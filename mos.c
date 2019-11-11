@@ -1,12 +1,14 @@
 
-//  Copyright 2019 Matthew Christopher Needes
-//  Licensed under the terms and conditions contained within the LICENSE
-//  file (the "License") included under this distribution.  You may not use
-//  this file except in compliance with the License.
+//  Copyright 2019 Matthew C Needes
+//  You may not use this source file except in compliance with the
+//  terms and conditions contained within the LICENSE file (the
+//  "License") included under this distribution.
 
 //
 // MOS Microkernel
 //
+
+#include <errno.h>
 
 #include "mos_phal.h"
 #include "mos.h"
@@ -15,7 +17,6 @@
 // TODO: Can use this to enable CM3 vs CM4F
 #endif
 
-// TODO: Measure timer "jitter"
 // TODO: Suppress yields on semaphores if no thread is waiting.
 // TODO: Thread kill / Kill handler
 
@@ -55,6 +56,7 @@ typedef enum {
 
 typedef struct Thread {
     u32 sp;
+    error_t err_no;
     ThreadState state;
     MosList run_q;
     MosList tmr_q;
@@ -62,14 +64,14 @@ typedef struct Thread {
     MosThreadPriority pri;
     MosThreadID id;
     u32 wake_tick;
-    MosMutex * wait_mutex;
-    MosSem * wait_sem;
-    MosWaitMux * wait_mux;
-    struct Thread * wait_thd;
-    s16 int_disable_cnt;
-    u16 stop_request;
-    s32 mux_idx;
-    s32 rtn_val;
+    MosMutex * wait_mutex;    // Could be a union
+    MosSem * wait_sem;        // ...  keep struct Thread small
+    MosWaitMux * wait_mux;    // ...  to reduce cache misses
+    struct Thread * wait_thd; // ...
+    s16 int_disable_cnt; // Put in separate struct?
+    u16 stop_request;    // ...
+    s32 rtn_val;         // ...
+    s32 mux_idx;         // ...
 } Thread;
 
 // Parameters
@@ -77,6 +79,7 @@ static MosParams Params;
 
 // Threads and Events
 static volatile MosThreadID RunningThreadID = MOS_NO_THREADS;
+static volatile error_t * ErrNo;
 static Thread Threads[MOS_MAX_THREADS];
 static MosList PriQueues[MOS_MAX_THREAD_PRIORITIES];
 static MosList Events;
@@ -160,12 +163,18 @@ static bool CheckWaitMux(Thread *thd) {
     return false;
 }
 
+// A little special something for profiling
+#define GPIO_BASE   0x40020C00
+#define LED_ON(x)   (MOS_VOL_U32(GPIO_BASE + 24) = (1 << (12 + (x))))
+#define LED_OFF(x)  (MOS_VOL_U32(GPIO_BASE + 24) = (1 << (12 + (x))) << 16)
+
 static u32 MOS_USED Scheduler(u32 sp) {
-    //#define GPIO_BASE  0x40020C00
-    //MOS_VOL_U32(GPIO_BASE + 24) = 32768;   // 16384 is another one
-    // Save SP
-    if (RunningThreadID != MOS_NO_THREADS)
+    //LED_ON(2);
+    // Save SP and ErrNo for context
+    if (RunningThreadID != MOS_NO_THREADS) {
         Threads[RunningThreadID].sp = sp;
+        Threads[RunningThreadID].err_no = *ErrNo;
+    }
     s32 adj_tick_count = TickCount;
     if (TickInterval > 1) {
         // Adjust TickCount / Remaining ticks
@@ -321,9 +330,10 @@ static u32 MOS_USED Scheduler(u32 sp) {
         TickCount = adj_tick_count;
         TickInterval = next_tick_interval;
     }
-    // Set next thread ID and return its stack pointer
+    // Set next thread ID and errno and return its stack pointer
     RunningThreadID = run_thd->id;
-    //MOS_VOL_U32(GPIO_BASE + 24) = 32768 << 16;
+    *ErrNo = Threads[RunningThreadID].err_no;
+    //LED_OFF(2);
     return (u32)Threads[RunningThreadID].sp;
 }
 
@@ -376,7 +386,7 @@ void MOS_NAKED MosDelayMicroSec(u32 usec) {
         "ldr r1, _CyclesPerMicroSec\n\t"
         "ldr r1, [r1]\n\t"
         "mul r0, r0, r1\n\t"
-        "sub r0, #13\n\t"
+        "sub r0, #13\n\t"  // Overhead calibration
         "delay:\n\t"
         "subs r0, #3\n\t"
         "bgt delay\n\t"
@@ -403,6 +413,8 @@ static s32 MosIdleThread(s32 arg) {
 
 // NOTE: SysTick should be set up by HAL before running.
 void MosInit(void) {
+    // Cache errno pointer for use during context switch
+    ErrNo = __errno();
     // Set up timers with tick-reduction
     CyclesPerTick = SysTick->LOAD + 1;
     MaxTickInterval = ((1 << 24) - 1) / CyclesPerTick;
@@ -511,6 +523,7 @@ s32 MosInitThread(MosThreadID id, MosThreadPriority pri,
     Threads[id].id = id;
     Threads[id].stop_request = false;
     Threads[id].int_disable_cnt = 0;
+    Threads[id].err_no = 0;
     MosInitList(&Threads[id].evt_q);
     MosInitList(&Threads[id].tmr_q);
     MosInitList(&Threads[id].run_q);
@@ -525,7 +538,8 @@ s32 MosRunThread(MosThreadID id) {
         if (id != MOS_IDLE_THREAD_ID)
             MosAddToList(&PriQueues[Threads[id].pri], &Threads[id].run_q);
         MosSetBasePri(0);
-        MosYieldThread();
+        if (RunningThreadID > -1 && Threads[id].pri < Threads[RunningThreadID].pri)
+            MosYieldThread();
         return id;
     }
     return -1;
@@ -545,7 +559,8 @@ void MosChangeThreadPriority(MosThreadID id, MosThreadPriority pri) {
     MosRemoveFromList(&Threads[id].run_q);
     MosAddToList(&PriQueues[pri], &Threads[id].run_q);
     MosSetBasePri(0);
-    if (pri < Threads[RunningThreadID].pri) MosYieldThread();
+    if (RunningThreadID > -1 && pri < Threads[RunningThreadID].pri)
+        MosYieldThread();
 }
 
 void MosRequestThreadStop(MosThreadID id) {

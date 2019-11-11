@@ -1,14 +1,14 @@
 
-//  Copyright 2019 Matthew Christopher Needes
-//  Licensed under the terms and conditions contained within the LICENSE
-//  file (the "License") included under this distribution.  You may not use
-//  this file except in compliance with the License.
+//  Copyright 2019 Matthew C Needes
+//  You may not use this source file except in compliance with the
+//  terms and conditions contained within the LICENSE file (the
+//  "License") included under this distribution.
 
 //
 // MOS Tracing Facility
 //
 
-// TODO: Limit to buffer size.
+// TODO: Pass in size to prevent exceeding max length, ala snprintf()
 
 #if (MOST_USE_STDIO == true)
 #include <stdio.h>
@@ -28,10 +28,8 @@ void MostItoa32(char * restrict * out,
                 s32 input, u16 base,
                 bool is_signed, bool is_upper,
                 const u16 min_digits, char pad_char) {
-    // Upper-case or lower-case
     const char * digits_p = lcDigits;
     if (is_upper) digits_p = ucDigits;
-    // Negate input based on sign
     u32 adj = (u32) input;
     if (is_signed && input < 0) adj = (u32) -input;
     // Determine digits (in reverse order)
@@ -65,10 +63,8 @@ void MostItoa64(char * restrict * out,
                 s64 input, u16 base,
                 bool is_signed, bool is_upper,
                 const u16 min_digits, char pad_char) {
-    // Upper-case or lower-case
     const char * digits_p = lcDigits;
     if (is_upper) digits_p = ucDigits;
-    // Negate input based on sign
     u64 adj = (u64) input;
     if (is_signed && input < 0) adj = (u64) -input;
     // Determine digits (in reverse order)
@@ -233,7 +229,6 @@ void MostTraceMessage(char * buffer, const char * id,
     va_start(args, fmt);
     MostTraceFmt(buf, fmt, args);
     va_end(args);
-    MosTakeMutex(&MostMutex);
     MostPrint(buffer);
 }
 

@@ -4,17 +4,9 @@
 //  terms and conditions contained within the LICENSE file (the
 //  "License") included under this distribution.
 
-//
-// Application HAL definitions
-//   Use this API to implement your BSP
-//
+#ifndef _HAL_TB_H_
+#define _HAL_TB_H_
 
-#ifndef _HAL_H_
-#define _HAL_H_
-
-#include "mos_phal.h"
-
-void HalInit(void);
-void HalPrintToConsole(char *str);
+void HalTests(u8 *stacks[], u32 stack_size);
 
 #endif

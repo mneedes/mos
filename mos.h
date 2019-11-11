@@ -1,8 +1,8 @@
 
-//  Copyright 2019 Matthew Christopher Needes
-//  Licensed under the terms and conditions contained within the LICENSE
-//  file (the "License") included under this distribution.  You may not use
-//  this file except in compliance with the License.
+//  Copyright 2019 Matthew C Needes
+//  You may not use this source file except in compliance with the
+//  terms and conditions contained within the LICENSE file (the
+//  "License") included under this distribution.
 
 //
 //  MOS Microkernel
@@ -150,15 +150,17 @@ void MosDelayMicroSec(u32 usec); // IS
 void MosRegisterTimerHook(MosTimerHook * timer_hook);
 
 // Thread Functions
+
+// Can use MosYieldThread() for cooperative multitasking
 void MosYieldThread(void); // IS
 MosThreadID MosGetThreadID(void);
 MosThreadState MosGetThreadState(MosThreadID id, s32 * rtn_val);
 s32 MosInitThread(MosThreadID id, MosThreadPriority pri, MosThreadEntry * entry,
-                  s32 arg, u8 * s_addr, u32 s_size); // IS
-s32 MosRunThread(MosThreadID id); // IS
+                  s32 arg, u8 * s_addr, u32 s_size);
+s32 MosRunThread(MosThreadID id);
 s32 MosInitAndRunThread(MosThreadID id, MosThreadPriority pri,
                         MosThreadEntry * entry, s32 arg, u8 * s_addr,
-                        u32 s_size); // IS
+                        u32 s_size);
 void MosChangeThreadPriority(MosThreadID id, MosThreadPriority pri);
 void MosRequestThreadStop(MosThreadID id);
 bool MosIsStopRequested(void);

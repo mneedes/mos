@@ -1,8 +1,8 @@
 
-//  Copyright 2019 Matthew Christopher Needes
-//  Licensed under the terms and conditions contained within the LICENSE
-//  file (the "License") included under this distribution.  You may not use
-//  this file except in compliance with the License.
+//  Copyright 2019 Matthew C Needes
+//  You may not use this source file except in compliance with the
+//  terms and conditions contained within the LICENSE file (the
+//  "License") included under this distribution.
 
 //
 // MOS Low-Overhead Deterministic Heaps

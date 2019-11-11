@@ -4,6 +4,10 @@ for ARM M series that supports basic threading and IPC primitives.
 
 It is intended for low thread count applications, e.g.: "fun personal projects."
 
+MOS was originally developed on a SGS-Thomson STM32F4Discovery.  The provided
+HAL layer example should work immediately with the STM32F4Discovery or
+similar boards.  Otherwise you will need to create your own HAL to try it out.
+
 Design Goals:
 + RTOS: Hard priorities and bounded execution
 + Thread timers based on SysTick
@@ -16,14 +20,16 @@ Design Goals:
 + Optional modules (heap, trace)
 + Low usage of conditional compilation (i.e.: very few #ifdefs)
 + Small code size (currently ~4KB)
-+ Includes Test bench
-+ Sensible use of abstraction (especially if ported to C++)
++ Includes test bench
++ Sensible use of abstraction (important if ported to C++)
 
-Supported architectures:
-+ ARM M3 and M4
-+ M0 (future)
+Supported architectures / toolchains:
++ ARM M3/M4
++ M0/M0+/M1/M4F/M7 (future)
++ GCC
 
 Features it probably WILL NEVER have:
 - MPU support
 - Non-ARM architecture support
+- Non-GCC toolchain support
 
