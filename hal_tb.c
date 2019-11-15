@@ -129,5 +129,20 @@ void HalTests(u8 *stacks[], u32 stack_size) {
     if (MosWaitForThreadStop(3) != TEST_PASS) test_pass = false;
     if (test_pass) MostPrint(" Passed\n");
     else MostPrint(" Failed\n");
+#elif RUN_TEST == 4
+    //
+    // Spin up max threads
+    //
+    test_pass = true;
+    MostPrint("Hal Timer Test 4\n");
+    for (u32 ix = 1; ix <= MOS_MAX_APP_THREADS - 1; ix++)
+        MosInitAndRunThread(ix, 1, TimerTestBusyThread, ix, stacks[ix], stack_size);
+    MosDelayThread(test_time);
+    for (u32 ix = 1; ix <= MOS_MAX_APP_THREADS - 1; ix++) {
+        MosRequestThreadStop(ix);
+        if (MosWaitForThreadStop(ix) != TEST_PASS) test_pass = false;
+    }
+    if (test_pass) MostPrint(" Passed\n");
+    else MostPrint(" Failed\n");
 #endif
 }

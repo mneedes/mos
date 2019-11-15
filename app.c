@@ -1,12 +1,14 @@
 
-//  Copyright 2019 Matthew Christopher Needes
-//  Licensed under the terms and conditions contained within the LICENSE
-//  file (the "License") included under this distribution.  You may not use
-//  this file except in compliance with the License.
+//  Copyright 2019 Matthew C Needes
+//  You may not use this source file except in compliance with the
+//  terms and conditions contained within the LICENSE file (the
+//  "License") included under this distribution.
 
 //
 //  MOS Test Bench
 //
+
+#include <errno.h>
 
 #include "hal.h"
 #include "mos.h"
@@ -14,7 +16,7 @@
 #include "most.h"
 
 #define DFT_STACK_SIZE           256
-#define MAX_TEST_SUB_THREADS     5
+#define MAX_TEST_SUB_THREADS     (MOS_MAX_APP_THREADS - 1)
 #define MAX_TEST_THREADS         (MAX_TEST_SUB_THREADS + 1)
 
 typedef enum {
@@ -30,7 +32,7 @@ typedef enum {
 } TestStatus;
 
 // Test thread stacks and heap
-static u8 * stack[MAX_TEST_THREADS];
+static u8 * stacks[MAX_TEST_THREADS];
 static MoshHeap TestHeapDesc;
 static u8 MOSH_HEAP_ALIGNED TestHeap[2048];
 
@@ -49,8 +51,6 @@ static MosWaitMux TestMux;
 // Test Message Queue
 static u32 queue[4];
 static MosQueue TestQueue;
-
-#define GPIO_BASE  0x40020C00
 
 // Buffer for printing messages
 static char print_buf[128];
@@ -102,9 +102,9 @@ static void ThreadTests(void) {
     test_pass = true;
     MostPrint("Priority Test 1\n");
     ClearHistogram();
-    MosInitAndRunThread(1, 1, PriTestThread, 0, stack[1], DFT_STACK_SIZE);
-    MosInitAndRunThread(2, 2, PriTestThread, 1, stack[2], DFT_STACK_SIZE);
-    MosInitAndRunThread(3, 3, PriTestThread, 2, stack[3], DFT_STACK_SIZE);
+    MosInitAndRunThread(1, 1, PriTestThread, 0, stacks[1], DFT_STACK_SIZE);
+    MosInitAndRunThread(2, 2, PriTestThread, 1, stacks[2], DFT_STACK_SIZE);
+    MosInitAndRunThread(3, 3, PriTestThread, 2, stacks[3], DFT_STACK_SIZE);
     MosDelayThread(test_time);
     DisplayHistogram(3);
     if (TestHisto[0] < exp_iter || TestHisto[0] > exp_iter + 1)
@@ -125,9 +125,9 @@ static void ThreadTests(void) {
     test_pass = true;
     MostPrint("Priority Test 2\n");
     ClearHistogram();
-    MosInitAndRunThread(1, 1, PriTestThread, 0, stack[1], DFT_STACK_SIZE);
-    MosInitAndRunThread(2, 2, PriTestThread, 1, stack[2], DFT_STACK_SIZE);
-    MosInitAndRunThread(3, 3, PriTestThread, 2, stack[3], DFT_STACK_SIZE);
+    MosInitAndRunThread(1, 1, PriTestThread, 0, stacks[1], DFT_STACK_SIZE);
+    MosInitAndRunThread(2, 2, PriTestThread, 1, stacks[2], DFT_STACK_SIZE);
+    MosInitAndRunThread(3, 3, PriTestThread, 2, stacks[3], DFT_STACK_SIZE);
     MosDelayThread(test_time);
     MosChangeThreadPriority(1, 2);
     MosChangeThreadPriority(2, 1);
@@ -152,6 +152,10 @@ static void ThreadTests(void) {
 
     //
     // InitThread / RunThread
+    //
+
+    //
+    // Set and Restore errno
     //
 }
 
@@ -185,6 +189,15 @@ static s32 TimerTestThread4(s32 arg) {
     return TEST_PASS;
 }
 
+static s32 TimerTestThreadOdd(s32 arg) {
+    for (;;) {
+        if (MosIsStopRequested()) break;
+        MosDelayThread(arg & 0xFFFF);
+        TestHisto[arg >> 16]++;
+    }
+    return TEST_PASS;
+}
+
 static s32 TimerTestBusyThread(s32 arg) {
     for (;;) {
         if (MosIsStopRequested()) break;
@@ -206,9 +219,9 @@ static void TimerTests(void) {
     test_pass = true;
     MostPrint("Timer Test 1\n");
     ClearHistogram();
-    MosInitAndRunThread(1, 1, TimerTestThread, 0, stack[1], DFT_STACK_SIZE);
-    MosInitAndRunThread(2, 3, TimerTestThread, 1, stack[2], DFT_STACK_SIZE);
-    MosInitAndRunThread(3, 3, TimerTestThread, 2, stack[3], DFT_STACK_SIZE);
+    MosInitAndRunThread(1, 1, TimerTestThread, 0, stacks[1], DFT_STACK_SIZE);
+    MosInitAndRunThread(2, 3, TimerTestThread, 1, stacks[2], DFT_STACK_SIZE);
+    MosInitAndRunThread(3, 3, TimerTestThread, 2, stacks[3], DFT_STACK_SIZE);
     MosDelayThread(test_time);
     MosRequestThreadStop(1);
     MosRequestThreadStop(2);
@@ -223,14 +236,14 @@ static void TimerTests(void) {
     if (test_pass) MostPrint(" Passed\n");
     else MostPrint(" Failed\n");
     //
-    // Run non-uniform timers
+    // Run "harmonic" timers
     //
     test_pass = true;
     MostPrint("Timer Test 2\n");
     ClearHistogram();
-    MosInitAndRunThread(1, 1, TimerTestThread, 0, stack[1], DFT_STACK_SIZE);
-    MosInitAndRunThread(2, 3, TimerTestThread2, 1, stack[2], DFT_STACK_SIZE);
-    MosInitAndRunThread(3, 3, TimerTestThread4, 2, stack[3], DFT_STACK_SIZE);
+    MosInitAndRunThread(1, 1, TimerTestThread, 0, stacks[1], DFT_STACK_SIZE);
+    MosInitAndRunThread(2, 3, TimerTestThread2, 1, stacks[2], DFT_STACK_SIZE);
+    MosInitAndRunThread(3, 3, TimerTestThread4, 2, stacks[3], DFT_STACK_SIZE);
     MosDelayThread(test_time);
     MosRequestThreadStop(1);
     MosRequestThreadStop(2);
@@ -245,14 +258,36 @@ static void TimerTests(void) {
     if (test_pass) MostPrint(" Passed\n");
     else MostPrint(" Failed\n");
     //
-    // Run two timers over busy thread
+    // Run odd timers
     //
     test_pass = true;
     MostPrint("Timer Test 3\n");
     ClearHistogram();
-    MosInitAndRunThread(1, 1, TimerTestThread, 0, stack[1], DFT_STACK_SIZE);
-    MosInitAndRunThread(2, 1, TimerTestThread2, 1, stack[2], DFT_STACK_SIZE);
-    MosInitAndRunThread(3, 2, TimerTestBusyThread, 2, stack[3], DFT_STACK_SIZE);
+    MosInitAndRunThread(1, 1, TimerTestThreadOdd, 13, stacks[1], DFT_STACK_SIZE);
+    MosInitAndRunThread(2, 2, TimerTestThreadOdd, 33 | 0x10000, stacks[2], DFT_STACK_SIZE);
+    MosInitAndRunThread(3, 3, TimerTestThreadOdd, 37 | 0x20000, stacks[3], DFT_STACK_SIZE);
+    MosDelayThread(test_time);
+    MosRequestThreadStop(1);
+    MosRequestThreadStop(2);
+    MosRequestThreadStop(3);
+    if (MosWaitForThreadStop(1) != TEST_PASS) test_pass = false;
+    if (MosWaitForThreadStop(2) != TEST_PASS) test_pass = false;
+    if (MosWaitForThreadStop(3) != TEST_PASS) test_pass = false;
+    DisplayHistogram(3);
+    if (TestHisto[0] != (test_time / 13) + 1) test_pass = false;
+    if (TestHisto[1] != (test_time / 33) + 1) test_pass = false;
+    if (TestHisto[2] != (test_time / 37) + 1) test_pass = false;
+    if (test_pass) MostPrint(" Passed\n");
+    else MostPrint(" Failed\n");
+    //
+    // Run two timers over busy thread
+    //
+    test_pass = true;
+    MostPrint("Timer Test 4\n");
+    ClearHistogram();
+    MosInitAndRunThread(1, 1, TimerTestThread, 0, stacks[1], DFT_STACK_SIZE);
+    MosInitAndRunThread(2, 1, TimerTestThread2, 1, stacks[2], DFT_STACK_SIZE);
+    MosInitAndRunThread(3, 2, TimerTestBusyThread, 2, stacks[3], DFT_STACK_SIZE);
     MosDelayThread(test_time);
     MosRequestThreadStop(1);
     MosRequestThreadStop(2);
@@ -269,11 +304,11 @@ static void TimerTests(void) {
     // Run timer over two busy threads
     //
     test_pass = true;
-    MostPrint("Timer Test 4\n");
+    MostPrint("Timer Test 5\n");
     ClearHistogram();
-    MosInitAndRunThread(1, 1, TimerTestThread, 0, stack[1], DFT_STACK_SIZE);
-    MosInitAndRunThread(2, 2, TimerTestBusyThread, 1, stack[2], DFT_STACK_SIZE);
-    MosInitAndRunThread(3, 2, TimerTestBusyThread, 2, stack[3], DFT_STACK_SIZE);
+    MosInitAndRunThread(1, 1, TimerTestThread, 0, stacks[1], DFT_STACK_SIZE);
+    MosInitAndRunThread(2, 2, TimerTestBusyThread, 1, stacks[2], DFT_STACK_SIZE);
+    MosInitAndRunThread(3, 2, TimerTestBusyThread, 2, stacks[3], DFT_STACK_SIZE);
     MosDelayThread(test_time);
     MosRequestThreadStop(1);
     MosRequestThreadStop(2);
@@ -356,9 +391,9 @@ static void SemTests(void) {
     MostPrint("Sem Test 1\n");
     ClearHistogram();
     MosInitSem(&TestSem, 5);
-    MosInitAndRunThread(1, 1, SemTestThreadTx, 0, stack[1], DFT_STACK_SIZE);
-    MosInitAndRunThread(2, 3, SemTestThreadTx, 1, stack[2], DFT_STACK_SIZE);
-    MosInitAndRunThread(3, 3, SemTestThreadRx, 2, stack[3], DFT_STACK_SIZE);
+    MosInitAndRunThread(1, 1, SemTestThreadTx, 0, stacks[1], DFT_STACK_SIZE);
+    MosInitAndRunThread(2, 3, SemTestThreadTx, 1, stacks[2], DFT_STACK_SIZE);
+    MosInitAndRunThread(3, 3, SemTestThreadRx, 2, stacks[3], DFT_STACK_SIZE);
     MosDelayThread(test_time);
     MosRequestThreadStop(1);
     MosRequestThreadStop(2);
@@ -379,9 +414,9 @@ static void SemTests(void) {
     MostPrint("Sem Test 2\n");
     ClearHistogram();
     MosInitSem(&TestSem, 0);
-    MosInitAndRunThread(1, 1, SemTestPendIRQ, 1, stack[1], DFT_STACK_SIZE);
-    MosInitAndRunThread(2, 3, SemTestThreadTx, 2, stack[2], DFT_STACK_SIZE);
-    MosInitAndRunThread(3, 3, SemTestThreadRx, 3, stack[3], DFT_STACK_SIZE);
+    MosInitAndRunThread(1, 1, SemTestPendIRQ, 1, stacks[1], DFT_STACK_SIZE);
+    MosInitAndRunThread(2, 3, SemTestThreadTx, 2, stacks[2], DFT_STACK_SIZE);
+    MosInitAndRunThread(3, 3, SemTestThreadRx, 3, stacks[3], DFT_STACK_SIZE);
     MosDelayThread(test_time);
     MosRequestThreadStop(1);
     MosRequestThreadStop(2);
@@ -402,9 +437,9 @@ static void SemTests(void) {
     MostPrint("Sem Test 3\n");
     ClearHistogram();
     MosInitSem(&TestSem, 5);
-    MosInitAndRunThread(1, 1, SemTestThreadTx, 0, stack[1], DFT_STACK_SIZE);
-    MosInitAndRunThread(2, 3, SemTestThreadTx, 1, stack[2], DFT_STACK_SIZE);
-    MosInitAndRunThread(3, 3, SemTestThreadRxTimeout, 2, stack[3], DFT_STACK_SIZE);
+    MosInitAndRunThread(1, 1, SemTestThreadTx, 0, stacks[1], DFT_STACK_SIZE);
+    MosInitAndRunThread(2, 3, SemTestThreadTx, 1, stacks[2], DFT_STACK_SIZE);
+    MosInitAndRunThread(3, 3, SemTestThreadRxTimeout, 2, stacks[3], DFT_STACK_SIZE);
     MosDelayThread(test_time);
     MosRequestThreadStop(1);
     MosRequestThreadStop(2);
@@ -426,9 +461,9 @@ static void SemTests(void) {
     MostPrint("Sem Test 4\n");
     ClearHistogram();
     MosInitSem(&TestSem, 5);
-    MosInitAndRunThread(1, 1, SemTestThreadTx, 0, stack[1], DFT_STACK_SIZE);
-    MosInitAndRunThread(2, 3, SemTestThreadTx, 1, stack[2], DFT_STACK_SIZE);
-    MosInitAndRunThread(3, 3, SemTestThreadRxTry, 2, stack[3], DFT_STACK_SIZE);
+    MosInitAndRunThread(1, 1, SemTestThreadTx, 0, stacks[1], DFT_STACK_SIZE);
+    MosInitAndRunThread(2, 3, SemTestThreadTx, 1, stacks[2], DFT_STACK_SIZE);
+    MosInitAndRunThread(3, 3, SemTestThreadRxTry, 2, stacks[3], DFT_STACK_SIZE);
     MosDelayThread(test_time);
     MosRequestThreadStop(1);
     MosRequestThreadStop(2);
@@ -537,9 +572,9 @@ static void QueueTests(void) {
     MostPrint("Queue Test 1\n");
     ClearHistogram();
     MosInitQueue(&TestQueue, queue, count_of(queue));
-    MosInitAndRunThread(1, 1, QueueTestPendIRQ, 0, stack[1], DFT_STACK_SIZE);
-    MosInitAndRunThread(2, 3, QueueTestThreadTx, 2, stack[2], DFT_STACK_SIZE);
-    MosInitAndRunThread(3, 3, QueueTestThreadRx, 2, stack[3], DFT_STACK_SIZE);
+    MosInitAndRunThread(1, 1, QueueTestPendIRQ, 0, stacks[1], DFT_STACK_SIZE);
+    MosInitAndRunThread(2, 3, QueueTestThreadTx, 2, stacks[2], DFT_STACK_SIZE);
+    MosInitAndRunThread(3, 3, QueueTestThreadRx, 2, stacks[3], DFT_STACK_SIZE);
     MosDelayThread(test_time);
     MosRequestThreadStop(1);
     MosRequestThreadStop(2);
@@ -561,9 +596,9 @@ static void QueueTests(void) {
     MostPrint("Queue Test 2\n");
     ClearHistogram();
     MosInitQueue(&TestQueue, queue, count_of(queue));
-    MosInitAndRunThread(1, 1, QueueTestPendIRQ, 0, stack[1], DFT_STACK_SIZE);
-    MosInitAndRunThread(2, 3, QueueTestThreadTx, 2, stack[2], DFT_STACK_SIZE);
-    MosInitAndRunThread(3, 3, QueueTestThreadRxTimeout, 2, stack[3], DFT_STACK_SIZE);
+    MosInitAndRunThread(1, 1, QueueTestPendIRQ, 0, stacks[1], DFT_STACK_SIZE);
+    MosInitAndRunThread(2, 3, QueueTestThreadTx, 2, stacks[2], DFT_STACK_SIZE);
+    MosInitAndRunThread(3, 3, QueueTestThreadRxTimeout, 2, stacks[3], DFT_STACK_SIZE);
     MosDelayThread(test_time);
     MosRequestThreadStop(1);
     MosRequestThreadStop(2);
@@ -587,9 +622,9 @@ static void QueueTests(void) {
     MostPrint("Queue Test 3\n");
     ClearHistogram();
     MosInitQueue(&TestQueue, queue, count_of(queue));
-    MosInitAndRunThread(1, 1, QueueTestPendIRQ, 0, stack[1], DFT_STACK_SIZE);
-    MosInitAndRunThread(2, 3, QueueTestThreadTxTimeout, 1, stack[2], DFT_STACK_SIZE);
-    MosInitAndRunThread(3, 3, QueueTestThreadRxSlow, 2, stack[3], DFT_STACK_SIZE);
+    MosInitAndRunThread(1, 1, QueueTestPendIRQ, 0, stacks[1], DFT_STACK_SIZE);
+    MosInitAndRunThread(2, 3, QueueTestThreadTxTimeout, 1, stacks[2], DFT_STACK_SIZE);
+    MosInitAndRunThread(3, 3, QueueTestThreadRxSlow, 2, stacks[3], DFT_STACK_SIZE);
     MosDelayThread(test_time);
     MosRequestThreadStop(1);
     MosRequestThreadStop(2);
@@ -614,9 +649,9 @@ static void QueueTests(void) {
     MostPrint("Queue Test 4\n");
     ClearHistogram();
     MosInitQueue(&TestQueue, queue, count_of(queue));
-    MosInitAndRunThread(1, 1, QueueTestPendIRQ, 0, stack[1], DFT_STACK_SIZE);
-    MosInitAndRunThread(2, 3, QueueTestThreadTx, 2, stack[2], DFT_STACK_SIZE);
-    MosInitAndRunThread(3, 3, QueueTestThreadRxTry, 2, stack[3], DFT_STACK_SIZE);
+    MosInitAndRunThread(1, 1, QueueTestPendIRQ, 0, stacks[1], DFT_STACK_SIZE);
+    MosInitAndRunThread(2, 3, QueueTestThreadTx, 2, stacks[2], DFT_STACK_SIZE);
+    MosInitAndRunThread(3, 3, QueueTestThreadRxTry, 2, stacks[3], DFT_STACK_SIZE);
     MosDelayThread(test_time);
     MosRequestThreadStop(1);
     MosRequestThreadStop(2);
@@ -714,9 +749,9 @@ static void WaitMuxTests(void) {
     ClearHistogram();
     MosInitSem(&TestSem, 0);
     MosInitQueue(&TestQueue, queue, count_of(queue));
-    MosInitAndRunThread(1, 1, WaitMuxTestThreadTx, 0, stack[1], DFT_STACK_SIZE);
-    MosInitAndRunThread(2, 3, WaitMuxTestThreadTx, 1, stack[2], DFT_STACK_SIZE);
-    MosInitAndRunThread(3, 3, WaitMuxTestThreadRx, 2, stack[3], DFT_STACK_SIZE);
+    MosInitAndRunThread(1, 1, WaitMuxTestThreadTx, 0, stacks[1], DFT_STACK_SIZE);
+    MosInitAndRunThread(2, 3, WaitMuxTestThreadTx, 1, stacks[2], DFT_STACK_SIZE);
+    MosInitAndRunThread(3, 3, WaitMuxTestThreadRx, 2, stacks[3], DFT_STACK_SIZE);
     MosDelayThread(test_time);
     MosRequestThreadStop(1);
     MosRequestThreadStop(2);
@@ -739,9 +774,9 @@ static void WaitMuxTests(void) {
     ClearHistogram();
     MosInitSem(&TestSem, 0);
     MosInitQueue(&TestQueue, queue, count_of(queue));
-    MosInitAndRunThread(1, 1, WaitMuxTestThreadTx, 0, stack[1], DFT_STACK_SIZE);
-    MosInitAndRunThread(2, 3, WaitMuxTestThreadTx, 1, stack[2], DFT_STACK_SIZE);
-    MosInitAndRunThread(3, 3, WaitMuxTestThreadRxTimeout, 2, stack[3], DFT_STACK_SIZE);
+    MosInitAndRunThread(1, 1, WaitMuxTestThreadTx, 0, stacks[1], DFT_STACK_SIZE);
+    MosInitAndRunThread(2, 3, WaitMuxTestThreadTx, 1, stacks[2], DFT_STACK_SIZE);
+    MosInitAndRunThread(3, 3, WaitMuxTestThreadRxTimeout, 2, stacks[3], DFT_STACK_SIZE);
     MosDelayThread(test_time);
     MosRequestThreadStop(1);
     MosRequestThreadStop(2);
@@ -861,8 +896,8 @@ static void MutexTests(void) {
     MostPrint("Mutex Test 1\n");
     ClearHistogram();
     MosInitMutex(&TestMutex);
-    MosInitAndRunThread(1, 3, MutexTestThread, 0, stack[1], DFT_STACK_SIZE);
-    MosInitAndRunThread(2, 3, MutexTestThread, 1, stack[2], DFT_STACK_SIZE);
+    MosInitAndRunThread(1, 3, MutexTestThread, 0, stacks[1], DFT_STACK_SIZE);
+    MosInitAndRunThread(2, 3, MutexTestThread, 1, stacks[2], DFT_STACK_SIZE);
     MosDelayThread(5000);
     MosRequestThreadStop(1);
     MosRequestThreadStop(2);
@@ -878,9 +913,9 @@ static void MutexTests(void) {
     MostPrint("Mutex Test 2\n");
     ClearHistogram();
     MosInitMutex(&TestMutex);
-    MosInitAndRunThread(1, 3, MutexTestThread, 0, stack[1], DFT_STACK_SIZE);
-    MosInitAndRunThread(2, 3, MutexTestThread, 1, stack[2], DFT_STACK_SIZE);
-    MosInitAndRunThread(3, 3, MutexTestThread, 2, stack[3], DFT_STACK_SIZE);
+    MosInitAndRunThread(1, 3, MutexTestThread, 0, stacks[1], DFT_STACK_SIZE);
+    MosInitAndRunThread(2, 3, MutexTestThread, 1, stacks[2], DFT_STACK_SIZE);
+    MosInitAndRunThread(3, 3, MutexTestThread, 2, stacks[3], DFT_STACK_SIZE);
     MosDelayThread(5000);
     MosRequestThreadStop(1);
     MosRequestThreadStop(2);
@@ -900,9 +935,9 @@ static void MutexTests(void) {
     MosInitMutex(&TestMutex);
     MosInitQueue(&TestQueue, queue, count_of(queue));
     MosInitAndRunThread(1, 1, MutexTestThread, MUTEX_TEST_PRIO_INHER,
-                        stack[1], DFT_STACK_SIZE);
-    MosInitAndRunThread(2, 2, MutexDummyThread, 1, stack[2], DFT_STACK_SIZE);
-    MosInitAndRunThread(3, 3, MutexTestThread, 0, stack[3], DFT_STACK_SIZE);
+                        stacks[1], DFT_STACK_SIZE);
+    MosInitAndRunThread(2, 2, MutexDummyThread, 1, stacks[2], DFT_STACK_SIZE);
+    MosInitAndRunThread(3, 3, MutexTestThread, 0, stacks[3], DFT_STACK_SIZE);
     MosDelayThread(5000);
     MosRequestThreadStop(1);
     MosRequestThreadStop(2);
@@ -920,8 +955,8 @@ static void MutexTests(void) {
     MostPrint("Mutex Test 4\n");
     ClearHistogram();
     MosInitMutex(&TestMutex);
-    MosInitAndRunThread(1, 2, MutexTryTestThread, 0, stack[1], DFT_STACK_SIZE);
-    MosInitAndRunThread(2, 2, MutexTryTestThread, 1, stack[2], DFT_STACK_SIZE);
+    MosInitAndRunThread(1, 2, MutexTryTestThread, 0, stacks[1], DFT_STACK_SIZE);
+    MosInitAndRunThread(2, 2, MutexTryTestThread, 1, stacks[2], DFT_STACK_SIZE);
     MosDelayThread(5000);
     MosRequestThreadStop(1);
     MosRequestThreadStop(2);
@@ -937,9 +972,9 @@ static void MutexTests(void) {
     MostPrint("Mutex Test 5\n");
     ClearHistogram();
     MosInitMutex(&TestMutex);
-    MosInitAndRunThread(1, 2, MutexTryTestThread, 0, stack[1], DFT_STACK_SIZE);
-    MosInitAndRunThread(2, 2, MutexTryTestThread, 1, stack[2], DFT_STACK_SIZE);
-    MosInitAndRunThread(3, 2, MutexTryTestThread, 2, stack[3], DFT_STACK_SIZE);
+    MosInitAndRunThread(1, 2, MutexTryTestThread, 0, stacks[1], DFT_STACK_SIZE);
+    MosInitAndRunThread(2, 2, MutexTryTestThread, 1, stacks[2], DFT_STACK_SIZE);
+    MosInitAndRunThread(3, 2, MutexTryTestThread, 2, stacks[3], DFT_STACK_SIZE);
     MosDelayThread(5000);
     MosRequestThreadStop(1);
     MosRequestThreadStop(2);
@@ -975,16 +1010,22 @@ static void HeapTests(void) {
     }
 }
 
+#define USING_LOGIC_ANALYZER  false
+
 s32 TestExecThread(s32 arg) {
     MostPrint("\nStarting Tests\n");
-    ThreadTests();
-    TimerTests();
-    SemTests();
-    QueueTests();
+#if (USING_LOGIC_ANALYZER == false)
+    // General testbench
+    //ThreadTests();
+    //TimerTests();
+    //SemTests();
+    //QueueTests();
     WaitMuxTests();
     MutexTests();
-    HeapTests();
-    //HalTests();
+    //HeapTests();
+#else
+    HalTests(stacks, DFT_STACK_SIZE);
+#endif
     MostPrint("Tests Complete\n");
     return 0;
 }
@@ -1001,9 +1042,9 @@ int main() {
     MoshReserveBlockSize(&TestHeapDesc, 256);
     MoshReserveBlockSize(&TestHeapDesc, 128);
     MoshReserveBlockSize(&TestHeapDesc, 512);
-    for (u32 id = 0; id < count_of(stack); id++) {
-        stack[id] = MoshAllocBlock(&TestHeapDesc, DFT_STACK_SIZE);
-        if (stack[id] == NULL) {
+    for (u32 id = 0; id < count_of(stacks); id++) {
+        stacks[id] = MoshAllocBlock(&TestHeapDesc, DFT_STACK_SIZE);
+        if (stacks[id] == NULL) {
             MostPrint("Stack allocation error\n");
             return -1;
         }
@@ -1014,7 +1055,9 @@ int main() {
         return -1;
     }
 
-    MosInitAndRunThread(MAX_TEST_THREADS - 1, 0, TestExecThread, 0, stack[0], 256);
+    MostPrintf(print_buf, "\nERRNO: %d\n", errno);
+
+    MosInitAndRunThread(MAX_TEST_THREADS, 0, TestExecThread, 0, stacks[0], 256);
     MosRunScheduler();
     return -1;
 }
