@@ -57,7 +57,7 @@ typedef uint64_t    u64;
 typedef int64_t     s64;
 
 typedef s32 (MosThreadEntry)(s32 arg);
-typedef s32 (MosHandlerEntry)(s32 arg);
+typedef s32 (MosHandler)(s32 arg);
 typedef void (MosTimerHook)(u32 TickCount);
 typedef s16 MosThreadID;
 typedef u16 MosThreadPriority;
@@ -168,10 +168,11 @@ void MosRequestThreadStop(MosThreadID id);
 bool MosIsStopRequested(void);
 s32 MosWaitForThreadStop(MosThreadID id);
 bool MosWaitForThreadStopOrTO(MosThreadID id, s32 * rtn_val, u32 ticks);
-// Forcible stop, works on blocked threads
+// Forcible stop, works on blocked threads. N.B.: Thread cannot kill itself.
 void MosKillThread(MosThreadID id);
-// Handler to run if thread is killed
-void MosSetKillHandler(MosThreadID id, MosHandlerEntry * entry, s32 arg);
+// Handler to run if thread is killed.  Thread can set own handler.
+void MosSetKillHandler(MosThreadID id, MosHandler * handler, s32 arg);
+void MosSetKillArg(MosThreadID id, s32 arg);
 
 // Doubly-Linked Lists
 void MosInitList(MosList * list); // IS
@@ -204,6 +205,9 @@ void MosInitMutex(MosMutex * mtx);
 void MosTakeMutex(MosMutex * mtx);
 bool MosTryMutex(MosMutex * mtx);
 void MosGiveMutex(MosMutex * mtx);
+// Release mutex if owned (useful in kill handlers)
+void MosRestoreMutex(MosMutex *mtx);
+bool MosIsMutexOwner(MosMutex *mtx);
 
 // Blocking Semaphore, intended for signaling
 void MosInitSem(MosSem * sem, u32 start_count);

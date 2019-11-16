@@ -17,11 +17,14 @@
 // TODO: Can use this to enable floating point context save for CM4F
 #endif
 
+// TODO: MosDrainSem() / MosDrainQueue()
+// TODO: Clearing wait flags after thread kill / wait counter?
+// TODO: Thread killing self?
+// TODO: WaitForThreadStop on WaitMux?
+// TODO: Priority Inheritance on WaitForThreadStop?
 // TODO: Suppress yields on semaphores if no thread is waiting.  Unlike Mutex
-//       Semaphore yields may be tricky since they can happen during high priority
-//       interrupts that are interrupting PendSV handler.
-// TODO: Make InitThread able to replace a running context.
-// TODO: Kill process is just another "InitThread".  If thread doesn't have handler.
+//       Semaphore yields may be tricky since they can happen during high
+//       priority interrupts that are interrupting PendSV handler.
 
 #define MOS_IDLE_THREAD_ID      0
 #define MOS_MAX_THREADS         (MOS_MAX_APP_THREADS + 1)
@@ -48,7 +51,6 @@ typedef enum {
     THREAD_WAIT_FOR_SEM,
     THREAD_WAIT_ON_MUX,
     THREAD_WAIT_FOR_STOP,
-    THREAD_KILL_PENDING,
     THREAD_STOPPED,
     THREAD_WAIT_FOR_TICK = 16,
     THREAD_WAIT_FOR_SEM_OR_TICK = THREAD_WAIT_FOR_SEM + 16,
@@ -78,8 +80,8 @@ typedef struct ThreadAuxData {
     u16 stop_request;
     s32 rtn_val;
     s32 mux_idx;
-    MosHandlerEntry * handler;
-    s32 handler_arg;
+    MosHandler * kill_handler;
+    s32 kill_arg;
     u8 * stack_addr;
     u32 stack_size;
 } ThreadAuxData;
@@ -495,15 +497,37 @@ static void MosThreadExit(s32 rtn_val) {
         ;
 }
 
+static s32 MosDefaultKillHandler(s32 arg) {
+    return arg;
+}
+
 s32 MosInitThread(MosThreadID id, MosThreadPriority pri,
                   MosThreadEntry * entry, s32 arg,
                   u8 * s_addr, u32 s_size) {
+    if (id == RunningThreadID) return -1;
+    // Stop thread if running
+    MosSetBasePri(MOS_LOW_INT_PRI_MASK);
     ThreadState state = Threads[id].state;
-    if (state != THREAD_UNINIT && state != THREAD_STOPPED) return -1;
+    switch (state) {
+    case THREAD_UNINIT:
+    case THREAD_INIT:
+    case THREAD_STOPPED:
+        break;
+    default:
+        MosRemoveFromList(&Threads[id].tmr_q);
+        MosRemoveFromList(&Threads[id].run_q);
+        MosSetThreadState(id, THREAD_UNINIT);
+        break;
+    }
+    MosSetBasePri(0);
+    // Initialize aux data
+    ThreadData[id].int_disable_cnt = 0;
+    ThreadData[id].stop_request = false;
+    ThreadData[id].kill_handler = MosDefaultKillHandler;
+    ThreadData[id].kill_arg = 0;
     ThreadData[id].stack_addr = s_addr;
     ThreadData[id].stack_size = s_size;
-    ThreadData[id].stop_request = false;
-    ThreadData[id].int_disable_cnt = 0;
+    // Initialize Stack
     StackFrame * sf = (StackFrame *) (s_addr + s_size);
     sf--;
     // Set Thumb Mode
@@ -512,10 +536,11 @@ s32 MosInitThread(MosThreadID id, MosThreadPriority pri,
     sf->LR = (u32)MosThreadExit;
     sf->R12 = 0;
     sf->HWSAVE[0] = arg;
+    // Initialize context and state
     Threads[id].sp = (u32)sf;
     Threads[id].err_no = 0;
-    MosInitList(&Threads[id].tmr_q);
     MosInitList(&Threads[id].run_q);
+    MosInitList(&Threads[id].tmr_q);
     Threads[id].id = id;
     Threads[id].pri = pri;
     MosSetThreadState(id, THREAD_INIT);
@@ -580,17 +605,23 @@ bool MosWaitForThreadStopOrTO(MosThreadID id, s32 * rtn_val, u32 ticks) {
     return true;
 }
 
-void MosSetKillHandler(MosThreadID id, MosHandlerEntry * entry, s32 arg) {
-    // TODO PRIMASK LOCK
-    ThreadData[id].handler = entry;
-    ThreadData[id].handler_arg = arg;
-}
-
 void MosKillThread(MosThreadID id) {
     if (id == RunningThreadID) return;
-    // TODO PRIMASK LOCK
-    // Set event for thread
-    MosYieldThread();
+    MosInitAndRunThread(id, Threads[id].pri, ThreadData[id].kill_handler,
+                        ThreadData[id].kill_arg, ThreadData[id].stack_addr,
+                        ThreadData[id].stack_size);
+}
+
+void MosSetKillHandler(MosThreadID id, MosHandler * handler, s32 arg) {
+    MosSetBasePri(MOS_LOW_INT_PRI_MASK);
+    if (handler) ThreadData[id].kill_handler = handler;
+    else ThreadData[id].kill_handler = MosDefaultKillHandler;
+    ThreadData[id].kill_arg = arg;
+    MosSetBasePri(0);
+}
+
+void MosSetKillArg(MosThreadID id, s32 arg) {
+    ThreadData[id].kill_arg = arg;
 }
 
 void MosInitList(MosList * list) {
@@ -728,6 +759,17 @@ void MOS_NAKED MosGiveMutex(MosMutex * mtx) {
         "bx lr\n\t"
             : : : "r0", "r1", "r2", "r3"
     );
+}
+
+void MosRestoreMutex(MosMutex *mtx) {
+    if (mtx->owner == RunningThreadID) {
+        mtx->depth = 1;
+        MosGiveMutex(mtx);
+    }
+}
+
+bool MosIsMutexOwner(MosMutex *mtx) {
+    return (mtx->owner == RunningThreadID);
 }
 
 void MosInitSem(MosSem * sem, u32 start_count) {

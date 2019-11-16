@@ -27,8 +27,9 @@ typedef enum {
 } TraceLevel;
 
 typedef enum {
-    TEST_PASS        = 0xba5eba11,
-    TEST_FAIL        = 0xdeadbeef,
+    TEST_PASS         = 0xba5eba11,
+    TEST_PASS_HANDLER = 0xba5eba12,
+    TEST_FAIL         = 0xdeadbeef,
 } TestStatus;
 
 // Test thread stacks and heap
@@ -90,6 +91,27 @@ static s32 PriTestThread(s32 arg) {
         MosDelayMicroSec(pri_test_delay * 1000);
     }
     return TEST_PASS;
+}
+
+static s32 KillTestHandler(s32 arg) {
+    MostPrint("KillTestHandler: Running Handler\n");
+    if (MosIsMutexOwner(&TestMutex)) {
+        MostPrint("KillTestHandler: I own mutex\n");
+        MosRestoreMutex(&TestMutex);
+    }
+    return arg;
+}
+
+static s32 KillTestThread(s32 arg) {
+    if (arg) {
+        MosSetKillHandler(MosGetThreadID(), KillTestHandler, TEST_PASS_HANDLER);
+        // Take mutex a couple times... need to release it in handler
+        MosTakeMutex(&TestMutex);
+        MosTakeMutex(&TestMutex);
+    } else MosSetKillArg(MosGetThreadID(), TEST_PASS_HANDLER);
+    MostPrint("KillTestThread: Blocking\n");
+    MosTakeSem(&TestSem);
+    return TEST_FAIL;
 }
 
 static void ThreadTests(void) {
@@ -157,6 +179,36 @@ static void ThreadTests(void) {
     //
     // Set and Restore errno
     //
+
+    //
+    // Kill Thread using Default Handler
+    //
+    test_pass = true;
+    MostPrint("Kill Test 1\n");
+    ClearHistogram();
+    MosInitMutex(&TestMutex);
+    MosInitSem(&TestSem, 0);
+    MosInitAndRunThread(1, 1, KillTestThread, 0, stacks[1], DFT_STACK_SIZE);
+    MosDelayThread(10);
+    MosKillThread(1);
+    if (MosWaitForThreadStop(1) != TEST_PASS_HANDLER) test_pass = false;
+    if (test_pass) MostPrint(" Passed\n");
+    else MostPrint(" Failed\n");
+    //
+    // Kill Thread using Supplied Handler
+    //
+    test_pass = true;
+    MostPrint("Kill Test 2\n");
+    ClearHistogram();
+    MosInitMutex(&TestMutex);
+    MosInitSem(&TestSem, 0);
+    MosInitAndRunThread(1, 1, KillTestThread, 1, stacks[1], DFT_STACK_SIZE);
+    MosDelayThread(10);
+    MosKillThread(1);
+    if (MosWaitForThreadStop(1) != TEST_PASS_HANDLER) test_pass = false;
+    if (TestMutex.owner != -1) test_pass = false;
+    if (test_pass) MostPrint(" Passed\n");
+    else MostPrint(" Failed\n");
 }
 
 // Make delay a multiple of 4
@@ -949,7 +1001,7 @@ static void MutexTests(void) {
     if (test_pass) MostPrint(" Passed\n");
     else MostPrint(" Failed\n");
     //
-    // Try Mutex
+    // Try Mutex (NOTE: may exhibit some non-deterministic behavior)
     //
     test_pass = true;
     MostPrint("Mutex Test 4\n");
@@ -966,7 +1018,7 @@ static void MutexTests(void) {
     if (test_pass) MostPrint(" Passed\n");
     else MostPrint(" Failed\n");
     //
-    // Try Mutex 2
+    // Try Mutex 2 (NOTE: may exhibit some non-deterministic behavior)
     //
     test_pass = true;
     MostPrint("Mutex Test 5\n");
@@ -1054,8 +1106,6 @@ int main() {
         MostPrint("Mos config error: not enough threads\n");
         return -1;
     }
-
-    MostPrintf(print_buf, "\nERRNO: %d\n", errno);
 
     MosInitAndRunThread(MAX_TEST_THREADS, 0, TestExecThread, 0, stacks[0], 256);
     MosRunScheduler();
