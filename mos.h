@@ -44,6 +44,7 @@
 #define MOS_STACK_ALIGNMENT    8
 #define MOS_STACK_ALIGNED      MOS_ALIGNED(MOS_STACK_ALIGNMENT)
 
+// Can be used for U32 register reads and writes
 #define MOS_VOL_U32(addr)      (*((volatile u32 *)(addr)))
 
 typedef uint8_t     u8;
@@ -56,6 +57,7 @@ typedef uint64_t    u64;
 typedef int64_t     s64;
 
 typedef s32 (MosThreadEntry)(s32 arg);
+typedef s32 (MosHandlerEntry)(s32 arg);
 typedef void (MosTimerHook)(u32 TickCount);
 typedef s16 MosThreadID;
 typedef u16 MosThreadPriority;
@@ -164,10 +166,12 @@ s32 MosInitAndRunThread(MosThreadID id, MosThreadPriority pri,
 void MosChangeThreadPriority(MosThreadID id, MosThreadPriority pri);
 void MosRequestThreadStop(MosThreadID id);
 bool MosIsStopRequested(void);
-// Forcible stop, works on blocked threads
-// TODO: void MosKillThread(MosThreadID id);
 s32 MosWaitForThreadStop(MosThreadID id);
 bool MosWaitForThreadStopOrTO(MosThreadID id, s32 * rtn_val, u32 ticks);
+// Forcible stop, works on blocked threads
+void MosKillThread(MosThreadID id);
+// Handler to run if thread is killed
+void MosSetKillHandler(MosThreadID id, MosHandlerEntry * entry, s32 arg);
 
 // Doubly-Linked Lists
 void MosInitList(MosList * list); // IS

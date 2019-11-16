@@ -70,7 +70,7 @@ static s32 TimerTestBusyThread(s32 arg) {
     return TEST_PASS;
 }
 
-#define RUN_TEST    3
+#define RUN_TEST    4
 
 void HalTests(u8 *stacks[], u32 stack_size) {
     const u32 test_time = 5000;

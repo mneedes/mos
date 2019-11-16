@@ -1016,10 +1016,10 @@ s32 TestExecThread(s32 arg) {
     MostPrint("\nStarting Tests\n");
 #if (USING_LOGIC_ANALYZER == false)
     // General testbench
-    //ThreadTests();
-    //TimerTests();
-    //SemTests();
-    //QueueTests();
+    ThreadTests();
+    TimerTests();
+    SemTests();
+    QueueTests();
     WaitMuxTests();
     MutexTests();
     //HeapTests();
