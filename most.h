@@ -5,10 +5,11 @@
 //  "License") included under this distribution.
 
 //
-// MOS tracing facility
+// MOS tracing facility and command shell
 //   Mutex to synchronize printing from different threads
 //   Lightweight format strings
 //   Maskable trace messaging
+//   Serial command shell
 //
 
 #ifndef _MOST_H_
@@ -32,7 +33,17 @@
 // Trace mask
 extern u32 MostTraceMask;
 
-// Basic message printing
+// Command shell callback
+typedef s32 (MostCmdFunc)(s32 argc, char * argv[]);
+
+// Command list
+typedef struct MostCmd {
+    MostCmdFunc * func;
+    char *name;
+    char *desc;
+    char *usage;
+} MostCmd;
+
 void MostPrint(char * str);
 void MostPrintf(char * buffer, const char * fmt, ...);
 
@@ -45,19 +56,25 @@ void MostHexDumpMessage(char * buffer, const char * id,
                         const char * name, const void * addr,
                         u32 size);
 
-void MostItoa32(char * restrict * out,
-                s32 input, u16 base,
+void MostItoa32(char * restrict * out, s32 input, u16 base,
                 bool is_signed, bool is_upper,
                 const u16 min_digits, char pad_char);
 
-void MostItoa64(char * restrict * out,
-                s64 input, u16 base,
+void MostItoa64(char * restrict * out, s64 input, u16 base,
                 bool is_signed, bool is_upper,
                 const u16 min_digits, char pad_char);
 
 // Callers can take mutex for multi-line prints
 void MostTakeMutex(void);
 void MostGiveMutex(void);
+
+// Command shell support
+void MostGetNextCmd(char * prompt, char * cmd, u32 max_cmd_len);
+u32 MostParseCmd(char * argv[], char *args, u32 max_argc);
+MostCmd * MostFindCmd(char * name, MostCmd * commands, u32 num_cmds);
+void MostPrintHelp(char * buffer, MostCmd * commands, u32 num_cmds);
+
+// Initialize module
 void MostInit(u32 mask);
 
 #endif

@@ -14,7 +14,10 @@
 
 #include "mos_phal.h"
 
+typedef void (HalRxUARTCallback)(char ch);
+
 void HalInit(void);
-void HalPrintToConsole(char *str);
+void HalRegisterRxUARTCallback(HalRxUARTCallback *rx_callback);
+void HalSendToTxUART(char ch);
 
 #endif

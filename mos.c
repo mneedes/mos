@@ -17,7 +17,6 @@
 // TODO: Can use this to enable floating point context save for CM4F
 #endif
 
-// TODO: MosDrainSem() / MosDrainQueue()
 // TODO: Clearing wait flags after thread kill / wait counter?
 // TODO: Thread killing self?
 // TODO: WaitForThreadStop on WaitMux?
@@ -225,6 +224,8 @@ static u32 MOS_USED Scheduler(u32 sp) {
     }
     u32 runnable_cnt = 0;
     // Process Priority Queues
+    // TODO: iterative scheduler (nested priority inheritance)
+    // TODO: proper setting of to_yield flag.
     Thread *run_thd = &Threads[MOS_IDLE_THREAD_ID];
     for (MosThreadPriority pri = 0; pri < MOS_MAX_THREAD_PRIORITIES; pri++) {
         MosList *elm;
@@ -237,11 +238,11 @@ static u32 MOS_USED Scheduler(u32 sp) {
                     // Check mutex and perform priority inheritance if necessary
                     MosThreadID owner = thd->wait.mtx->owner;
                     if (thd->wait.mtx->owner == MOS_NO_THREADS) {
-                        thd->wait.mtx->is_waiting = false;
+                        thd->wait.mtx->to_yield = false;
                         MosSetThreadState(thd->id, THREAD_RUNNABLE);
                     }
                     else {
-                        thd->wait.mtx->is_waiting = true;
+                        thd->wait.mtx->to_yield = true;
                         // Unusual if thread owning mutex is not runnable
                         if (Threads[owner].state == THREAD_RUNNABLE)
                             thd = &Threads[owner];
@@ -664,7 +665,7 @@ void MosMoveToEndOfList(MosList * elm_exist, MosList * elm_move) {
 void MosInitMutex(MosMutex * mtx) {
     mtx->owner = MOS_NO_THREADS;
     mtx->depth = 0;
-    mtx->is_waiting = false;
+    mtx->to_yield = false;
 }
 
 static void MOS_USED MosBlockOnMutex(MosMutex * mtx) {

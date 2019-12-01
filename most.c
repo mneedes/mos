@@ -5,7 +5,7 @@
 //  "License") included under this distribution.
 
 //
-// MOS Tracing Facility
+// MOS tracing facility and command shell
 //
 
 // TODO: Pass in size to prevent exceeding max length, ala snprintf()
@@ -14,6 +14,8 @@
 #include <stdio.h>
 #endif
 
+#include <string.h>
+
 #include "hal.h"
 #include "mos.h"
 #include "most.h"
@@ -21,15 +23,17 @@
 u32 MostTraceMask = 0;
 static MosMutex MostMutex;
 
-static const char lcDigits[] = "0123456789abcdef";
-static const char ucDigits[] = "0123456789ABCDEF";
+static MosQueue RxQueue;
+static u32 QueueBuf[32];
 
-void MostItoa32(char * restrict * out,
-                s32 input, u16 base,
+static const char LCDigits[] = "0123456789abcdef";
+static const char UCDigits[] = "0123456789ABCDEF";
+
+void MostItoa32(char * restrict * out, s32 input, u16 base,
                 bool is_signed, bool is_upper,
                 const u16 min_digits, char pad_char) {
-    const char * digits_p = lcDigits;
-    if (is_upper) digits_p = ucDigits;
+    const char * digits_p = LCDigits;
+    if (is_upper) digits_p = UCDigits;
     u32 adj = (u32) input;
     if (is_signed && input < 0) adj = (u32) -input;
     // Determine digits (in reverse order)
@@ -59,12 +63,11 @@ void MostItoa32(char * restrict * out,
     }
 }
 
-void MostItoa64(char * restrict * out,
-                s64 input, u16 base,
+void MostItoa64(char * restrict * out, s64 input, u16 base,
                 bool is_signed, bool is_upper,
                 const u16 min_digits, char pad_char) {
-    const char * digits_p = lcDigits;
-    if (is_upper) digits_p = ucDigits;
+    const char * digits_p = LCDigits;
+    if (is_upper) digits_p = UCDigits;
     u64 adj = (u64) input;
     if (is_signed && input < 0) adj = (u64) -input;
     // Determine digits (in reverse order)
@@ -207,8 +210,17 @@ void MostPrint(char * str) {
 #if (MOST_USE_STDIO == true)
     fputs(str, stdout);
 #else
-    HalPrintToConsole(str);
+    for (char * ch = str; *ch != '\0'; ch++) {
+        if (*ch == '\n') HalSendToTxUART('\r');
+        HalSendToTxUART(*ch);
+    }
 #endif
+    MosGiveMutex(&MostMutex);
+}
+
+static void MostPrintCh(char ch) {
+    MosTakeMutex(&MostMutex);
+    HalSendToTxUART(ch);
     MosGiveMutex(&MostMutex);
 }
 
@@ -220,8 +232,7 @@ void MostPrintf(char * buffer, const char * fmt, ...) {
     MostPrint(buffer);
 }
 
-void MostTraceMessage(char * buffer, const char * id,
-                      const char * fmt, ...) {
+void MostTraceMessage(char * buffer, const char * id, const char * fmt, ...) {
     char * restrict buf = buffer;
     const char * restrict str = id;
     va_list args;
@@ -279,7 +290,53 @@ void MostGiveMutex(void) {
     MosGiveMutex(&MostMutex);
 }
 
+/* Callback must be ISR safe */
+static void MostRxCallback(char ch) {
+    MosSendToQueue(&RxQueue, (u32)ch);
+}
+
+void MostGetNextCmd(char * prompt, char * cmd, u32 max_cmd_len) {
+    if (prompt) MostPrint(prompt);
+    u32 ix = 0;
+    while (ix < max_cmd_len - 1) {
+        cmd[ix] = (char)MosReceiveFromQueue(&RxQueue);
+        if (cmd[ix] == '\b' || cmd[ix] == 127) {
+            if (ix) MostPrintCh(cmd[ix--]);
+        } else if (cmd[ix] == '\r') break;
+        else MostPrintCh(cmd[ix++]);
+    }
+    cmd[ix] = '\0';
+    MostPrint("\n");
+}
+
+u32 MostParseCmd(char * argv[], char * args, u32 max_argc) {
+    if (args == NULL) return 0;
+    char *tmp = NULL;
+    for (u32 argc = 0; argc < max_argc; ++argc) {
+        argv[argc] = strtok_r((argc == 0) ? args : NULL, " ", &tmp);
+        if (argv[argc] == NULL) return argc;
+    }
+    return max_argc;
+}
+
+MostCmd * MostFindCmd(char * name, MostCmd * commands, u32 num_cmds) {
+    for (u32 ix = 0; ix < num_cmds; ix++) {
+        if (strcmp(name, commands[ix].name) == 0)
+            return &commands[ix];
+    }
+    return NULL;
+}
+
+void MostPrintHelp(char * buffer, MostCmd * commands, u32 num_cmds) {
+    for (u32 ix = 0; ix < num_cmds; ix++) {
+        MostPrintf(buffer, "%s %s: %s\n", commands[ix].name,
+                   commands[ix].usage, commands[ix].desc);
+    }
+}
+
 void MostInit(u32 mask) {
     MostTraceMask = mask;
     MosInitMutex(&MostMutex);
+    MosInitQueue(&RxQueue, QueueBuf, count_of(QueueBuf));
+    HalRegisterRxUARTCallback(MostRxCallback);
 }

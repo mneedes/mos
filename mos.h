@@ -91,7 +91,7 @@ typedef enum {
 typedef struct {
     s32 owner;  // ThreadID stored in s32
     s32 depth;
-    bool is_waiting;
+    bool to_yield;
 } MosMutex;
 
 // Doubly-linked lists (idea borrowed from famous OS)

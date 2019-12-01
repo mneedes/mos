@@ -9,11 +9,14 @@
 //
 
 #include <errno.h>
+#include <string.h>
 
 #include "hal.h"
 #include "mos.h"
 #include "mosh.h"
 #include "most.h"
+
+#include "hal_tb.h"
 
 #define DFT_STACK_SIZE           256
 #define MAX_TEST_SUB_THREADS     (MOS_MAX_APP_THREADS - 1)
@@ -35,7 +38,7 @@ typedef enum {
 // Test thread stacks and heap
 static u8 * stacks[MAX_TEST_THREADS];
 static MoshHeap TestHeapDesc;
-static u8 MOSH_HEAP_ALIGNED TestHeap[2048];
+static u8 MOSH_HEAP_ALIGNED TestHeap[4096];
 
 // Generic flag for tests
 static volatile u32 TestFlag = 0;
@@ -1062,23 +1065,54 @@ static void HeapTests(void) {
     }
 }
 
-#define USING_LOGIC_ANALYZER  false
+#define MAX_CMD_ARGUMENTS       10
+#define MAX_CMD_BUFFER_LENGTH   10
+#define MAX_CMD_LINE_SIZE       128
 
-s32 TestExecThread(s32 arg) {
-    MostPrint("\nStarting Tests\n");
-#if (USING_LOGIC_ANALYZER == false)
-    // General testbench
-    ThreadTests();
-    TimerTests();
-    SemTests();
-    QueueTests();
-    WaitMuxTests();
-    MutexTests();
-    //HeapTests();
-#else
-    HalTests(stacks, DFT_STACK_SIZE);
-#endif
-    MostPrint("Tests Complete\n");
+//static char CmdBuffer[MAX_CMD_BUFFER_LENGTH][MAX_CMD_LINE_SIZE];
+//static s32 CmdIx = 0;
+
+s32 RunTest(s32 argc, char * argv[]) {
+    if (argc == 2) {
+        if (strcmp(argv[1], "main") == 0) {
+            ThreadTests();
+            TimerTests();
+            SemTests();
+            QueueTests();
+            WaitMuxTests();
+            MutexTests();
+            MostPrint("Tests Complete\n");
+        } else if (strcmp(argv[1], "hal") == 0) {
+            HalTests(stacks, DFT_STACK_SIZE);
+            MostPrint("Tests Complete\n");
+        }
+    }
+    return 0;
+}
+
+MostCmdFunc CmdHelp;
+
+static MostCmd cmd_list[] = {
+    { RunTest, "run", "Run Test", "[TEST]" },
+    { CmdHelp, "help", "Display Help", "" },
+    { CmdHelp, "?", "Display Help", "" },
+};
+
+s32 CmdHelp(s32 argc, char * argv[])  {
+    MostPrintHelp(print_buf, cmd_list, count_of(cmd_list));
+    return 0;
+}
+
+s32 TestShell(s32 arg) {
+    u32 argc;
+    char * argv[MAX_CMD_ARGUMENTS];
+    char cmd_buf[MAX_CMD_LINE_SIZE];
+    while (1) {
+        MostGetNextCmd("# ", cmd_buf, MAX_CMD_LINE_SIZE);
+        argc = MostParseCmd(argv, cmd_buf, MAX_CMD_ARGUMENTS);
+        MostCmd *cmd = MostFindCmd(argv[0], cmd_list, count_of(cmd_list));
+        if (cmd) cmd->func(argc, argv);
+    }
     return 0;
 }
 
@@ -1091,10 +1125,12 @@ int main() {
     MostInit(TRACE_INFO | TRACE_ERROR | TRACE_FATAL);
 
     MoshInitHeap(&TestHeapDesc, TestHeap, sizeof(TestHeap));
+    MoshReserveBlockSize(&TestHeapDesc, 1024);
     MoshReserveBlockSize(&TestHeapDesc, 256);
     MoshReserveBlockSize(&TestHeapDesc, 128);
     MoshReserveBlockSize(&TestHeapDesc, 512);
-    for (u32 id = 0; id < count_of(stacks); id++) {
+    stacks[0] = MoshAllocBlock(&TestHeapDesc, 1024);
+    for (u32 id = 1; id < count_of(stacks); id++) {
         stacks[id] = MoshAllocBlock(&TestHeapDesc, DFT_STACK_SIZE);
         if (stacks[id] == NULL) {
             MostPrint("Stack allocation error\n");
@@ -1107,7 +1143,7 @@ int main() {
         return -1;
     }
 
-    MosInitAndRunThread(MAX_TEST_THREADS, 0, TestExecThread, 0, stacks[0], 256);
+    MosInitAndRunThread(MAX_TEST_THREADS, 0, TestShell, 0, stacks[0], 1024);
     MosRunScheduler();
     return -1;
 }

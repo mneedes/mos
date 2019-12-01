@@ -41,4 +41,7 @@
 // Use STDIO to print traces
 #define MOST_USE_STDIO              false
 
+// Maximum number of arguments on shell command line 
+#define MOST_CMD_MAX_ARGC           10
+
 #endif
