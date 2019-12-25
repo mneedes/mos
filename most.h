@@ -1,5 +1,5 @@
 
-//  Copyright 2019 Matthew C Needes
+//  Copyright 2019-2020 Matthew C Needes
 //  You may not use this source file except in compliance with the
 //  terms and conditions contained within the LICENSE file (the
 //  "License") included under this distribution.
@@ -39,13 +39,20 @@ typedef s32 (MostCmdFunc)(s32 argc, char * argv[]);
 // Command list
 typedef struct MostCmd {
     MostCmdFunc * func;
-    char *name;
-    char *desc;
-    char *usage;
+    char * name;
+    char * desc;
+    char * usage;
 } MostCmd;
 
-void MostPrint(char * str);
-void MostPrintf(char * buffer, const char * fmt, ...);
+typedef enum {
+    MOST_CMD_RECEIVED,
+    MOST_CMD_UP_ARROW,
+    MOST_CMD_DOWN_ARROW,
+    //MOST_CMD_TIMEOUT,
+} MostCmdResult;
+
+u32 MostPrint(char * str);
+u32 MostPrintf(char * buffer, const char * fmt, ...);
 
 // Parse format string and arguments into provided buffer
 void MostTraceMessage(char * buffer, const char * id,
@@ -69,7 +76,7 @@ void MostTakeMutex(void);
 void MostGiveMutex(void);
 
 // Command shell support
-void MostGetNextCmd(char * prompt, char * cmd, u32 max_cmd_len);
+MostCmdResult MostGetNextCmd(char * prompt, char * cmd, u32 max_cmd_len);
 u32 MostParseCmd(char * argv[], char *args, u32 max_argc);
 MostCmd * MostFindCmd(char * name, MostCmd * commands, u32 num_cmds);
 void MostPrintHelp(char * buffer, MostCmd * commands, u32 num_cmds);

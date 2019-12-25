@@ -1,11 +1,11 @@
 
-//  Copyright 2019 Matthew C Needes
+//  Copyright 2019-2020 Matthew C Needes
 //  You may not use this source file except in compliance with the
 //  terms and conditions contained within the LICENSE file (the
 //  "License") included under this distribution.
 
 //
-// MOS tracing facility and command shell
+// MOS tracing facility and command shell support
 //
 
 // TODO: Pass in size to prevent exceeding max length, ala snprintf()
@@ -205,17 +205,21 @@ static void MostTraceFmt(char * buffer, const char * fmt, va_list args) {
     *buf = '\0';
 }
 
-void MostPrint(char * str) {
+u32 MostPrint(char * str) {
+    u32 cnt;
     MosTakeMutex(&MostMutex);
 #if (MOST_USE_STDIO == true)
     fputs(str, stdout);
+    cnt = strlen(str);
 #else
-    for (char * ch = str; *ch != '\0'; ch++) {
+    cnt = 0;
+    for (char * ch = str; *ch != '\0'; ch++, cnt++) {
         if (*ch == '\n') HalSendToTxUART('\r');
         HalSendToTxUART(*ch);
     }
 #endif
     MosGiveMutex(&MostMutex);
+    return cnt;
 }
 
 static void MostPrintCh(char ch) {
@@ -224,12 +228,12 @@ static void MostPrintCh(char ch) {
     MosGiveMutex(&MostMutex);
 }
 
-void MostPrintf(char * buffer, const char * fmt, ...) {
+u32 MostPrintf(char * buffer, const char * fmt, ...) {
     va_list args;
     va_start(args, fmt);
     MostTraceFmt(buffer, fmt, args);
     va_end(args);
-    MostPrint(buffer);
+    return MostPrint(buffer);
 }
 
 void MostTraceMessage(char * buffer, const char * id, const char * fmt, ...) {
@@ -295,18 +299,66 @@ static void MostRxCallback(char ch) {
     MosSendToQueue(&RxQueue, (u32)ch);
 }
 
-void MostGetNextCmd(char * prompt, char * cmd, u32 max_cmd_len) {
-    if (prompt) MostPrint(prompt);
-    u32 ix = 0;
-    while (ix < max_cmd_len - 1) {
-        cmd[ix] = (char)MosReceiveFromQueue(&RxQueue);
-        if (cmd[ix] == '\b' || cmd[ix] == 127) {
-            if (ix) MostPrintCh(cmd[ix--]);
-        } else if (cmd[ix] == '\r') break;
-        else MostPrintCh(cmd[ix++]);
+MostCmdResult MostGetNextCmd(char * prompt, char * cmd, u32 max_cmd_len) {
+    enum {
+        NORMAL,
+        GOT_ESC,
+        GOT_ESC_PLUS_BRACKET
+    };
+    static u32 buf_ix = 0;
+    static bool last_ch_was_arrow = false;
+    if (buf_ix) {
+        for (u32 ix = 0; ix < buf_ix; ix++) MostPrintCh(127);
+    } else if (prompt && !last_ch_was_arrow) MostPrint(prompt);
+    last_ch_was_arrow = false;
+    buf_ix = MostPrint(cmd);
+    u32 state = NORMAL;
+    while (1) {
+        char ch = (char)MosReceiveFromQueue(&RxQueue);
+        switch (state) {
+        default:
+        case NORMAL:
+            switch (ch) {
+            default:
+                if (buf_ix < max_cmd_len && ch > 31) {
+                    MostPrintCh(ch);
+                    cmd[buf_ix++] = ch;
+                }
+                break;
+            case 27:
+                state = GOT_ESC;
+                break;
+            case '\b':
+            case 127:
+                if (buf_ix) {
+                    MostPrintCh(ch);
+                    buf_ix--;
+                }
+                break;
+            case '\r':
+                MostPrint("\n");
+                cmd[buf_ix] = '\0';
+                buf_ix = 0;
+                return MOST_CMD_RECEIVED;
+            }
+            break;
+        case GOT_ESC:
+            if (ch == '[') state = GOT_ESC_PLUS_BRACKET;
+            else state = NORMAL;
+            break;
+        case GOT_ESC_PLUS_BRACKET:
+            if (ch == 'A') {
+                last_ch_was_arrow = true;
+                cmd[buf_ix] = '\0';
+                return MOST_CMD_UP_ARROW;
+            } else if (ch == 'B') {
+                last_ch_was_arrow = true;
+                cmd[buf_ix] = '\0';
+                return MOST_CMD_DOWN_ARROW;
+            } else state = NORMAL;
+            break;
+        }
     }
-    cmd[ix] = '\0';
-    MostPrint("\n");
 }
 
 u32 MostParseCmd(char * argv[], char * args, u32 max_argc) {

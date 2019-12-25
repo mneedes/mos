@@ -1,5 +1,5 @@
 
-//  Copyright 2019 Matthew C Needes
+//  Copyright 2019-2020 Matthew C Needes
 //  You may not use this source file except in compliance with the
 //  terms and conditions contained within the LICENSE file (the
 //  "License") included under this distribution.
@@ -38,7 +38,7 @@ typedef enum {
 // Test thread stacks and heap
 static u8 * stacks[MAX_TEST_THREADS];
 static MoshHeap TestHeapDesc;
-static u8 MOSH_HEAP_ALIGNED TestHeap[4096];
+static u8 MOSH_HEAP_ALIGNED TestHeap[8192];
 
 // Generic flag for tests
 static volatile u32 TestFlag = 0;
@@ -1043,13 +1043,12 @@ static void MutexTests(void) {
 }
 
 static void HeapTests(void) {
-
     //
     //  Allocate and Free of reserved blocks
     //
 
     //
-    //  Allocate and "Free" of forever blocks
+    //  Allocate and Free of odd sized blocks
     //
 
     //
@@ -1064,13 +1063,6 @@ static void HeapTests(void) {
         MoshFreeShortLived(&TestHeapDesc, fun[ix]);
     }
 }
-
-#define MAX_CMD_ARGUMENTS       10
-#define MAX_CMD_BUFFER_LENGTH   10
-#define MAX_CMD_LINE_SIZE       128
-
-//static char CmdBuffer[MAX_CMD_BUFFER_LENGTH][MAX_CMD_LINE_SIZE];
-//static s32 CmdIx = 0;
 
 s32 RunTest(s32 argc, char * argv[]) {
     if (argc == 2) {
@@ -1103,15 +1095,48 @@ s32 CmdHelp(s32 argc, char * argv[])  {
     return 0;
 }
 
+#define MAX_CMD_ARGUMENTS       10
+#define MAX_CMD_BUFFER_LENGTH   10
+#define MAX_CMD_LINE_SIZE       128
+
+char CmdBuffers[MAX_CMD_BUFFER_LENGTH][MAX_CMD_LINE_SIZE] = {{ 0 }};
+
 s32 TestShell(s32 arg) {
-    u32 argc;
-    char * argv[MAX_CMD_ARGUMENTS];
+    u32 cmd_ix = 0;
+    u32 cmd_max_ix = 0;
+    u32 cmd_history_ix = 0;
     char cmd_buf[MAX_CMD_LINE_SIZE];
+    char * argv[MAX_CMD_ARGUMENTS];
+    u32 argc;
     while (1) {
-        MostGetNextCmd("# ", cmd_buf, MAX_CMD_LINE_SIZE);
-        argc = MostParseCmd(argv, cmd_buf, MAX_CMD_ARGUMENTS);
-        MostCmd *cmd = MostFindCmd(argv[0], cmd_list, count_of(cmd_list));
-        if (cmd) cmd->func(argc, argv);
+        MostCmdResult result;
+        result = MostGetNextCmd("# ", CmdBuffers[cmd_ix], MAX_CMD_LINE_SIZE);
+        switch (result) {
+        case MOST_CMD_RECEIVED:
+            strcpy(cmd_buf, CmdBuffers[cmd_ix]);
+            argc = MostParseCmd(argv, cmd_buf, MAX_CMD_ARGUMENTS);
+            MostCmd *cmd = MostFindCmd(argv[0], cmd_list, count_of(cmd_list));
+            if (cmd) {
+                cmd->func(argc, argv);
+                if (++cmd_ix == MAX_CMD_BUFFER_LENGTH) cmd_ix = 0;
+                if (cmd_ix > cmd_max_ix) cmd_max_ix = cmd_ix;
+                cmd_history_ix = cmd_ix;
+            }
+            CmdBuffers[cmd_ix][0] = '\0';
+            break;
+        case MOST_CMD_UP_ARROW:
+            if (cmd_history_ix == 0) cmd_history_ix = cmd_max_ix;
+            else --cmd_history_ix;
+            strcpy(CmdBuffers[cmd_ix], CmdBuffers[cmd_history_ix]);
+            break;
+        case MOST_CMD_DOWN_ARROW:
+            if (cmd_history_ix + 1 > cmd_max_ix) cmd_history_ix = 0;
+            else ++cmd_history_ix;
+            strcpy(CmdBuffers[cmd_ix], CmdBuffers[cmd_history_ix]);
+            break;
+        default:
+            break;
+        }
     }
     return 0;
 }
@@ -1126,10 +1151,15 @@ int main() {
 
     MoshInitHeap(&TestHeapDesc, TestHeap, sizeof(TestHeap));
     MoshReserveBlockSize(&TestHeapDesc, 1024);
+    MoshReserveBlockSize(&TestHeapDesc, 512);
     MoshReserveBlockSize(&TestHeapDesc, 256);
     MoshReserveBlockSize(&TestHeapDesc, 128);
-    MoshReserveBlockSize(&TestHeapDesc, 512);
-    stacks[0] = MoshAllocBlock(&TestHeapDesc, 1024);
+    MoshReserveBlockSize(&TestHeapDesc, 64);
+    stacks[0] = MoshAllocForever(&TestHeapDesc, 1024);
+    if (stacks[0] == NULL) {
+        MostPrint("Stack allocation error\n");
+        return -1;
+    }
     for (u32 id = 1; id < count_of(stacks); id++) {
         stacks[id] = MoshAllocBlock(&TestHeapDesc, DFT_STACK_SIZE);
         if (stacks[id] == NULL) {
@@ -1137,12 +1167,10 @@ int main() {
             return -1;
         }
     }
-
     if (MAX_TEST_THREADS > MOS_MAX_APP_THREADS) {
         MostPrint("Mos config error: not enough threads\n");
         return -1;
     }
-
     MosInitAndRunThread(MAX_TEST_THREADS, 0, TestShell, 0, stacks[0], 1024);
     MosRunScheduler();
     return -1;
