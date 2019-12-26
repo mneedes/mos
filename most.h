@@ -63,9 +63,9 @@ void MostHexDumpMessage(char * buffer, const char * id,
                         const char * name, const void * addr,
                         u32 size);
 
-void MostItoa32(char * restrict * out, s32 input, u16 base,
-                bool is_signed, bool is_upper,
-                const u16 min_digits, char pad_char);
+void MostItoa(char * restrict * out, s32 input, u16 base,
+              bool is_signed, bool is_upper,
+              const u16 min_digits, char pad_char);
 
 void MostItoa64(char * restrict * out, s64 input, u16 base,
                 bool is_signed, bool is_upper,

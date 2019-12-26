@@ -19,7 +19,7 @@
 #include "hal_tb.h"
 
 #define DFT_STACK_SIZE           256
-#define TEST_SHELL_STACK_SIZE    1024
+#define TEST_SHELL_STACK_SIZE    2048
 #define MAX_TEST_SUB_THREADS     (MOS_MAX_APP_THREADS - 1)
 #define MAX_TEST_THREADS         (MAX_TEST_SUB_THREADS + 1)
 
@@ -38,8 +38,11 @@ typedef enum {
 
 // Test thread stacks and heap
 static u8 * stacks[MAX_TEST_THREADS];
-static MoshHeap TestHeapDesc;
-static u8 MOSH_HEAP_ALIGNED TestHeap[8192];
+static MoshHeap TestThreadHeapDesc;
+static u8 MOSH_HEAP_ALIGNED TestThreadHeap[8192];
+
+// Heap for Heap testing
+static u8 MOSH_HEAP_ALIGNED TestHeap[16384];
 
 // Generic flag for tests
 static volatile u32 TestFlag = 0;
@@ -118,9 +121,10 @@ static s32 KillTestThread(s32 arg) {
     return TEST_FAIL;
 }
 
-static void ThreadTests(void) {
+static bool ThreadTests(void) {
     const u32 test_time = 5000;
     u32 exp_iter = test_time / pri_test_delay;
+    bool tests_all_pass = true;
     bool test_pass;
     //
     // Highest priorities must starve lowest
@@ -144,7 +148,10 @@ static void ThreadTests(void) {
     if (MosWaitForThreadStop(2) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(3) != TEST_PASS) test_pass = false;
     if (test_pass) MostPrint(" Passed\n");
-    else MostPrint(" Failed\n");
+    else {
+        MostPrint(" Failed\n");
+        tests_all_pass = false;
+    }
     //
     // Change of priority
     //
@@ -171,7 +178,10 @@ static void ThreadTests(void) {
     if (MosWaitForThreadStop(2) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(3) != TEST_PASS) test_pass = false;
     if (test_pass) MostPrint(" Passed\n");
-    else MostPrint(" Failed\n");
+    else {
+        MostPrint(" Failed\n");
+        tests_all_pass = false;
+    }
     //
     // Timeout on wait for thread
     //
@@ -197,7 +207,10 @@ static void ThreadTests(void) {
     MosKillThread(1);
     if (MosWaitForThreadStop(1) != TEST_PASS_HANDLER) test_pass = false;
     if (test_pass) MostPrint(" Passed\n");
-    else MostPrint(" Failed\n");
+    else {
+        MostPrint(" Failed\n");
+        tests_all_pass = false;
+    }
     //
     // Kill Thread using Supplied Handler
     //
@@ -212,7 +225,11 @@ static void ThreadTests(void) {
     if (MosWaitForThreadStop(1) != TEST_PASS_HANDLER) test_pass = false;
     if (TestMutex.owner != -1) test_pass = false;
     if (test_pass) MostPrint(" Passed\n");
-    else MostPrint(" Failed\n");
+    else {
+        MostPrint(" Failed\n");
+        tests_all_pass = false;
+    }
+    return tests_all_pass;
 }
 
 // Make delay a multiple of 4
@@ -265,9 +282,10 @@ static s32 TimerTestBusyThread(s32 arg) {
 //
 // Timer Tests
 //
-static void TimerTests(void) {
+static bool TimerTests(void) {
     const u32 test_time = 5000;
     u32 exp_iter = test_time / timer_test_delay;
+    bool tests_all_pass = true;
     bool test_pass;
     //
     // Run uniform timers
@@ -290,7 +308,10 @@ static void TimerTests(void) {
     if (TestHisto[1] != exp_iter) test_pass = false;
     if (TestHisto[2] != exp_iter) test_pass = false;
     if (test_pass) MostPrint(" Passed\n");
-    else MostPrint(" Failed\n");
+    else {
+        MostPrint(" Failed\n");
+        tests_all_pass = false;
+    }
     //
     // Run "harmonic" timers
     //
@@ -312,7 +333,10 @@ static void TimerTests(void) {
     if (TestHisto[1] != exp_iter * 2) test_pass = false;
     if (TestHisto[2] != exp_iter * 4) test_pass = false;
     if (test_pass) MostPrint(" Passed\n");
-    else MostPrint(" Failed\n");
+    else {
+        MostPrint(" Failed\n");
+        tests_all_pass = false;
+    }
     //
     // Run odd timers
     //
@@ -334,7 +358,10 @@ static void TimerTests(void) {
     if (TestHisto[1] != (test_time / 33) + 1) test_pass = false;
     if (TestHisto[2] != (test_time / 37) + 1) test_pass = false;
     if (test_pass) MostPrint(" Passed\n");
-    else MostPrint(" Failed\n");
+    else {
+        MostPrint(" Failed\n");
+        tests_all_pass = false;
+    }
     //
     // Run two timers over busy thread
     //
@@ -355,7 +382,10 @@ static void TimerTests(void) {
     if (TestHisto[0] != exp_iter) test_pass = false;
     if (TestHisto[1] != exp_iter * 2) test_pass = false;
     if (test_pass) MostPrint(" Passed\n");
-    else MostPrint(" Failed\n");
+    else {
+        MostPrint(" Failed\n");
+        tests_all_pass = false;
+    }
     //
     // Run timer over two busy threads
     //
@@ -375,7 +405,11 @@ static void TimerTests(void) {
     DisplayHistogram(3);
     if (TestHisto[0] != exp_iter) test_pass = false;
     if (test_pass) MostPrint(" Passed\n");
-    else MostPrint(" Failed\n");
+    else {
+        MostPrint(" Failed\n");
+        tests_all_pass = false;
+    }
+    return tests_all_pass;
 }
 
 //
@@ -436,9 +470,10 @@ static s32 SemTestThreadRxTry(s32 arg) {
     return TEST_PASS;
 }
 
-static void SemTests(void) {
+static bool SemTests(void) {
     const u32 test_time = 5000;
     u32 exp_cnt = test_time / sem_test_delay;
+    bool tests_all_pass = true;
     bool test_pass;
     //
     // Validate counts
@@ -462,7 +497,10 @@ static void SemTests(void) {
     if (TestHisto[2] != TestHisto[0] + TestHisto[1] + 5 + 1)
         test_pass = false;
     if (test_pass) MostPrint(" Passed\n");
-    else MostPrint(" Failed\n");
+    else {
+        MostPrint(" Failed\n");
+        tests_all_pass = false;
+    }
     //
     // Post from interrupt and threads
     //
@@ -485,7 +523,10 @@ static void SemTests(void) {
     if (TestHisto[3] != TestHisto[0] + TestHisto[2] + 1)
         test_pass = false;
     if (test_pass) MostPrint(" Passed\n");
-    else MostPrint(" Failed\n");
+    else {
+        MostPrint(" Failed\n");
+        tests_all_pass = false;
+    }
     //
     // Take Sem with Timeouts
     //
@@ -509,7 +550,10 @@ static void SemTests(void) {
     // Add one for last timeout before thread stop
     if (TestHisto[3] != exp_cnt + 1) test_pass = false;
     if (test_pass) MostPrint(" Passed\n");
-    else MostPrint(" Failed\n");
+    else {
+        MostPrint(" Failed\n");
+        tests_all_pass = false;
+    }
     //
     // TrySem
     //
@@ -531,7 +575,11 @@ static void SemTests(void) {
     if (TestHisto[2] != TestHisto[0] + TestHisto[1] + 5)
         test_pass = false;
     if (test_pass) MostPrint(" Passed\n");
-    else MostPrint(" Failed\n");
+    else {
+        MostPrint(" Failed\n");
+        tests_all_pass = false;
+    }
+    return tests_all_pass;
 }
 
 //
@@ -617,9 +665,10 @@ static s32 QueueTestThreadRxTimeout(s32 arg) {
     return TEST_PASS;
 }
 
-static void QueueTests(void) {
+static bool QueueTests(void) {
     const u32 test_time = 5000;
     u32 exp_cnt = test_time / queue_test_delay;
+    bool tests_all_pass = true;
     bool test_pass;
     //
     // Post from interrupts and threads
@@ -644,7 +693,10 @@ static void QueueTests(void) {
     if (TestHisto[4] != TestHisto[2] + 1) test_pass = false;
     if (TestQueue.head != TestQueue.tail) test_pass = false;
     if (test_pass) MostPrint(" Passed\n");
-    else MostPrint(" Failed\n");
+    else {
+        MostPrint(" Failed\n");
+        tests_all_pass = false;
+    }
     //
     // Receive From Queue Timeout
     //
@@ -668,7 +720,10 @@ static void QueueTests(void) {
     if (TestHisto[5] != exp_cnt + 1) test_pass = false;
     if (TestQueue.head != TestQueue.tail) test_pass = false;
     if (test_pass) MostPrint(" Passed\n");
-    else MostPrint(" Failed\n");
+    else {
+        MostPrint(" Failed\n");
+        tests_all_pass = false;
+    }
     //
     // Send to Queue Timeout
     //   NOTE: The interrupt will only be able to queue the first entry since the
@@ -697,7 +752,10 @@ static void QueueTests(void) {
     if (TestHisto[4] != TestHisto[1] + 1) test_pass = false;
     if (TestQueue.head != TestQueue.tail) test_pass = false;
     if (test_pass) MostPrint(" Passed\n");
-    else MostPrint(" Failed\n");
+    else {
+        MostPrint(" Failed\n");
+        tests_all_pass = false;
+    }
     //
     // Try Queue
     //
@@ -721,7 +779,11 @@ static void QueueTests(void) {
     if (TestHisto[4] != TestHisto[2] + 1) test_pass = false;
     if (TestQueue.head != TestQueue.tail) test_pass = false;
     if (test_pass) MostPrint(" Passed\n");
-    else MostPrint(" Failed\n");
+    else {
+        MostPrint(" Failed\n");
+        tests_all_pass = false;
+    }
+    return tests_all_pass;
 }
 
 //
@@ -793,9 +855,10 @@ static s32 WaitMuxTestThreadRxTimeout(s32 arg) {
     return TEST_PASS;
 }
 
-static void WaitMuxTests(void) {
+static bool WaitMuxTests(void) {
     const u32 test_time = 5000;
     u32 exp_cnt = test_time / mux_test_delay;
+    bool tests_all_pass = true;
     bool test_pass;
     //
     // Wait on Mux, thread and semaphore
@@ -821,7 +884,10 @@ static void WaitMuxTests(void) {
     if (TestHisto[3] != TestHisto[1]) test_pass = false;
     if (TestHisto[4] != 1) test_pass = false;
     if (test_pass) MostPrint(" Passed\n");
-    else MostPrint(" Failed\n");
+    else {
+        MostPrint(" Failed\n");
+        tests_all_pass = false;
+    }
     //
     // Wait on Mux with Timeout
     //
@@ -845,7 +911,11 @@ static void WaitMuxTests(void) {
     if (TestHisto[3] != TestHisto[1]) test_pass = false;
     if (TestHisto[4] != exp_cnt + 1) test_pass = false;
     if (test_pass) MostPrint(" Passed\n");
-    else MostPrint(" Failed\n");
+    else {
+        MostPrint(" Failed\n");
+        tests_all_pass = false;
+    }
+    return tests_all_pass;
 }
 
 //
@@ -943,7 +1013,8 @@ static s32 MutexDummyThread(s32 arg) {
     return TEST_PASS;
 }
 
-static void MutexTests(void) {
+static bool MutexTests(void) {
+    bool tests_all_pass = true;
     bool test_pass;
     //
     // Contention / Depth 1
@@ -961,7 +1032,10 @@ static void MutexTests(void) {
     if (MosWaitForThreadStop(2) != TEST_PASS) test_pass = false;
     DisplayHistogram(2);
     if (test_pass) MostPrint(" Passed\n");
-    else MostPrint(" Failed\n");
+    else {
+        MostPrint(" Failed\n");
+        tests_all_pass = false;
+    }
     //
     // Contention / Depth 2
     //
@@ -981,7 +1055,10 @@ static void MutexTests(void) {
     if (MosWaitForThreadStop(3) != TEST_PASS) test_pass = false;
     DisplayHistogram(3);
     if (test_pass) MostPrint(" Passed\n");
-    else MostPrint(" Failed\n");
+    else {
+        MostPrint(" Failed\n");
+        tests_all_pass = false;
+    }
     //
     // Priority Inheritance
     //
@@ -1003,7 +1080,10 @@ static void MutexTests(void) {
     if (MosWaitForThreadStop(2) != TEST_PASS) test_pass = false;
     DisplayHistogram(6);
     if (test_pass) MostPrint(" Passed\n");
-    else MostPrint(" Failed\n");
+    else {
+        MostPrint(" Failed\n");
+        tests_all_pass = false;
+    }
     //
     // Try Mutex (NOTE: may exhibit some non-deterministic behavior)
     //
@@ -1020,7 +1100,10 @@ static void MutexTests(void) {
     if (MosWaitForThreadStop(2) != TEST_PASS) test_pass = false;
     DisplayHistogram(2);
     if (test_pass) MostPrint(" Passed\n");
-    else MostPrint(" Failed\n");
+    else {
+        MostPrint(" Failed\n");
+        tests_all_pass = false;
+    }
     //
     // Try Mutex 2 (NOTE: may exhibit some non-deterministic behavior)
     //
@@ -1040,66 +1123,152 @@ static void MutexTests(void) {
     if (MosWaitForThreadStop(3) != TEST_PASS) test_pass = false;
     DisplayHistogram(3);
     if (test_pass) MostPrint(" Passed\n");
-    else MostPrint(" Failed\n");
+    else {
+        MostPrint(" Failed\n");
+        tests_all_pass = false;
+    }
+    return tests_all_pass;
 }
 
-static void HeapTests(void) {
+static bool HeapTests(void) {
+    bool tests_all_pass = true;
+    bool test_pass;
+    MoshHeap TestHeapDesc;
+    u32 rem;
     //
-    //  Allocate and Free of reserved blocks
+    // Allocate and Free of reserved block sizes
+    //
+    test_pass = true;
+    MostPrint("Heap Test 1: Reserved block sizes\n");
+    MoshInitHeap(&TestHeapDesc, TestHeap, sizeof(TestHeap));
+    if (TestHeapDesc.max_bs != 0) test_pass = false;
+    MoshReserveBlockSize(&TestHeapDesc, 128);
+    if (TestHeapDesc.max_bs != 128) test_pass = false;
+    MoshReserveBlockSize(&TestHeapDesc, 64);
+    if (TestHeapDesc.max_bs != 128) test_pass = false;
+    MoshReserveBlockSize(&TestHeapDesc, 256);
+    if (TestHeapDesc.max_bs != 256) test_pass = false;
+    // Check for sorted blocks
+    // Check for alignment
+    // TODO: Finish
+    if (test_pass) MostPrint(" Passed\n");
+    else {
+        MostPrint(" Failed\n");
+        tests_all_pass = false;
+    }
+    //
+    // Allocate and Free of odd sized blocks
+    //
+    test_pass = true;
+    MostPrint("Heap Test 2: Odd blocks\n");
+    MoshInitHeap(&TestHeapDesc, TestHeap, sizeof(TestHeap));
+    MoshReserveBlockSize(&TestHeapDesc, 64);
+    MoshReserveBlockSize(&TestHeapDesc, 128);
+    MoshReserveBlockSize(&TestHeapDesc, 256);
+    if (TestHeapDesc.max_bs != 256) test_pass = false;
+    rem = TestHeapDesc.bot - TestHeapDesc.pit + 16;
+    MostPrintf(print_buf, "  Starting: %u bytes\n", rem);
+    if (rem != sizeof(TestHeap)) test_pass = false;
+    const u16 num_blocks = 5;
+    void * blocks[num_blocks];
+    for (u32 ix = 0; ix < num_blocks; ix++) {
+        blocks[ix] = MoshAlloc(&TestHeapDesc, 257);
+        if (blocks[ix] == NULL) test_pass = false;
+        if ((u32)blocks[ix] % MOSH_HEAP_ALIGNMENT != 0) test_pass = false;
+        if (!MosIsListEmpty(&TestHeapDesc.osl)) test_pass = false;
+    }
+    rem = TestHeapDesc.bot - TestHeapDesc.pit + 16;
+    MostPrintf(print_buf, " Remaining: %u bytes\n", rem);
+    if (rem != sizeof(TestHeap) - (264 + 16) * num_blocks)
+        test_pass = false;
+    for (u32 ix = 0; ix < num_blocks; ix++) {
+        MoshFree(&TestHeapDesc, blocks[ix]);
+        if (MosIsListEmpty(&TestHeapDesc.osl)) test_pass = false;
+    }
+    for (u32 ix = 0; ix < num_blocks; ix++) {
+        if (MosIsListEmpty(&TestHeapDesc.osl)) test_pass = false;
+        blocks[ix] = MoshAlloc(&TestHeapDesc, 257);
+        if (blocks[ix] == NULL) test_pass = false;
+        if ((u32)blocks[ix] % MOSH_HEAP_ALIGNMENT != 0) test_pass = false;
+    }
+    if (!MosIsListEmpty(&TestHeapDesc.osl)) test_pass = false;
+    rem = TestHeapDesc.bot - TestHeapDesc.pit + 16;
+    MostPrintf(print_buf, " Remaining: %u bytes\n", rem);
+    if (rem != sizeof(TestHeap) - (264 + 16) * num_blocks)
+        test_pass = false;
+    if (test_pass) MostPrint(" Passed\n");
+    else {
+        MostPrint(" Failed\n");
+        tests_all_pass = false;
+    }
+    //
+    // Allocation of several odd size blocks of differing sizes
     //
 
     //
-    //  Allocate and Free of odd sized blocks
+    // Allocate and Free of short-lived blocks
     //
-
-    //
-    //  Allocate and Free of short-lived blocks
-    //
-
+    test_pass = true;
+    MostPrint("Heap Test 3: Short-lived blocks\n");
     u8 * fun[8];
     for (u32 ix = 0; ix < count_of(fun); ix++) {
-        fun[ix] = MoshAllocShortLived(&TestHeapDesc, 64);
+        fun[ix] = MoshAllocShortLived(&TestThreadHeapDesc, 64);
     }
     for (u32 ix = 0; ix < count_of(fun); ix++) {
-        MoshFreeShortLived(&TestHeapDesc, fun[ix]);
+        MoshFree(&TestThreadHeapDesc, fun[ix]);
     }
+    if (test_pass) MostPrint(" Passed\n");
+    else {
+        MostPrint(" Failed\n");
+        tests_all_pass = false;
+    }
+    return tests_all_pass;
 }
 
 typedef enum {
-    CMD_NOT_FOUND = -2,
-    CMD_ERROR = -1,
+    CMD_ERR_NOT_FOUND = -2,
+    CMD_ERR = -1,
     CMD_OK,
     CMD_OK_NO_HISTORY,
 } CmdStatus;
 
 static s32 CmdTest(s32 argc, char * argv[]) {
+    bool test_pass = true;
     if (argc == 2) {
         if (strcmp(argv[1], "main") == 0) {
-            ThreadTests();
-            TimerTests();
-            SemTests();
-            QueueTests();
-            WaitMuxTests();
-            MutexTests();
+            if (ThreadTests() == false) test_pass = false;
+            if (TimerTests() == false) test_pass = false;
+            if (SemTests() == false) test_pass = false;
+            if (QueueTests() == false) test_pass = false;
+            if (WaitMuxTests() == false) test_pass = false;
+            if (MutexTests() == false) test_pass = false;
+            if (HeapTests() == false) test_pass = false;
         } else if (strcmp(argv[1], "hal") == 0) {
-            HalTests(stacks, DFT_STACK_SIZE);
+            test_pass = HalTests(stacks, DFT_STACK_SIZE);
         } else if (strcmp(argv[1], "thread") == 0) {
-            ThreadTests();
+            test_pass = ThreadTests();
         } else if (strcmp(argv[1], "timer") == 0) {
-            TimerTests();
+            test_pass = TimerTests();
         } else if (strcmp(argv[1], "sem") == 0) {
-            SemTests();
+            test_pass = SemTests();
         } else if (strcmp(argv[1], "queue") == 0) {
-            QueueTests();
+            test_pass = QueueTests();
         } else if (strcmp(argv[1], "wmux") == 0) {
-            WaitMuxTests();
+            test_pass = WaitMuxTests();
         } else if (strcmp(argv[1], "mutex") == 0) {
-            MutexTests();
-        } else return CMD_NOT_FOUND;
-        MostPrint("Tests Complete\n");
-        return CMD_OK;
+            test_pass = MutexTests();
+        } else if (strcmp(argv[1], "heap") == 0) {
+            test_pass = HeapTests();
+        } else return CMD_ERR_NOT_FOUND;
+        if (test_pass) {
+            MostPrint("Tests Passed\n");
+            return CMD_OK;
+        } else {
+            MostPrint("Tests FAILED\n");
+            return CMD_ERR;
+        }
     }
-    return CMD_NOT_FOUND;
+    return CMD_ERR_NOT_FOUND;
 }
 
 static MostCmd cmd_list[] = {
@@ -1115,7 +1284,7 @@ static u32 CmdIx = 0;
 static u32 CmdMaxIx = 0;
 static u32 CmdHistoryIx = 0;
 
-/* Calculate a valid command index at the offset from the provided index */
+// Calculate a valid command index at the offset from the provided index
 static u32 CalcOffsetCmdIx(s32 ix, s32 max_ix, s32 offset) {
     s32 new_ix = (ix + offset) % (max_ix + 1);
     if (new_ix < 0) new_ix += (max_ix + 1);
@@ -1165,7 +1334,7 @@ static CmdStatus RunCmd(char * cmd_buf_in) {
     } else if (argv[0][0] == '\0') {
         return CMD_OK_NO_HISTORY;
     }
-    return CMD_NOT_FOUND;
+    return CMD_ERR_NOT_FOUND;
 }
 
 static s32 TestShell(s32 arg) {
@@ -1179,8 +1348,8 @@ static s32 TestShell(s32 arg) {
             switch (status) {
             case CMD_OK_NO_HISTORY:
                 break;
-            case CMD_NOT_FOUND:
-                MostPrint("[ERR] NOT FOUND\n");
+            case CMD_ERR_NOT_FOUND:
+                MostPrint("[ERR] Command Not Found\n");
                 break;
             case CMD_OK:
                 MostPrint("[OK]\n");
@@ -1188,7 +1357,7 @@ static s32 TestShell(s32 arg) {
                 if (CmdIx > CmdMaxIx) CmdMaxIx = CmdIx;
                 break;
             default:
-            case CMD_ERROR:
+            case CMD_ERR:
                 MostPrint("[ERR]\n");
                 if (++CmdIx == MAX_CMD_BUFFER_LENGTH) CmdIx = 0;
                 if (CmdIx > CmdMaxIx) CmdMaxIx = CmdIx;
@@ -1198,14 +1367,14 @@ static s32 TestShell(s32 arg) {
             CmdBuffers[CmdIx][0] = '\0';
             break;
         case MOST_CMD_UP_ARROW:
-            /* Rotate history back one, skipping over current index */
+            // Rotate history back one, skipping over current index
             CmdHistoryIx = CalcOffsetCmdIx(CmdHistoryIx, CmdMaxIx, -1);
             if (CmdHistoryIx == CmdIx)
                 CmdHistoryIx = CalcOffsetCmdIx(CmdHistoryIx, CmdMaxIx, -1);
             strcpy(CmdBuffers[CmdIx], CmdBuffers[CmdHistoryIx]);
             break;
         case MOST_CMD_DOWN_ARROW:
-            /* Rotate history forward one, skipping over current index */
+            // Rotate history forward one, skipping over current index
             CmdHistoryIx = CalcOffsetCmdIx(CmdHistoryIx, CmdMaxIx, 1);
             if (CmdHistoryIx == CmdIx)
                 CmdHistoryIx = CalcOffsetCmdIx(CmdHistoryIx, CmdMaxIx, 1);
@@ -1226,19 +1395,19 @@ int main() {
     MosInit();
     MostInit(TRACE_INFO | TRACE_ERROR | TRACE_FATAL);
 
-    MoshInitHeap(&TestHeapDesc, TestHeap, sizeof(TestHeap));
-    MoshReserveBlockSize(&TestHeapDesc, 1024);
-    MoshReserveBlockSize(&TestHeapDesc, 512);
-    MoshReserveBlockSize(&TestHeapDesc, 256);
-    MoshReserveBlockSize(&TestHeapDesc, 128);
-    MoshReserveBlockSize(&TestHeapDesc, 64);
-    stacks[0] = MoshAllocForever(&TestHeapDesc, TEST_SHELL_STACK_SIZE);
+    MoshInitHeap(&TestThreadHeapDesc, TestThreadHeap, sizeof(TestThreadHeap));
+    MoshReserveBlockSize(&TestThreadHeapDesc, 1024);
+    MoshReserveBlockSize(&TestThreadHeapDesc, 512);
+    MoshReserveBlockSize(&TestThreadHeapDesc, 256);
+    MoshReserveBlockSize(&TestThreadHeapDesc, 128);
+    MoshReserveBlockSize(&TestThreadHeapDesc, 64);
+    stacks[0] = MoshAlloc(&TestThreadHeapDesc, TEST_SHELL_STACK_SIZE);
     if (stacks[0] == NULL) {
         MostPrint("Stack allocation error\n");
         return -1;
     }
     for (u32 id = 1; id < count_of(stacks); id++) {
-        stacks[id] = MoshAllocBlock(&TestHeapDesc, DFT_STACK_SIZE);
+        stacks[id] = MoshAllocBlock(&TestThreadHeapDesc, DFT_STACK_SIZE);
         if (stacks[id] == NULL) {
             MostPrint("Stack allocation error\n");
             return -1;

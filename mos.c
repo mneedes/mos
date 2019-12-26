@@ -74,7 +74,7 @@ typedef struct Thread {
     MosWaitMux * wait_mux;
 } Thread;
 
-typedef struct ThreadAuxData {
+typedef struct {
     s16 int_disable_cnt;
     u16 stop_request;
     s32 rtn_val;
@@ -895,7 +895,7 @@ void MosInitQueue(MosQueue * queue, u32 * buf, u32 len) {
 
 bool MosSendToQueue(MosQueue * queue, u32 data) {
     // After taking semaphore context has a "license to write one entry,"
-    // but it still should wait if another context is trying to do the same
+    // but it still must wait if another context is trying to do the same
     // thing in a thread or ISR.
     u32 irq = MosGetIRQNumber();
     if (!irq) MosTakeSem(&queue->sem_tail);

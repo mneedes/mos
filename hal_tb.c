@@ -72,7 +72,7 @@ static s32 TimerTestBusyThread(s32 arg) {
 
 #define RUN_TEST    4
 
-void HalTests(u8 *stacks[], u32 stack_size) {
+bool HalTests(u8 *stacks[], u32 stack_size) {
     const u32 test_time = 5000;
     bool test_pass;
 #if RUN_TEST == 1
@@ -145,4 +145,5 @@ void HalTests(u8 *stacks[], u32 stack_size) {
     if (test_pass) MostPrint(" Passed\n");
     else MostPrint(" Failed\n");
 #endif
+    return test_pass;
 }

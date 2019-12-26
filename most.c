@@ -10,6 +10,8 @@
 
 // TODO: Pass in size to prevent exceeding max length, ala snprintf()
 // TODO: Parse Quotes and escape characters in command shell
+// TODO: ITOA can use shift/mask operations for power-of-2 bases
+// TODO: Internal buffer using mutex?
 
 #if (MOST_USE_STDIO == true)
 #include <stdio.h>
@@ -27,14 +29,14 @@ static MosMutex MostMutex;
 static MosQueue RxQueue;
 static u32 QueueBuf[32];
 
-static const char LCDigits[] = "0123456789abcdef";
-static const char UCDigits[] = "0123456789ABCDEF";
+static const char LowerCaseDigits[] = "0123456789abcdef";
+static const char UpperCaseDigits[] = "0123456789ABCDEF";
 
-void MostItoa32(char * restrict * out, s32 input, u16 base,
-                bool is_signed, bool is_upper,
-                const u16 min_digits, char pad_char) {
-    const char * digits_p = LCDigits;
-    if (is_upper) digits_p = UCDigits;
+void MostItoa(char * restrict * out, s32 input, u16 base,
+               bool is_signed, bool is_upper,
+               const u16 min_digits, char pad_char) {
+    const char * digits_p = LowerCaseDigits;
+    if (is_upper) digits_p = UpperCaseDigits;
     u32 adj = (u32) input;
     if (is_signed && input < 0) adj = (u32) -input;
     // Determine digits (in reverse order)
@@ -67,8 +69,8 @@ void MostItoa32(char * restrict * out, s32 input, u16 base,
 void MostItoa64(char * restrict * out, s64 input, u16 base,
                 bool is_signed, bool is_upper,
                 const u16 min_digits, char pad_char) {
-    const char * digits_p = LCDigits;
-    if (is_upper) digits_p = UCDigits;
+    const char * digits_p = LowerCaseDigits;
+    if (is_upper) digits_p = UpperCaseDigits;
     u64 adj = (u64) input;
     if (is_signed && input < 0) adj = (u64) -input;
     // Determine digits (in reverse order)
@@ -177,12 +179,12 @@ static void MostTraceFmt(char * buffer, const char * fmt, va_list args) {
                 break;
             case 'p':
                 arg32 = (u32) va_arg(args, u32 *);
-                MostItoa32(&buf, arg32, 16, false, false, 8, '0');
+                MostItoa(&buf, arg32, 16, false, false, 8, '0');
                 is_numeric = false;
                 break;
             case 'P':
                 arg32 = (u32) va_arg(args, u32 *);
-                MostItoa32(&buf, arg32, 16, false, true, 8, '0');
+                MostItoa(&buf, arg32, 16, false, true, 8, '0');
                 is_numeric = false;
                 break;
             default:
@@ -193,8 +195,8 @@ static void MostTraceFmt(char * buffer, const char * fmt, va_list args) {
             if (is_numeric) {
                 if (long_cnt <= 1) {
                     arg32 = va_arg(args, s32);
-                    MostItoa32(&buf, arg32, base, is_signed,
-                               is_upper, min_digits, pad_char);
+                    MostItoa(&buf, arg32, base, is_signed,
+                             is_upper, min_digits, pad_char);
                 } else {
                     arg64 = va_arg(args, s64);
                     MostItoa64(&buf, arg64, base, is_signed,
@@ -269,11 +271,11 @@ void MostHexDumpMessage(char * buffer, const char * id, const char * name,
             if (bytes == 0) break;
         }
         // Address
-        MostItoa32(&buf, (s32) data, 16, false, true, 8, '0');
+        MostItoa(&buf, (s32) data, 16, false, true, 8, '0');
         *buf++ = ' ';
         *buf++ = ' ';
         for (; bytes > 0; bytes--) {
-            MostItoa32(&buf, *data, 16, false, true, 2, '0');
+            MostItoa(&buf, *data, 16, false, true, 2, '0');
             *buf++ = ' ';
             data++;
         }
@@ -295,7 +297,7 @@ void MostGiveMutex(void) {
     MosGiveMutex(&MostMutex);
 }
 
-/* Callback must be ISR safe */
+// Callback must be ISR safe
 static void MostRxCallback(char ch) {
     MosSendToQueue(&RxQueue, (u32)ch);
 }
@@ -319,7 +321,7 @@ MostCmdResult MostGetNextCmd(char * prompt, char * cmd, u32 max_cmd_len) {
     last_ch_was_arrow = false;
     u32 state = KEY_NORMAL;
     while (1) {
-        /* Obtain next key character and parse it */
+        // Obtain next key character and parse it
         char ch = (char)MosReceiveFromQueue(&RxQueue);
         switch (state) {
         default:
