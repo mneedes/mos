@@ -9,6 +9,7 @@
 //
 
 // TODO: Pass in size to prevent exceeding max length, ala snprintf()
+// TODO: Parse Quotes and escape characters in command shell
 
 #if (MOST_USE_STDIO == true)
 #include <stdio.h>
@@ -301,23 +302,28 @@ static void MostRxCallback(char ch) {
 
 MostCmdResult MostGetNextCmd(char * prompt, char * cmd, u32 max_cmd_len) {
     enum {
-        NORMAL,
-        GOT_ESC,
-        GOT_ESC_PLUS_BRACKET
+        KEY_NORMAL,
+        KEY_ESCAPE,
+        KEY_ESCAPE_PLUS_BRACKET
     };
     static u32 buf_ix = 0;
     static bool last_ch_was_arrow = false;
+    MosTakeMutex(&MostMutex);
     if (buf_ix) {
         for (u32 ix = 0; ix < buf_ix; ix++) MostPrintCh(127);
-    } else if (prompt && !last_ch_was_arrow) MostPrint(prompt);
-    last_ch_was_arrow = false;
+    } else if (prompt && !last_ch_was_arrow) {
+        MostPrint(prompt);
+    }
     buf_ix = MostPrint(cmd);
-    u32 state = NORMAL;
+    MosGiveMutex(&MostMutex);
+    last_ch_was_arrow = false;
+    u32 state = KEY_NORMAL;
     while (1) {
+        /* Obtain next key character and parse it */
         char ch = (char)MosReceiveFromQueue(&RxQueue);
         switch (state) {
         default:
-        case NORMAL:
+        case KEY_NORMAL:
             switch (ch) {
             default:
                 if (buf_ix < max_cmd_len && ch > 31) {
@@ -326,7 +332,7 @@ MostCmdResult MostGetNextCmd(char * prompt, char * cmd, u32 max_cmd_len) {
                 }
                 break;
             case 27:
-                state = GOT_ESC;
+                state = KEY_ESCAPE;
                 break;
             case '\b':
             case 127:
@@ -342,11 +348,11 @@ MostCmdResult MostGetNextCmd(char * prompt, char * cmd, u32 max_cmd_len) {
                 return MOST_CMD_RECEIVED;
             }
             break;
-        case GOT_ESC:
-            if (ch == '[') state = GOT_ESC_PLUS_BRACKET;
-            else state = NORMAL;
+        case KEY_ESCAPE:
+            if (ch == '[') state = KEY_ESCAPE_PLUS_BRACKET;
+            else state = KEY_NORMAL;
             break;
-        case GOT_ESC_PLUS_BRACKET:
+        case KEY_ESCAPE_PLUS_BRACKET:
             if (ch == 'A') {
                 last_ch_was_arrow = true;
                 cmd[buf_ix] = '\0';
@@ -355,7 +361,9 @@ MostCmdResult MostGetNextCmd(char * prompt, char * cmd, u32 max_cmd_len) {
                 last_ch_was_arrow = true;
                 cmd[buf_ix] = '\0';
                 return MOST_CMD_DOWN_ARROW;
-            } else state = NORMAL;
+            } else {
+                state = KEY_NORMAL;
+            }
             break;
         }
     }

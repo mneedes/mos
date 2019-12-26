@@ -19,6 +19,7 @@
 #include "hal_tb.h"
 
 #define DFT_STACK_SIZE           256
+#define TEST_SHELL_STACK_SIZE    1024
 #define MAX_TEST_SUB_THREADS     (MOS_MAX_APP_THREADS - 1)
 #define MAX_TEST_THREADS         (MAX_TEST_SUB_THREADS + 1)
 
@@ -1064,7 +1065,14 @@ static void HeapTests(void) {
     }
 }
 
-s32 RunTest(s32 argc, char * argv[]) {
+typedef enum {
+    CMD_NOT_FOUND = -2,
+    CMD_ERROR = -1,
+    CMD_OK,
+    CMD_OK_NO_HISTORY,
+} CmdStatus;
+
+static s32 CmdTest(s32 argc, char * argv[]) {
     if (argc == 2) {
         if (strcmp(argv[1], "main") == 0) {
             ThreadTests();
@@ -1073,66 +1081,135 @@ s32 RunTest(s32 argc, char * argv[]) {
             QueueTests();
             WaitMuxTests();
             MutexTests();
-            MostPrint("Tests Complete\n");
         } else if (strcmp(argv[1], "hal") == 0) {
             HalTests(stacks, DFT_STACK_SIZE);
-            MostPrint("Tests Complete\n");
-        }
+        } else if (strcmp(argv[1], "thread") == 0) {
+            ThreadTests();
+        } else if (strcmp(argv[1], "timer") == 0) {
+            TimerTests();
+        } else if (strcmp(argv[1], "sem") == 0) {
+            SemTests();
+        } else if (strcmp(argv[1], "queue") == 0) {
+            QueueTests();
+        } else if (strcmp(argv[1], "wmux") == 0) {
+            WaitMuxTests();
+        } else if (strcmp(argv[1], "mutex") == 0) {
+            MutexTests();
+        } else return CMD_NOT_FOUND;
+        MostPrint("Tests Complete\n");
+        return CMD_OK;
     }
-    return 0;
+    return CMD_NOT_FOUND;
 }
-
-MostCmdFunc CmdHelp;
 
 static MostCmd cmd_list[] = {
-    { RunTest, "run", "Run Test", "[TEST]" },
-    { CmdHelp, "help", "Display Help", "" },
-    { CmdHelp, "?", "Display Help", "" },
+    { CmdTest, "run", "Run Test", "[TEST]" },
 };
-
-s32 CmdHelp(s32 argc, char * argv[])  {
-    MostPrintHelp(print_buf, cmd_list, count_of(cmd_list));
-    return 0;
-}
 
 #define MAX_CMD_ARGUMENTS       10
 #define MAX_CMD_BUFFER_LENGTH   10
 #define MAX_CMD_LINE_SIZE       128
 
-char CmdBuffers[MAX_CMD_BUFFER_LENGTH][MAX_CMD_LINE_SIZE] = {{ 0 }};
+static char CmdBuffers[MAX_CMD_BUFFER_LENGTH][MAX_CMD_LINE_SIZE] = {{ 0 }};
+static u32 CmdIx = 0;
+static u32 CmdMaxIx = 0;
+static u32 CmdHistoryIx = 0;
 
-s32 TestShell(s32 arg) {
-    u32 cmd_ix = 0;
-    u32 cmd_max_ix = 0;
-    u32 cmd_history_ix = 0;
-    char cmd_buf[MAX_CMD_LINE_SIZE];
-    char * argv[MAX_CMD_ARGUMENTS];
+/* Calculate a valid command index at the offset from the provided index */
+static u32 CalcOffsetCmdIx(s32 ix, s32 max_ix, s32 offset) {
+    s32 new_ix = (ix + offset) % (max_ix + 1);
+    if (new_ix < 0) new_ix += (max_ix + 1);
+    return (u32)new_ix;
+}
+
+static CmdStatus RunCmd(char * cmd_buf_in) {
     u32 argc;
+    char * argv[MAX_CMD_ARGUMENTS];
+    char cmd_buf[MAX_CMD_LINE_SIZE];
+    strcpy(cmd_buf, cmd_buf_in);
+    argc = MostParseCmd(argv, cmd_buf, MAX_CMD_ARGUMENTS);
+    MostCmd * cmd = MostFindCmd(argv[0], cmd_list, count_of(cmd_list));
+    if (cmd) {
+        return (CmdStatus)cmd->func(argc, argv);
+    } else if (argv[0][0] == '!') {
+        if (argv[0][1] == '!') {
+            u32 run_cmd_ix = CalcOffsetCmdIx(CmdIx, CmdMaxIx, -1);
+            strcpy(CmdBuffers[CmdIx], CmdBuffers[run_cmd_ix]);
+            return (CmdStatus)RunCmd(CmdBuffers[CmdIx]);
+        } else if (argv[0][1] == '-') {
+            if (argv[0][2] >= '1' && argv[0][2] <= '9') {
+                u32 run_cmd_ix = CalcOffsetCmdIx(CmdIx, CmdMaxIx,
+                                                 -(s8)(argv[0][2] - '0'));
+                strcpy(CmdBuffers[CmdIx], CmdBuffers[run_cmd_ix]);
+                return (CmdStatus)RunCmd(CmdBuffers[CmdIx]);
+            }
+        }
+    } else if (strcmp(argv[0], "?") == 0 || strcmp(argv[0], "help") == 0) {
+        MostPrintHelp(print_buf, cmd_list, count_of(cmd_list));
+        MostPrint("!!: Repeat prior command\n");
+        MostPrint("!-#: Repeat #th prior command\n");
+        MostPrint("h -or- history: Display command history\n");
+        MostPrint("? -or- help: Display command help\n");\
+        return CMD_OK_NO_HISTORY;
+    } else if (strcmp(argv[0], "h") == 0 || strcmp(argv[0], "history") == 0) {
+        char buf[8];
+        for (s32 ix = CmdMaxIx; ix > 0; ix--) {
+            u32 hist_cmd_ix = CalcOffsetCmdIx(CmdIx, CmdMaxIx, -ix);
+            MostTakeMutex();
+            MostPrintf(buf, "%2d: ", -ix);
+            MostPrint(CmdBuffers[hist_cmd_ix]);
+            MostPrint("\n");
+            MostGiveMutex();
+        }
+        return CMD_OK_NO_HISTORY;
+    } else if (argv[0][0] == '\0') {
+        return CMD_OK_NO_HISTORY;
+    }
+    return CMD_NOT_FOUND;
+}
+
+static s32 TestShell(s32 arg) {
     while (1) {
         MostCmdResult result;
-        result = MostGetNextCmd("# ", CmdBuffers[cmd_ix], MAX_CMD_LINE_SIZE);
+        CmdStatus status;
+        result = MostGetNextCmd("# ", CmdBuffers[CmdIx], MAX_CMD_LINE_SIZE);
         switch (result) {
         case MOST_CMD_RECEIVED:
-            strcpy(cmd_buf, CmdBuffers[cmd_ix]);
-            argc = MostParseCmd(argv, cmd_buf, MAX_CMD_ARGUMENTS);
-            MostCmd *cmd = MostFindCmd(argv[0], cmd_list, count_of(cmd_list));
-            if (cmd) {
-                cmd->func(argc, argv);
-                if (++cmd_ix == MAX_CMD_BUFFER_LENGTH) cmd_ix = 0;
-                if (cmd_ix > cmd_max_ix) cmd_max_ix = cmd_ix;
-                cmd_history_ix = cmd_ix;
+            status = RunCmd(CmdBuffers[CmdIx]);
+            switch (status) {
+            case CMD_OK_NO_HISTORY:
+                break;
+            case CMD_NOT_FOUND:
+                MostPrint("[ERR] NOT FOUND\n");
+                break;
+            case CMD_OK:
+                MostPrint("[OK]\n");
+                if (++CmdIx == MAX_CMD_BUFFER_LENGTH) CmdIx = 0;
+                if (CmdIx > CmdMaxIx) CmdMaxIx = CmdIx;
+                break;
+            default:
+            case CMD_ERROR:
+                MostPrint("[ERR]\n");
+                if (++CmdIx == MAX_CMD_BUFFER_LENGTH) CmdIx = 0;
+                if (CmdIx > CmdMaxIx) CmdMaxIx = CmdIx;
+                break;
             }
-            CmdBuffers[cmd_ix][0] = '\0';
+            CmdHistoryIx = CmdIx;
+            CmdBuffers[CmdIx][0] = '\0';
             break;
         case MOST_CMD_UP_ARROW:
-            if (cmd_history_ix == 0) cmd_history_ix = cmd_max_ix;
-            else --cmd_history_ix;
-            strcpy(CmdBuffers[cmd_ix], CmdBuffers[cmd_history_ix]);
+            /* Rotate history back one, skipping over current index */
+            CmdHistoryIx = CalcOffsetCmdIx(CmdHistoryIx, CmdMaxIx, -1);
+            if (CmdHistoryIx == CmdIx)
+                CmdHistoryIx = CalcOffsetCmdIx(CmdHistoryIx, CmdMaxIx, -1);
+            strcpy(CmdBuffers[CmdIx], CmdBuffers[CmdHistoryIx]);
             break;
         case MOST_CMD_DOWN_ARROW:
-            if (cmd_history_ix + 1 > cmd_max_ix) cmd_history_ix = 0;
-            else ++cmd_history_ix;
-            strcpy(CmdBuffers[cmd_ix], CmdBuffers[cmd_history_ix]);
+            /* Rotate history forward one, skipping over current index */
+            CmdHistoryIx = CalcOffsetCmdIx(CmdHistoryIx, CmdMaxIx, 1);
+            if (CmdHistoryIx == CmdIx)
+                CmdHistoryIx = CalcOffsetCmdIx(CmdHistoryIx, CmdMaxIx, 1);
+            strcpy(CmdBuffers[CmdIx], CmdBuffers[CmdHistoryIx]);
             break;
         default:
             break;
@@ -1155,7 +1232,7 @@ int main() {
     MoshReserveBlockSize(&TestHeapDesc, 256);
     MoshReserveBlockSize(&TestHeapDesc, 128);
     MoshReserveBlockSize(&TestHeapDesc, 64);
-    stacks[0] = MoshAllocForever(&TestHeapDesc, 1024);
+    stacks[0] = MoshAllocForever(&TestHeapDesc, TEST_SHELL_STACK_SIZE);
     if (stacks[0] == NULL) {
         MostPrint("Stack allocation error\n");
         return -1;
@@ -1171,7 +1248,8 @@ int main() {
         MostPrint("Mos config error: not enough threads\n");
         return -1;
     }
-    MosInitAndRunThread(MAX_TEST_THREADS, 0, TestShell, 0, stacks[0], 1024);
+    MosInitAndRunThread(MAX_TEST_THREADS, 0, TestShell, 0,
+                        stacks[0], TEST_SHELL_STACK_SIZE);
     MosRunScheduler();
     return -1;
 }
