@@ -41,6 +41,9 @@
 // Use STDIO to print traces
 #define MOST_USE_STDIO              false
 
+// Length of internal buffer for terminal messages
+#define MOST_PRINT_BUFFER_SIZE      128
+
 // Maximum number of arguments on shell command line 
 #define MOST_CMD_MAX_ARGC           10
 

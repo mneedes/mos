@@ -13,6 +13,7 @@
 #include "stm32f4_discovery.h"
 #include "hal.h"
 #include "mos.h"
+#include "most.h"
 #include "hal_tb.h"
 
 typedef enum {
@@ -135,10 +136,10 @@ bool HalTests(u8 *stacks[], u32 stack_size) {
     //
     test_pass = true;
     MostPrint("Hal Timer Test 4\n");
-    for (u32 ix = 1; ix <= MOS_MAX_APP_THREADS - 1; ix++)
+    for (u32 ix = 1; ix <= MOS_MAX_APP_THREADS - 2; ix++)
         MosInitAndRunThread(ix, 1, TimerTestBusyThread, ix, stacks[ix], stack_size);
     MosDelayThread(test_time);
-    for (u32 ix = 1; ix <= MOS_MAX_APP_THREADS - 1; ix++) {
+    for (u32 ix = 1; ix <= MOS_MAX_APP_THREADS - 2; ix++) {
         MosRequestThreadStop(ix);
         if (MosWaitForThreadStop(ix) != TEST_PASS) test_pass = false;
     }

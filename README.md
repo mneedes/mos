@@ -19,14 +19,16 @@ Design Goals:
 + Easily extendable
 + Optional modules (heap, trace)
 + Low usage of conditional compilation (i.e.: very few #ifdefs)
-+ Small code size (currently ~4KB)
-+ Includes test bench
-+ Sensible use of abstraction (important if ported to C++)
++ Kernel (mos.c) has small code size (currently ~4KB)
++ Include test bench
++ Sensible/Simple use of abstraction
++ C++ implementation
 
-Supported architectures / toolchains:
-+ ARM M3/M4
-+ M0/M0+/M1/M4F/M7 (future)
+Supported toolchains / architectures:
 + GCC
++ ARM M3/M4 (M7 should work)
++ M4F (future--M4 with hard floating point)
++ M0/M0+/M1 (future--Essentially M3 code without ldrex/strex) 
 
 Features it probably WILL NEVER have:
 - MPU support

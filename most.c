@@ -11,7 +11,7 @@
 // TODO: Pass in size to prevent exceeding max length, ala snprintf()
 // TODO: Parse Quotes and escape characters in command shell
 // TODO: ITOA can use shift/mask operations for power-of-2 bases
-// TODO: Internal buffer using mutex?
+// TODO: Rotating logs
 
 #if (MOST_USE_STDIO == true)
 #include <stdio.h>
@@ -31,6 +31,8 @@ static u32 QueueBuf[32];
 
 static const char LowerCaseDigits[] = "0123456789abcdef";
 static const char UpperCaseDigits[] = "0123456789ABCDEF";
+
+static char PrintBuffer[MOST_PRINT_BUFFER_SIZE];
 
 void MostItoa(char * restrict * out, s32 input, u16 base,
                bool is_signed, bool is_upper,
@@ -208,11 +210,28 @@ static void MostTraceFmt(char * buffer, const char * fmt, va_list args) {
     *buf = '\0';
 }
 
-u32 MostPrint(char * str) {
-    u32 cnt;
+static void _MostPrintCh(char ch) {
+#if (MOST_USE_STDIO == true)
+    putc(ch);
+#else
+    HalSendToTxUART(ch);
+#endif
+}
+
+static void MostPrintCh(char ch) {
     MosTakeMutex(&MostMutex);
 #if (MOST_USE_STDIO == true)
-    fputs(str, stdout);
+    putc(ch);
+#else
+    HalSendToTxUART(ch);
+#endif
+    MosGiveMutex(&MostMutex);
+}
+
+static u32 _MostPrint(char * str) {
+    u32 cnt;
+#if (MOST_USE_STDIO == true)
+    puts(str);
     cnt = strlen(str);
 #else
     cnt = 0;
@@ -221,41 +240,47 @@ u32 MostPrint(char * str) {
         HalSendToTxUART(*ch);
     }
 #endif
+    return cnt;
+}
+
+u32 MostPrint(char * str) {
+    MosTakeMutex(&MostMutex);
+    u32 cnt = _MostPrint(str);
     MosGiveMutex(&MostMutex);
     return cnt;
 }
 
-static void MostPrintCh(char ch) {
-    MosTakeMutex(&MostMutex);
-    HalSendToTxUART(ch);
-    MosGiveMutex(&MostMutex);
-}
-
-u32 MostPrintf(char * buffer, const char * fmt, ...) {
+u32 MostPrintf(const char * fmt, ...) {
     va_list args;
     va_start(args, fmt);
-    MostTraceFmt(buffer, fmt, args);
+    MosTakeMutex(&MostMutex);
+    MostTraceFmt(PrintBuffer, fmt, args);
     va_end(args);
-    return MostPrint(buffer);
+    u32 cnt = _MostPrint(PrintBuffer);
+    MosGiveMutex(&MostMutex);
+    return cnt;
 }
 
-void MostTraceMessage(char * buffer, const char * id, const char * fmt, ...) {
-    char * restrict buf = buffer;
+void MostTraceMessage(const char * id, const char * fmt, ...) {
+    char * restrict buf = PrintBuffer;
     const char * restrict str = id;
     va_list args;
+    MosTakeMutex(&MostMutex);
     while (*str != '\0') *buf++ = *str++;
     va_start(args, fmt);
     MostTraceFmt(buf, fmt, args);
     va_end(args);
-    MostPrint(buffer);
+    _MostPrint(PrintBuffer);
+    MosGiveMutex(&MostMutex);
 }
 
-void MostHexDumpMessage(char * buffer, const char * id, const char * name,
+void MostHexDumpMessage(const char * id, const char * name,
                         const void * addr, u32 size) {
-    char * restrict buf = buffer;
+    char * restrict buf = PrintBuffer;
     const char * restrict str = id;
     const u8 * restrict data = (const u8 *) addr;
     u32 lines, bytes;
+    MosTakeMutex(&MostMutex);
     while (*str != '\0')
         *buf++ = *str++;
     str = name;
@@ -282,7 +307,8 @@ void MostHexDumpMessage(char * buffer, const char * id, const char * name,
         *buf++ = '\n';
     }
     *buf = '\0';
-    MostPrint(buffer);
+    _MostPrint(PrintBuffer);
+    MosGiveMutex(&MostMutex);
 }
 
 void MostTakeMutex(void) {
@@ -312,11 +338,11 @@ MostCmdResult MostGetNextCmd(char * prompt, char * cmd, u32 max_cmd_len) {
     static bool last_ch_was_arrow = false;
     MosTakeMutex(&MostMutex);
     if (buf_ix) {
-        for (u32 ix = 0; ix < buf_ix; ix++) MostPrintCh(127);
+        for (u32 ix = 0; ix < buf_ix; ix++) _MostPrintCh(127);
     } else if (prompt && !last_ch_was_arrow) {
-        MostPrint(prompt);
+        _MostPrint(prompt);
     }
-    buf_ix = MostPrint(cmd);
+    buf_ix = _MostPrint(cmd);
     MosGiveMutex(&MostMutex);
     last_ch_was_arrow = false;
     u32 state = KEY_NORMAL;
@@ -389,11 +415,13 @@ MostCmd * MostFindCmd(char * name, MostCmd * commands, u32 num_cmds) {
     return NULL;
 }
 
-void MostPrintHelp(char * buffer, MostCmd * commands, u32 num_cmds) {
+void MostPrintHelp(MostCmd * commands, u32 num_cmds) {
+    MosTakeMutex(&MostMutex);
     for (u32 ix = 0; ix < num_cmds; ix++) {
-        MostPrintf(buffer, "%s %s: %s\n", commands[ix].name,
+        MostPrintf("%s %s: %s\n", commands[ix].name,
                    commands[ix].usage, commands[ix].desc);
     }
+    MosGiveMutex(&MostMutex);
 }
 
 void MostInit(u32 mask) {
