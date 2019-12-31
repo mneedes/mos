@@ -120,7 +120,7 @@ typedef struct {
 } MosWaitMuxEntry;
 
 typedef struct {
-    u16 num;
+    u32 num;
     MosWaitMuxEntry * entries;
 } MosWaitMux;
 

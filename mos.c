@@ -17,10 +17,11 @@
 // TODO: Can use this to enable floating point context save for CM4F
 #endif
 
+// TODO: Improve Exception handling.  Maybe move thread kill into scheduler to
+//       help support this.
 // TODO: Clearing wait flags after thread kill / wait counter?
 // TODO: Thread killing self?
 // TODO: WaitForThreadStop on WaitMux?
-// TODO: Priority Inheritance on WaitForThreadStop?
 // TODO: Suppress yields on semaphores if no thread is waiting.  Unlike Mutex
 //       Semaphore yields may be tricky since they can happen during high
 //       priority interrupts that are interrupting PendSV handler.
@@ -349,6 +350,19 @@ void MOS_NAKED PendSV_Handler(void) {
     );
 }
 
+void UsageFault_Handler(void) {
+    // Hang on exceptions that occur during interrupts (for now)
+    asm volatile (
+        "tst lr, #4\n\t"
+        "beq Default_Handler\n\t"
+    );
+    // Stop thread that had exception but do not hang system
+    MosRemoveFromList(&Threads[RunningThreadID].tmr_q);
+    MosRemoveFromList(&Threads[RunningThreadID].run_q);
+    MosSetThreadState(RunningThreadID, THREAD_STOPPED);
+    MosYieldThread();
+}
+
 u32 MosGetTickCount(void) {
     // Adjust tick count based on value in SysTick counter
     asm volatile ( "cpsid if" );
@@ -446,6 +460,10 @@ void MosRunScheduler(void) {
         "psp_start: .word MosIdleStack + 64\n\t"
             : : : "r0"
     );
+    // Enable Usage Faults in general
+    //  Trap Divide By 0 and "Unintentional" Unaligned Accesses
+    SCB->SHCSR |= SCB_SHCSR_USGFAULTENA_Msk;
+    SCB->CCR |= (SCB_CCR_DIV_0_TRP_Msk | SCB_CCR_UNALIGN_TRP_Msk);
     // Invoke PendSV handler to potentially perform context switch
     SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
     // Not reachable
@@ -647,8 +665,9 @@ void MosAddToListAfter(MosList * list, MosList * elm_add) {
 void MosRemoveFromList(MosList * elm_rem) {
     elm_rem->next->prev = elm_rem->prev;
     elm_rem->prev->next = elm_rem->next;
-    // For MosIsElementOnList()
+    // For MosIsElementOnList() and safety
     elm_rem->prev = elm_rem;
+    elm_rem->next = elm_rem;
 }
 
 void MosMoveToEndOfList(MosList * elm_exist, MosList * elm_move) {
@@ -698,6 +717,7 @@ void MOS_NAKED MosTakeMutex(MosMutex * mtx) {
         "bl MosBlockOnMutex\n\t"
         "pop {r0, r1, lr}\n\t"
         "b RetryTM\n\t"
+        ".align 4\n\t"
         "_ThreadID:\n\t"
         ".word RunningThreadID\n\t"
             // Explicit clobber list prevents compiler from making
@@ -731,6 +751,7 @@ bool MOS_NAKED MosTryMutex(MosMutex * mtx) {
         "FailTRM:\n\t"
         "mov r0, #0\n\t"
         "bx lr\n\t"
+        ".align 4\n\t"
         "_ThreadID2:\n\t"
         ".word RunningThreadID\n\t"
             : : : "r0", "r1", "r2", "r3"
@@ -742,8 +763,7 @@ void MOS_NAKED MosGiveMutex(MosMutex * mtx) {
         "ldr r1, [r0, #4]\n\t"
         "sub r1, #1\n\t"
         "str r1, [r0, #4]\n\t"
-        "cmp r1, #0\n\t"
-        "bne SkipGM\n\t"
+        "cbnz r1, SkipGM\n\t"
         "mov r1, #-1\n\t"
         "RetryGM:\n\t"
         "ldrex r2, [r0]\n\t"     // Not sure this is needed
@@ -751,8 +771,7 @@ void MOS_NAKED MosGiveMutex(MosMutex * mtx) {
         "cmp r2, #0\n\t"
         "bne RetryGM\n\t"
         "ldr r1, [r0, #8]\n\t"
-        "cmp r1, #0\n\t"
-        "beq SkipGM\n\t"
+        "cbz r1, SkipGM\n\t"
         "push { lr }\n\t"
         "bl MosYieldThread\n\t"
         "pop { lr }\n\t"
@@ -787,8 +806,7 @@ void MOS_NAKED MosTakeSem(MosSem * sem) {
     asm volatile (
         "RetryTS:\n\t"
         "ldrex r1, [r0]\n\t"
-        "cmp r1, #0\n\t"
-        "beq BlockTS\n\t"
+        "cbz r1, BlockTS\n\t"
         "sub r1, #1\n\t"
         "strex r2, r1, [r0]\n\t"
         "cmp r2, #0\n\t"
@@ -820,8 +838,7 @@ bool MOS_NAKED MosTakeSemOrTO(MosSem * sem, u32 ticks) {
         "pop {r0, lr}\n\t"
         "RetryTSTO:\n\t"
         "ldrex r1, [r0]\n\t"
-        "cmp r1, #0\n\t"
-        "beq BlockTSTO\n\t"
+        "cbz r1, BlockTSTO\n\t"
         "sub r1, #1\n\t"
         "strex r2, r1, [r0]\n\t"
         "cmp r2, #0\n\t"
@@ -845,8 +862,7 @@ bool MOS_NAKED MosTrySem(MosSem * sem) {
     asm volatile (
         "RetryTRS:\n\t"
         "ldrex r1, [r0]\n\t"
-        "cmp r1, #0\n\t"
-        "beq FailTRS\n\t"
+        "cbz r1, FailTRS\n\t"
         "sub r1, #1\n\t"
         "strex r2, r1, [r0]\n\t"
         "cmp r2, #0\n\t"

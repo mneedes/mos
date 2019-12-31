@@ -123,6 +123,14 @@ static s32 KillTestThread(s32 arg) {
     return TEST_FAIL;
 }
 
+static s32 ExcTestThread(s32 arg) {
+    volatile u32 x;
+    MosDelayThread(50);
+    x = 30 / arg;
+    (void)x;
+    return TEST_FAIL;
+}
+
 static bool ThreadTests(void) {
     const u32 test_time = 5000;
     u32 exp_iter = test_time / pri_test_delay;
@@ -226,6 +234,19 @@ static bool ThreadTests(void) {
     MosKillThread(1);
     if (MosWaitForThreadStop(1) != TEST_PASS_HANDLER) test_pass = false;
     if (TestMutex.owner != -1) test_pass = false;
+    if (test_pass) MostPrint(" Passed\n");
+    else {
+        MostPrint(" Failed\n");
+        tests_all_pass = false;
+    }
+    //
+    // Thread exception handler
+    //   Currently passes if it doesn't hang, TODO: better recovery or error detection?
+    test_pass = true;
+    MostPrint("Exception Test\n");
+    ClearHistogram();
+    MosInitAndRunThread(1, 1, ExcTestThread, 0, Stacks[1], DFT_STACK_SIZE);
+    MosWaitForThreadStop(1);
     if (test_pass) MostPrint(" Passed\n");
     else {
         MostPrint(" Failed\n");
