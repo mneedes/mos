@@ -860,7 +860,7 @@ static s32 WaitMuxTestThreadRxTimeout(s32 arg) {
     MosSetActiveMux(&TestMux, mux, count_of(mux));
     for (;;) {
         u32 idx;
-        if (MosWaitOnMuxOrTO(&TestMux, &idx, mux_test_delay / 2 + 1)) {
+        if (MosWaitOnMuxOrTO(&TestMux, &idx, mux_test_delay / 2 + 2)) {
             if (idx == 0) {
                 if (!MosTrySem(&TestSem)) return TEST_FAIL;
                 TestHisto[arg]++;
@@ -1396,7 +1396,7 @@ static s32 TestShell(s32 arg) {
             case CMD_OK_NO_HISTORY:
                 break;
             case CMD_ERR_NOT_FOUND:
-                MostPrint("[ERR] Command Not Found\n");
+                MostPrint("[ERR] Command not found...\n");
                 break;
             case CMD_OK:
                 MostPrint("[OK]\n");
@@ -1440,7 +1440,7 @@ int main() {
     NVIC_EnableIRQ(EXTI1_IRQn);
 
     MosInit();
-    MostInit(TRACE_INFO | TRACE_ERROR | TRACE_FATAL);
+    MostInit(TRACE_INFO | TRACE_ERROR | TRACE_FATAL, true);
 
     MoshInitHeap(&TestThreadHeapDesc, TestThreadHeap, sizeof(TestThreadHeap));
     MoshReserveBlockSize(&TestThreadHeapDesc, 1024);

@@ -19,10 +19,10 @@ Design Goals:
 + Easily extendable
 + Optional modules (heap, trace)
 + Low usage of conditional compilation (i.e.: very few #ifdefs)
-+ Kernel (mos.c) has small code size (currently ~4KB)
-+ Include test bench
++ Kernel (mos.c) has small code size (currently ~5KB)
++ Includes test bench
 + Sensible/Simple use of abstraction
-+ C++ implementation
++ C++ implementation (future)
 
 Supported toolchains / architectures:
 + GCC
@@ -34,4 +34,3 @@ Features it probably WILL NEVER have:
 - MPU support
 - Non-ARM architecture support
 - Non-GCC toolchain support
-

@@ -81,6 +81,7 @@ MostCmd * MostFindCmd(char * name, MostCmd * commands, u32 num_cmds);
 void MostPrintHelp(MostCmd * commands, u32 num_cmds);
 
 // Initialize module
-void MostInit(u32 mask);
+//   if enable_raw_print_hook is true, run mos low-level print through MOST
+void MostInit(u32 mask, bool enable_raw_print_hook);
 
 #endif

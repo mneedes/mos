@@ -58,7 +58,8 @@ typedef int64_t     s64;
 
 typedef s32 (MosThreadEntry)(s32 arg);
 typedef s32 (MosHandler)(s32 arg);
-typedef void (MosTimerHook)(u32 TickCount);
+typedef void (MosTimerHook)(u32 tick_count);
+typedef void (MosRawPrintfHook)(const char * fmt, ...);
 typedef s16 MosThreadID;
 typedef u16 MosThreadPriority;
 typedef volatile u32 MosSem;
@@ -142,6 +143,7 @@ u32 MosGetIRQNumber(void); // IS
 // In thread mode interrupt functions are recursion safe.
 void MosDisableInterrupts(void); // IS (not recursion safe in ISR)
 void MosEnableInterrupts(void); // IS (not recursion safe in ISR)
+void MosRegisterRawPrintfHook(MosRawPrintfHook * printf_hook);
 
 // Time and Delays
 u32 MosGetTickCount(void);

@@ -95,6 +95,7 @@ static volatile error_t * ErrNo;
 static Thread Threads[MOS_MAX_THREADS];
 static MosList PriQueues[MOS_MAX_THREAD_PRIORITIES];
 static ThreadAuxData ThreadData[MOS_MAX_THREADS];
+static MosRawPrintfHook * PrintfHook = NULL;
 
 // Timers and Ticks
 static MosList Timers;
@@ -350,17 +351,72 @@ void MOS_NAKED PendSV_Handler(void) {
     );
 }
 
-void UsageFault_Handler(void) {
-    // Hang on exceptions that occur during interrupts (for now)
+// Which vector / Which Thread ID?
+static void MOS_USED FaultHandler(u32 fault_no, u32 * sp, bool in_isr) {
+    char * fault_type[] = {
+        "Hard", "MemManage", "Bus", "Usage"
+    };
+    if (PrintfHook) {
+        (*PrintfHook)("*** %s Fault %s(ThreadID %u) ***\n",
+                      fault_type[fault_no - 3],
+                      in_isr ? "In ISR " : "", RunningThreadID);
+        (*PrintfHook)(" HFSR: %08X  CFSR: %08X AFSR: %08X\n", SCB->HFSR,
+                      SCB->CFSR, SCB->AFSR);
+        (*PrintfHook)(" BFAR: %08X MMFAR: %08X\n", SCB->BFAR, SCB->MMFAR);
+        (*PrintfHook)("Stack @%08X:\n", (u32) sp);
+        for (u32 ix = 0; ix < 16; ix++) {
+            (*PrintfHook)(" %08X", sp[ix]);
+            if ((ix & 0x3) == 0x3) (*PrintfHook)("\n");
+        }
+    }
+    if (in_isr) {
+        // Hang if fault occurred in interrupt context
+        while (1)
+            ;
+    } else {
+        // Stop thread if fault occurred in thread context
+        MosRemoveFromList(&Threads[RunningThreadID].tmr_q);
+        MosRemoveFromList(&Threads[RunningThreadID].run_q);
+        MosSetThreadState(RunningThreadID, THREAD_STOPPED);
+        MosYieldThread();
+    }
+}
+
+void MOS_NAKED HardFault_Handler(void) {
     asm volatile (
+        "mrs r0, psr\n\t"
+        "and r0, #255\n\t"
+        "mov r2, #0\n\t"
         "tst lr, #4\n\t"
-        "beq Default_Handler\n\t"
+        "itte eq\n\t"
+        "mrseq r1, msp\n\t"
+        "moveq r2, #1\n\t"
+        "mrsne r1, psp\n\t"
+        "b FaultHandler\n\t"
+            : : : "r0", "r1", "r2", "r3"
     );
-    // Stop thread that had exception but do not hang system
-    MosRemoveFromList(&Threads[RunningThreadID].tmr_q);
-    MosRemoveFromList(&Threads[RunningThreadID].run_q);
-    MosSetThreadState(RunningThreadID, THREAD_STOPPED);
-    MosYieldThread();
+}
+
+void MOS_NAKED MemManage_Handler(void) {
+    asm volatile (
+        "b HardFault_Handler"
+    );
+}
+
+void MOS_NAKED BusFault_Handler(void) {
+    asm volatile (
+        "b HardFault_Handler"
+    );
+}
+
+void MOS_NAKED UsageFault_Handler(void) {
+    asm volatile (
+        "b HardFault_Handler"
+    );
+}
+
+void MosRegisterRawPrintfHook(MosRawPrintfHook * printf_hook) {
+    PrintfHook = printf_hook;
 }
 
 u32 MosGetTickCount(void) {
@@ -396,16 +452,16 @@ void MOS_NAKED MosDelayMicroSec(u32 usec) {
         "mul r0, r0, r1\n\t"
         "sub r0, #13\n\t"  // Overhead calibration
         "delay:\n\t"
-        "subs r0, #3\n\t"
+        "subs r0, #3\n\t"  // Cycles per loop iteration
         "bgt delay\n\t"
         "bx lr\n\t"
-        "_CyclesPerMicroSec:\n\t"
-        ".word CyclesPerMicroSec\n\t"
+        ".balign 4\n\t"
+        "_CyclesPerMicroSec: .word CyclesPerMicroSec\n\t"
             : : : "r0", "r1"
     );
 }
 
-void MosRegisterTimerHook(MosTimerHook *timer_hook) {
+void MosRegisterTimerHook(MosTimerHook * timer_hook) {
     TimerHook = timer_hook;
 }
 
@@ -457,12 +513,14 @@ void MosRunScheduler(void) {
         "mov r0, #0\n\t"
         "msr basepri, r0\n\t"
         "cpsie if\n\t"
+        ".balign 4\n\t"
         "psp_start: .word MosIdleStack + 64\n\t"
             : : : "r0"
     );
-    // Enable Usage Faults in general
+    // Enable Bus, Memory and Usage Faults in general
+    SCB->SHCSR |= (SCB_SHCSR_BUSFAULTENA_Msk | SCB_SHCSR_MEMFAULTENA_Msk |
+                   SCB_SHCSR_USGFAULTENA_Msk);
     //  Trap Divide By 0 and "Unintentional" Unaligned Accesses
-    SCB->SHCSR |= SCB_SHCSR_USGFAULTENA_Msk;
     SCB->CCR |= (SCB_CCR_DIV_0_TRP_Msk | SCB_CCR_UNALIGN_TRP_Msk);
     // Invoke PendSV handler to potentially perform context switch
     SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
@@ -717,9 +775,8 @@ void MOS_NAKED MosTakeMutex(MosMutex * mtx) {
         "bl MosBlockOnMutex\n\t"
         "pop {r0, r1, lr}\n\t"
         "b RetryTM\n\t"
-        ".align 4\n\t"
-        "_ThreadID:\n\t"
-        ".word RunningThreadID\n\t"
+        ".balign 4\n\t"
+        "_ThreadID: .word RunningThreadID\n\t"
             // Explicit clobber list prevents compiler from making
             // assumptions about registers not being changed as
             // this assembly code calls a C function.  Normally C
@@ -751,9 +808,8 @@ bool MOS_NAKED MosTryMutex(MosMutex * mtx) {
         "FailTRM:\n\t"
         "mov r0, #0\n\t"
         "bx lr\n\t"
-        ".align 4\n\t"
-        "_ThreadID2:\n\t"
-        ".word RunningThreadID\n\t"
+        ".balign 4\n\t"
+        "_ThreadID2: .word RunningThreadID\n\t"
             : : : "r0", "r1", "r2", "r3"
     );
 }

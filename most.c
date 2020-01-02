@@ -33,6 +33,7 @@ static const char LowerCaseDigits[] = "0123456789abcdef";
 static const char UpperCaseDigits[] = "0123456789ABCDEF";
 
 static char PrintBuffer[MOST_PRINT_BUFFER_SIZE];
+static char RawPrintBuffer[MOST_PRINT_BUFFER_SIZE];
 
 void MostItoa(char * restrict * out, s32 input, u16 base,
                bool is_signed, bool is_upper,
@@ -311,6 +312,14 @@ void MostHexDumpMessage(const char * id, const char * name,
     MosGiveMutex(&MostMutex);
 }
 
+static void MostRawPrintfCallback(const char * fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    MostTraceFmt(RawPrintBuffer, fmt, args);
+    va_end(args);
+    _MostPrint(RawPrintBuffer);
+}
+
 void MostTakeMutex(void) {
     MosTakeMutex(&MostMutex);
 }
@@ -424,9 +433,11 @@ void MostPrintHelp(MostCmd * commands, u32 num_cmds) {
     MosGiveMutex(&MostMutex);
 }
 
-void MostInit(u32 mask) {
+void MostInit(u32 mask, bool enable_raw_printf_hook) {
     MostTraceMask = mask;
     MosInitMutex(&MostMutex);
     MosInitQueue(&RxQueue, QueueBuf, count_of(QueueBuf));
+    if (enable_raw_printf_hook)
+        MosRegisterRawPrintfHook(MostRawPrintfCallback);
     HalRegisterRxUARTCallback(MostRxCallback);
 }
