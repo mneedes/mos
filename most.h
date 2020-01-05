@@ -51,13 +51,11 @@ typedef enum {
     //MOST_CMD_TIMEOUT,
 } MostCmdResult;
 
-void MostItoa(char * restrict * out, s32 input, u16 base,
-              bool is_signed, bool is_upper,
-              const u16 min_digits, char pad_char);
+void MostItoa(char * restrict * out, s32 input, u16 base, bool is_upper,
+              u16 min_digits, char pad_char, bool is_signed);
 
-void MostItoa64(char * restrict * out, s64 input, u16 base,
-                bool is_signed, bool is_upper,
-                const u16 min_digits, char pad_char);
+void MostItoa64(char * restrict * out, s64 input, u16 base, bool is_upper,
+               u16 min_digits, char pad_char, bool is_signed);
 
 u32 MostPrint(char * str);
 u32 MostPrintf(const char * fmt, ...);

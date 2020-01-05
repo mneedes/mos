@@ -10,7 +10,6 @@
 
 // TODO: Pass in size to prevent exceeding max length, ala snprintf()
 // TODO: Parse Quotes and escape characters in command shell
-// TODO: ITOA can use shift/mask operations for power-of-2 bases
 // TODO: Rotating logs
 
 #if (MOST_USE_STDIO == true)
@@ -35,18 +34,75 @@ static const char UpperCaseDigits[] = "0123456789ABCDEF";
 static char PrintBuffer[MOST_PRINT_BUFFER_SIZE];
 static char RawPrintBuffer[MOST_PRINT_BUFFER_SIZE];
 
-void MostItoa(char * restrict * out, s32 input, u16 base,
-               bool is_signed, bool is_upper,
-               const u16 min_digits, char pad_char) {
-    const char * digits_p = LowerCaseDigits;
-    if (is_upper) digits_p = UpperCaseDigits;
+static void PadAndReverse(char * restrict * out, u16 min_digits,
+                          char pad_char, u32 cnt) {
+    // Pad to minimum number of digits
+    for (; cnt < min_digits; cnt++) {
+        **out = pad_char;
+        (*out)++;
+    }
+    // Reverse digit order in place
+    for (u32 idx = 0; idx < ((cnt + 1) >> 1); idx++) {
+        char tmp = (*out)[idx - cnt];
+        (*out)[idx - cnt] = (*out)[-idx - 1];
+        (*out)[-idx - 1] = tmp;
+    }
+}
+
+static void Pow2Div(char * restrict * out, u32 input, u32 shift,
+                    const char * digits, u16 min_digits,
+                    char pad_char) {
+    u32 mask = (1 << shift) - 1;
+    // Determine digits (in reverse order)
+    u32 cnt = 0;
+    do {
+        cnt++;
+        **out = digits[input & mask];
+        (*out)++;
+        input >>= shift;
+    } while (input != 0);
+    PadAndReverse(out, min_digits, pad_char, cnt);
+}
+
+static void Pow2Div64(char * restrict * out, u64 input, u32 shift,
+                      const char * digits, u16 min_digits,
+                      char pad_char) {
+    u32 mask = (1 << shift) - 1;
+    // Determine digits (in reverse order)
+    u32 cnt = 0;
+    do {
+        cnt++;
+        **out = digits[input & mask];
+        (*out)++;
+        input >>= shift;
+    } while (input != 0);
+    PadAndReverse(out, min_digits, pad_char, cnt);
+}
+
+void MostItoa(char * restrict * out, s32 input, u16 base, bool is_upper,
+              u16 min_digits, char pad_char, bool is_signed) {
+    const char * digits = LowerCaseDigits;
+    if (is_upper) digits = UpperCaseDigits;
+    switch (base) {
+    case 2:
+        Pow2Div(out, input, 1, digits, min_digits, pad_char);
+        return;
+    case 8:
+        Pow2Div(out, input, 3, digits, min_digits, pad_char);
+        return;
+    case 16:
+        Pow2Div(out, input, 4, digits, min_digits, pad_char);
+        return;
+    default:
+        break;
+    }
     u32 adj = (u32) input;
     if (is_signed && input < 0) adj = (u32) -input;
     // Determine digits (in reverse order)
     u32 cnt = 0;
     do {
         cnt++;
-        **out = digits_p[adj % base];
+        **out = digits[adj % base];
         (*out)++;
         adj = adj / base;
     } while (adj != 0);
@@ -56,31 +112,33 @@ void MostItoa(char * restrict * out, s32 input, u16 base,
         **out = '-';
         (*out)++;
     }
-    // Pad to minimum number of digits
-    for (; cnt < min_digits; cnt++) {
-        **out = pad_char;
-        (*out)++;
-    }
-    // Reverse digit order in place
-    for (u32 idx = 0; idx < ((cnt + 1) >> 1); idx++) {
-        char tmp = (*out)[ idx - cnt];
-        (*out)[ idx - cnt] = (*out)[-idx - 1];
-        (*out)[-idx - 1] = tmp;
-    }
+    PadAndReverse(out, min_digits, pad_char, cnt);
 }
 
-void MostItoa64(char * restrict * out, s64 input, u16 base,
-                bool is_signed, bool is_upper,
-                const u16 min_digits, char pad_char) {
-    const char * digits_p = LowerCaseDigits;
-    if (is_upper) digits_p = UpperCaseDigits;
+void MostItoa64(char * restrict * out, s64 input, u16 base, bool is_upper,
+                u16 min_digits, char pad_char, bool is_signed) {
+    const char * digits = LowerCaseDigits;
+    if (is_upper) digits = UpperCaseDigits;
+    switch (base) {
+    case 2:
+        Pow2Div64(out, input, 1, digits, min_digits, pad_char);
+        return;
+    case 8:
+        Pow2Div64(out, input, 3, digits, min_digits, pad_char);
+        return;
+    case 16:
+        Pow2Div64(out, input, 4, digits, min_digits, pad_char);
+        return;
+    default:
+        break;
+    }
     u64 adj = (u64) input;
     if (is_signed && input < 0) adj = (u64) -input;
     // Determine digits (in reverse order)
     u32 cnt = 0;
     do {
         cnt++;
-        **out = digits_p[adj % base];
+        **out = digits[adj % base];
         (*out)++;
         adj = adj / base;
     } while (adj != 0);
@@ -90,27 +148,17 @@ void MostItoa64(char * restrict * out, s64 input, u16 base,
         **out = '-';
         (*out)++;
     }
-    // Pad to minimum number of digits
-    for (; cnt < min_digits; cnt++) {
-        **out = pad_char;
-        (*out)++;
-    }
-    // Reverse digit order in place
-    for (u32 idx = 0; idx < ((cnt + 1) >> 1); idx++) {
-        char tmp = (*out)[ idx - cnt];
-        (*out)[ idx - cnt] = (*out)[-idx - 1];
-        (*out)[-idx - 1] = tmp;
-    }
+    PadAndReverse(out, min_digits, pad_char, cnt);
 }
 
-static void MostTraceFmt(char * buffer, const char * fmt, va_list args) {
+static void FormatString(char * buffer, const char * fmt, va_list args) {
     const char * ch = fmt;
     char * buf = buffer;
     char pad_char = ' ';
     char *arg;
     s64 arg64;
     s32 arg32, base, long_cnt = 0, min_digits = 0;
-    bool is_numeric, is_signed, is_upper;
+    bool do_numeric, is_signed, is_upper;
     bool in_arg = false;
     for (ch = fmt; *ch != '\0'; ch++) {
         if (!in_arg) {
@@ -132,78 +180,76 @@ static void MostTraceFmt(char * buffer, const char * fmt, va_list args) {
         } else {
             // Argument will be consumed (unless modifier found)
             in_arg = false;
-            is_numeric = true;
+            do_numeric = false;
             switch (*ch) {
             case '%':
                 *buf++ = '%';
-                is_numeric = false;
                 break;
             case 'c':
                 // Char is promoted to int when passed through va args
                 arg32 = va_arg(args, int);
-                *buf++ = (char) arg32;
-                is_numeric = false;
+                *buf++ = (char)arg32;
                 break;
             case 's':
                 arg = va_arg(args, char *);
                 for (; *arg != '\0'; arg++)
                     *buf++ = *arg;
-                is_numeric = false;
                 break;
             case 'l':
                 long_cnt++;
                 in_arg = true;
-                is_numeric = false;
                 break;
             case 'o':
                 base = 8;
+                do_numeric = true;
                 is_signed = false;
                 is_upper = false;
                 break;
             case 'd':
                 base = 10;
+                do_numeric = true;
                 is_signed = true;
                 is_upper = false;
                 break;
             case 'u':
                 base = 10;
+                do_numeric = true;
                 is_signed = false;
                 is_upper = false;
                 break;
             case 'x':
                 base = 16;
+                do_numeric = true;
                 is_signed = false;
                 is_upper = false;
                 break;
             case 'X':
                 base = 16;
+                do_numeric = true;
                 is_signed = false;
-                is_upper = false;
+                is_upper = true;
                 break;
             case 'p':
                 arg32 = (u32) va_arg(args, u32 *);
-                MostItoa(&buf, arg32, 16, false, false, 8, '0');
-                is_numeric = false;
+                MostItoa(&buf, arg32, 16, false, 8, '0', false);
                 break;
             case 'P':
                 arg32 = (u32) va_arg(args, u32 *);
-                MostItoa(&buf, arg32, 16, false, true, 8, '0');
-                is_numeric = false;
+                MostItoa(&buf, arg32, 16, true, 8, '0', false);
                 break;
             default:
-                is_numeric = false;
                 break;
             }
             // Convert numeric types to text
-            if (is_numeric) {
+            if (do_numeric) {
                 if (long_cnt <= 1) {
                     arg32 = va_arg(args, s32);
-                    MostItoa(&buf, arg32, base, is_signed,
-                             is_upper, min_digits, pad_char);
+                    MostItoa(&buf, arg32, base, is_upper, min_digits,
+                             pad_char, is_signed);
                 } else {
                     arg64 = va_arg(args, s64);
-                    MostItoa64(&buf, arg64, base, is_signed,
-                               is_upper, min_digits, pad_char);
+                    MostItoa64(&buf, arg64, base, is_upper, min_digits,
+                               pad_char, is_signed);
                 }
             }
         }
@@ -255,7 +301,7 @@ u32 MostPrintf(const char * fmt, ...) {
     va_list args;
     va_start(args, fmt);
     MosTakeMutex(&MostMutex);
-    MostTraceFmt(PrintBuffer, fmt, args);
+    FormatString(PrintBuffer, fmt, args);
     va_end(args);
     u32 cnt = _MostPrint(PrintBuffer);
     MosGiveMutex(&MostMutex);
@@ -269,7 +315,7 @@ void MostTraceMessage(const char * id, const char * fmt, ...) {
     MosTakeMutex(&MostMutex);
     while (*str != '\0') *buf++ = *str++;
     va_start(args, fmt);
-    MostTraceFmt(buf, fmt, args);
+    FormatString(buf, fmt, args);
     va_end(args);
     _MostPrint(PrintBuffer);
     MosGiveMutex(&MostMutex);
@@ -297,11 +343,11 @@ void MostHexDumpMessage(const char * id, const char * name,
             if (bytes == 0) break;
         }
         // Address
-        MostItoa(&buf, (s32) data, 16, false, true, 8, '0');
+        MostItoa(&buf, (s32) data, 16, true, 8, '0', false);
         *buf++ = ' ';
         *buf++ = ' ';
         for (; bytes > 0; bytes--) {
-            MostItoa(&buf, *data, 16, false, true, 2, '0');
+            MostItoa(&buf, *data, 16, true, 2, '0', false);
             *buf++ = ' ';
             data++;
         }
@@ -315,7 +361,7 @@ void MostHexDumpMessage(const char * id, const char * name,
 static void MostRawPrintfCallback(const char * fmt, ...) {
     va_list args;
     va_start(args, fmt);
-    MostTraceFmt(RawPrintBuffer, fmt, args);
+    FormatString(RawPrintBuffer, fmt, args);
     va_end(args);
     _MostPrint(RawPrintBuffer);
 }
