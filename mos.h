@@ -140,9 +140,8 @@ const MosParams * MosGetParams(void);
 // Used primarily to determine if in interrupt context.
 // Returns '0' if not in an interrupt, otherwise returns vector number
 u32 MosGetIRQNumber(void); // IS
-// In thread mode interrupt functions are recursion safe.
-void MosDisableInterrupts(void); // IS (not recursion safe in ISR)
-void MosEnableInterrupts(void); // IS (not recursion safe in ISR)
+void MosDisableInterrupts(void); // IS
+void MosEnableInterrupts(void); // IS
 void MosRegisterRawPrintfHook(MosRawPrintfHook * printf_hook);
 
 // Time and Delays

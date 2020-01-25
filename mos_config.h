@@ -28,8 +28,8 @@
 // Starting tick count
 //   Set to early rollover to always test rollovers,
 //   Set to zero for more intuitive time keeping
-//#define MOS_START_TICK_COUNT        0xFFFFFF00
-#define MOS_START_TICK_COUNT        0x00000000
+#define MOS_START_TICK_COUNT        0xFFFFFF00
+//#define MOS_START_TICK_COUNT        0x00000000
 
 // Keep tick interrupt running at slowest rate to maintain
 // time even when there are no timer events scheduled.
@@ -37,9 +37,6 @@
 
 // Maximum number of supported block sizes for MOSH heap
 #define MOSH_MAX_HEAP_BLOCK_SIZES   6
-
-// Use STDIO to print traces
-#define MOST_USE_STDIO              false
 
 // Length of internal buffer for terminal messages
 #define MOST_PRINT_BUFFER_SIZE      128

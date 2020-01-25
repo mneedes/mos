@@ -76,7 +76,6 @@ typedef struct Thread {
 } Thread;
 
 typedef struct {
-    s16 int_disable_cnt;
     u16 stop_request;
     s32 rtn_val;
     s32 mux_idx;
@@ -96,6 +95,7 @@ static Thread Threads[MOS_MAX_THREADS];
 static MosList PriQueues[MOS_MAX_THREAD_PRIORITIES];
 static ThreadAuxData ThreadData[MOS_MAX_THREADS];
 static MosRawPrintfHook * PrintfHook = NULL;
+static u32 IntDisableCount = 0;
 
 // Timers and Ticks
 static MosList Timers;
@@ -119,15 +119,16 @@ static void MOS_INLINE MosSetBasePri(u32 pri) {
 }
 
 void MosDisableInterrupts(void) {
-    u32 irq = MosGetIRQNumber();
-    if (!irq && ++ThreadData[RunningThreadID].int_disable_cnt > 1) return;
-    asm volatile ( "cpsid if" );
+    if (IntDisableCount++ == 0) {
+        asm volatile ( "cpsid if" );
+    }
 }
 
 void MosEnableInterrupts(void) {
-    u32 irq = MosGetIRQNumber();
-    if (!irq && --ThreadData[RunningThreadID].int_disable_cnt > 0) return;
-    asm volatile ( "cpsie if" );
+    if (IntDisableCount == 0) return;
+    if (--IntDisableCount == 0) {
+        asm volatile ( "cpsie if" );
+    }
 }
 
 u32 MOS_NAKED MosGetIRQNumber(void) {
@@ -351,7 +352,7 @@ void MOS_NAKED PendSV_Handler(void) {
     );
 }
 
-// Which vector / Which Thread ID?
+// TODO: Which ISR Vector, limit stack dump to end
 static void MOS_USED FaultHandler(u32 fault_no, u32 * sp, bool in_isr) {
     char * fault_type[] = {
         "Hard", "MemManage", "Bus", "Usage"
@@ -520,7 +521,7 @@ void MosRunScheduler(void) {
     // Enable Bus, Memory and Usage Faults in general
     SCB->SHCSR |= (SCB_SHCSR_BUSFAULTENA_Msk | SCB_SHCSR_MEMFAULTENA_Msk |
                    SCB_SHCSR_USGFAULTENA_Msk);
-    //  Trap Divide By 0 and "Unintentional" Unaligned Accesses
+    // Trap Divide By 0 and "Unintentional" Unaligned Accesses
     SCB->CCR |= (SCB_CCR_DIV_0_TRP_Msk | SCB_CCR_UNALIGN_TRP_Msk);
     // Invoke PendSV handler to potentially perform context switch
     SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
@@ -598,7 +599,6 @@ s32 MosInitThread(MosThreadID id, MosThreadPriority pri,
     }
     MosSetBasePri(0);
     // Initialize aux data
-    ThreadData[id].int_disable_cnt = 0;
     ThreadData[id].stop_request = false;
     ThreadData[id].kill_handler = MosDefaultKillHandler;
     ThreadData[id].kill_arg = 0;

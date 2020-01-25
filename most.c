@@ -12,10 +12,6 @@
 // TODO: Parse Quotes and escape characters in command shell
 // TODO: Rotating logs
 
-#if (MOST_USE_STDIO == true)
-#include <stdio.h>
-#endif
-
 #include <string.h>
 
 #include "hal.h"
@@ -258,35 +254,21 @@ static void FormatString(char * buffer, const char * fmt, va_list args) {
 }
 
 static void _MostPrintCh(char ch) {
-#if (MOST_USE_STDIO == true)
-    putc(ch);
-#else
     HalSendToTxUART(ch);
-#endif
 }
 
 static void MostPrintCh(char ch) {
     MosTakeMutex(&MostMutex);
-#if (MOST_USE_STDIO == true)
-    putc(ch);
-#else
     HalSendToTxUART(ch);
-#endif
     MosGiveMutex(&MostMutex);
 }
 
 static u32 _MostPrint(char * str) {
-    u32 cnt;
-#if (MOST_USE_STDIO == true)
-    puts(str);
-    cnt = strlen(str);
-#else
-    cnt = 0;
+    u32 cnt = 0;
     for (char * ch = str; *ch != '\0'; ch++, cnt++) {
         if (*ch == '\n') HalSendToTxUART('\r');
         HalSendToTxUART(*ch);
     }
-#endif
     return cnt;
 }
 
