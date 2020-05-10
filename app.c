@@ -56,10 +56,10 @@ static volatile u32 TestFlag = 0;
 #define MAX_HISTO_ENTRIES   102
 static volatile u32 TestHisto[MAX_HISTO_ENTRIES];
 
-// Test Sem / Mutex / WaitMux
+// Test Sem / Mutex / Mux
 static MosSem TestSem;
 static MosMutex TestMutex;
-static MosWaitMux TestMux;
+static MosMux TestMux;
 
 // Test Message Queue
 static u32 queue[4];
@@ -634,7 +634,7 @@ static s32 QueueTestThreadTx(s32 arg) {
 static s32 QueueTestThreadTxTimeout(s32 arg) {
     for (;;) {
         if (MosSendToQueueOrTO(&TestQueue, 2,
-                               queue_test_delay / 2 + 1)) {
+                               queue_test_delay / 2 + 2)) {
             TestHisto[arg]++;
         } else {
             TestHisto[arg + 1]++;
@@ -678,7 +678,7 @@ static s32 QueueTestThreadRxTimeout(s32 arg) {
     for (;;) {
         u32 val;
         if (MosReceiveFromQueueOrTO(&TestQueue, &val,
-                                    queue_test_delay / 2 + 1)) {
+                                    queue_test_delay / 2 + 2)) {
             TestHisto[arg + val]++;
         } else {
             TestHisto[arg + 3]++;
@@ -810,12 +810,12 @@ static bool QueueTests(void) {
 }
 
 //
-// WaitMux Testing
+// Mux Testing
 //
 
 static const u32 mux_test_delay = 50;
 
-static s32 WaitMuxTestThreadTx(s32 arg) {
+static s32 MuxTestThreadTx(s32 arg) {
     for (;;) {
         if (arg == 0) MosGiveSem(&TestSem);
         else if (arg == 1) MosSendToQueue(&TestQueue, 1);
@@ -826,13 +826,13 @@ static s32 WaitMuxTestThreadTx(s32 arg) {
     return TEST_PASS;
 }
 
-static s32 WaitMuxTestThreadRx(s32 arg) {
-    MosWaitMuxEntry mux[2];
+static s32 MuxTestThreadRx(s32 arg) {
+    MosMuxEntry mux[2];
     mux[0].type = MOS_WAIT_SEM;
     mux[0].ptr.sem = &TestSem;
     mux[1].type = MOS_WAIT_RECV_QUEUE;
     mux[1].ptr.q = &TestQueue;
-    MosInitWaitMux(&TestMux);
+    MosInitMux(&TestMux);
     MosSetActiveMux(&TestMux, mux, count_of(mux));
     for (;;) {
         u32 idx = MosWaitOnMux(&TestMux);
@@ -850,13 +850,13 @@ static s32 WaitMuxTestThreadRx(s32 arg) {
     return TEST_PASS;
 }
 
-static s32 WaitMuxTestThreadRxTimeout(s32 arg) {
-    MosWaitMuxEntry mux[2];
+static s32 MuxTestThreadRxTimeout(s32 arg) {
+    MosMuxEntry mux[2];
     mux[0].type = MOS_WAIT_SEM;
     mux[0].ptr.sem = &TestSem;
     mux[1].type = MOS_WAIT_RECV_QUEUE;
     mux[1].ptr.q = &TestQueue;
-    MosInitWaitMux(&TestMux);
+    MosInitMux(&TestMux);
     MosSetActiveMux(&TestMux, mux, count_of(mux));
     for (;;) {
         u32 idx;
@@ -878,7 +878,7 @@ static s32 WaitMuxTestThreadRxTimeout(s32 arg) {
     return TEST_PASS;
 }
 
-static bool WaitMuxTests(void) {
+static bool MuxTests(void) {
     const u32 test_time = 5000;
     u32 exp_cnt = test_time / mux_test_delay;
     bool tests_all_pass = true;
@@ -887,13 +887,13 @@ static bool WaitMuxTests(void) {
     // Wait on Mux, thread and semaphore
     //
     test_pass = true;
-    MostPrint("WaitMux Test 1\n");
+    MostPrint("Mux Test 1\n");
     ClearHistogram();
     MosInitSem(&TestSem, 0);
     MosInitQueue(&TestQueue, queue, count_of(queue));
-    MosInitAndRunThread(1, 1, WaitMuxTestThreadTx, 0, Stacks[1], DFT_STACK_SIZE);
-    MosInitAndRunThread(2, 3, WaitMuxTestThreadTx, 1, Stacks[2], DFT_STACK_SIZE);
-    MosInitAndRunThread(3, 3, WaitMuxTestThreadRx, 2, Stacks[3], DFT_STACK_SIZE);
+    MosInitAndRunThread(1, 1, MuxTestThreadTx, 0, Stacks[1], DFT_STACK_SIZE);
+    MosInitAndRunThread(2, 3, MuxTestThreadTx, 1, Stacks[2], DFT_STACK_SIZE);
+    MosInitAndRunThread(3, 3, MuxTestThreadRx, 2, Stacks[3], DFT_STACK_SIZE);
     MosDelayThread(test_time);
     MosRequestThreadStop(1);
     MosRequestThreadStop(2);
@@ -915,13 +915,13 @@ static bool WaitMuxTests(void) {
     // Wait on Mux with Timeout
     //
     test_pass = true;
-    MostPrint("WaitMux Test 2\n");
+    MostPrint("Mux Test 2\n");
     ClearHistogram();
     MosInitSem(&TestSem, 0);
     MosInitQueue(&TestQueue, queue, count_of(queue));
-    MosInitAndRunThread(1, 1, WaitMuxTestThreadTx, 0, Stacks[1], DFT_STACK_SIZE);
-    MosInitAndRunThread(2, 3, WaitMuxTestThreadTx, 1, Stacks[2], DFT_STACK_SIZE);
-    MosInitAndRunThread(3, 3, WaitMuxTestThreadRxTimeout, 2, Stacks[3], DFT_STACK_SIZE);
+    MosInitAndRunThread(1, 1, MuxTestThreadTx, 0, Stacks[1], DFT_STACK_SIZE);
+    MosInitAndRunThread(2, 3, MuxTestThreadTx, 1, Stacks[2], DFT_STACK_SIZE);
+    MosInitAndRunThread(3, 3, MuxTestThreadRxTimeout, 2, Stacks[3], DFT_STACK_SIZE);
     MosDelayThread(test_time);
     MosRequestThreadStop(1);
     MosRequestThreadStop(2);
@@ -1263,7 +1263,7 @@ static s32 CmdTest(s32 argc, char * argv[]) {
             if (TimerTests() == false) test_pass = false;
             if (SemTests() == false) test_pass = false;
             if (QueueTests() == false) test_pass = false;
-            if (WaitMuxTests() == false) test_pass = false;
+            if (MuxTests() == false) test_pass = false;
             if (MutexTests() == false) test_pass = false;
             if (HeapTests() == false) test_pass = false;
         } else if (strcmp(argv[1], "hal") == 0) {
@@ -1276,8 +1276,8 @@ static s32 CmdTest(s32 argc, char * argv[]) {
             test_pass = SemTests();
         } else if (strcmp(argv[1], "queue") == 0) {
             test_pass = QueueTests();
-        } else if (strcmp(argv[1], "wmux") == 0) {
-            test_pass = WaitMuxTests();
+        } else if (strcmp(argv[1], "mux") == 0) {
+            test_pass = MuxTests();
         } else if (strcmp(argv[1], "mutex") == 0) {
             test_pass = MutexTests();
         } else if (strcmp(argv[1], "heap") == 0) {
@@ -1441,6 +1441,7 @@ int main() {
 
     MosInit();
     MostInit(TRACE_INFO | TRACE_ERROR | TRACE_FATAL, true);
+    MostPrint("\nWelcome to Maintainable OS\n");
 
     MoshInitHeap(&TestThreadHeapDesc, TestThreadHeap, sizeof(TestThreadHeap));
     MoshReserveBlockSize(&TestThreadHeapDesc, 1024);

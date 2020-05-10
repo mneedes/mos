@@ -118,12 +118,12 @@ typedef struct {
         MosSem * sem;
         MosQueue * q;
     } ptr;
-} MosWaitMuxEntry;
+} MosMuxEntry;
 
 typedef struct {
     u32 num;
-    MosWaitMuxEntry * entries;
-} MosWaitMux;
+    MosMuxEntry * entries;
+} MosMux;
 
 // IS (Interrupt Safe) means the function can be called from ISRs.
 // It may make sense to disable interrupts when calling those functions.
@@ -228,12 +228,12 @@ bool MosTryReceiveFromQueue(MosQueue * queue, u32 * data);
 // Returns false on timeout, true if received
 bool MosReceiveFromQueueOrTO(MosQueue * queue, u32 * data, u32 ticks);
 
-// Wait Mux (Block on multiple "selected" queues and/or semaphores)
+// Mux (Block on multiple "selected" queues and/or semaphores)
 // NOTE: An active Mux should only be changed by the thread using it
-void MosInitWaitMux(MosWaitMux * mux);
-void MosSetActiveMux(MosWaitMux * mux, MosWaitMuxEntry * entries, u32 len);
-u32 MosWaitOnMux(MosWaitMux * mux);
+void MosInitMux(MosMux * mux);
+void MosSetActiveMux(MosMux * mux, MosMuxEntry * entries, u32 len);
+u32 MosWaitOnMux(MosMux * mux);
 // Returns false on timeout, true if pending
-bool MosWaitOnMuxOrTO(MosWaitMux * mux, u32 * idx, u32 ticks);
+bool MosWaitOnMuxOrTO(MosMux * mux, u32 * idx, u32 ticks);
 
 #endif
