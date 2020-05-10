@@ -151,7 +151,7 @@ static void FormatString(char * buffer, const char * fmt, va_list args) {
     const char * ch = fmt;
     char * buf = buffer;
     char pad_char = ' ';
-    char *arg;
+    char * arg;
     s64 arg64;
     s32 arg32, base, long_cnt = 0, min_digits = 0;
     bool do_numeric, is_signed, is_upper;
@@ -436,7 +436,7 @@ MostCmdResult MostGetNextCmd(char * prompt, char * cmd, u32 max_cmd_len) {
 
 u32 MostParseCmd(char * argv[], char * args, u32 max_argc) {
     if (args == NULL) return 0;
-    char *tmp = NULL;
+    char * tmp = NULL;
     for (u32 argc = 0; argc < max_argc; ++argc) {
         argv[argc] = strtok_r((argc == 0) ? args : NULL, " ", &tmp);
         if (argv[argc] == NULL) return argc;

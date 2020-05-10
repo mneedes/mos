@@ -1,5 +1,5 @@
 
-//  Copyright 2019 Matthew C Needes
+//  Copyright 2019-2020 Matthew C Needes
 //  You may not use this source file except in compliance with the
 //  terms and conditions contained within the LICENSE file (the
 //  "License") included under this distribution.
@@ -207,8 +207,8 @@ void MosTakeMutex(MosMutex * mtx);
 bool MosTryMutex(MosMutex * mtx);
 void MosGiveMutex(MosMutex * mtx);
 // Release mutex if owned (useful in kill handlers)
-void MosRestoreMutex(MosMutex *mtx);
-bool MosIsMutexOwner(MosMutex *mtx);
+void MosRestoreMutex(MosMutex * mtx);
+bool MosIsMutexOwner(MosMutex * mtx);
 
 // Blocking Semaphore, intended for signaling
 void MosInitSem(MosSem * sem, u32 start_count);

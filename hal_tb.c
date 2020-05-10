@@ -1,5 +1,5 @@
 
-//  Copyright 2019 Matthew C Needes
+//  Copyright 2019-2020 Matthew C Needes
 //  You may not use this source file except in compliance with the
 //  terms and conditions contained within the LICENSE file (the
 //  "License") included under this distribution.
@@ -72,7 +72,7 @@ static s32 TimerTestBusyThread(s32 arg) {
 
 #define RUN_TEST    4
 
-bool HalTests(u8 *stacks[], u32 stack_size) {
+bool HalTests(u8 * stacks[], u32 stack_size) {
     const u32 test_time = 5000;
     bool test_pass;
 #if RUN_TEST == 1

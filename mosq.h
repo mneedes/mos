@@ -1,5 +1,5 @@
 
-//  Copyright 2019 Matthew C Needes
+//  Copyright 2019-2020 Matthew C Needes
 //  You may not use this source file except in compliance with the
 //  terms and conditions contained within the LICENSE file (the
 //  "License") included under this distribution.
@@ -15,7 +15,7 @@
 //   NOTE: Usable depth is len - 1.
 //   External mutex is required to support multiple readers or writers.
 typedef struct {
-    volatile u32 *buf;
+    volatile u32 * buf;
     u32 len;
     volatile u32 tail;
     volatile u32 head;

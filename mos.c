@@ -1,5 +1,5 @@
 
-//  Copyright 2019 Matthew C Needes
+//  Copyright 2019-2020 Matthew C Needes
 //  You may not use this source file except in compliance with the
 //  terms and conditions contained within the LICENSE file (the
 //  "License") included under this distribution.
@@ -152,10 +152,10 @@ void SysTick_Handler(void) {
     if (TimerHook) (*TimerHook)(TickCount);
 }
 
-static bool CheckWaitMux(Thread *thd) {
-    MosWaitMux *mux = thd->wait_mux;
+static bool CheckWaitMux(Thread * thd) {
+    MosWaitMux * mux = thd->wait_mux;
     for (u32 idx = 0; idx < mux->num; idx++) {
-        MosSem *sem;
+        MosSem * sem;
         switch (mux->entries[idx].type) {
         case MOS_WAIT_SEM:
             sem = mux->entries[idx].ptr.sem;
@@ -203,19 +203,19 @@ static u32 MOS_USED Scheduler(u32 sp) {
     if (Threads[RunningThreadID].state & THREAD_WAIT_FOR_TICK) {
         // Insertion sort in timer queue
         s32 rem_ticks = (s32)Threads[RunningThreadID].wake_tick - adj_tick_count;
-        MosList *tmr;
+        MosList * tmr;
         for (tmr = Timers.next; tmr != &Timers; tmr = tmr->next) {
-            Thread *tmr_thd = container_of(tmr, Thread, tmr_q);
+            Thread * tmr_thd = container_of(tmr, Thread, tmr_q);
             s32 tmr_rem_ticks = (s32)tmr_thd->wake_tick - adj_tick_count;
             if (rem_ticks <= tmr_rem_ticks) break;
         }
         MosAddToListBefore(tmr, &Threads[RunningThreadID].tmr_q);
     }
     // Process timer queue
-    MosList *tmr_save;
-    for (MosList *tmr = Timers.next; tmr != &Timers; tmr = tmr_save) {
+    MosList * tmr_save;
+    for (MosList * tmr = Timers.next; tmr != &Timers; tmr = tmr_save) {
         tmr_save = tmr->next;
-        Thread *thd = container_of(tmr, Thread, tmr_q);
+        Thread * thd = container_of(tmr, Thread, tmr_q);
         s32 rem_ticks = (s32)thd->wake_tick - adj_tick_count;
         if (rem_ticks <= 0) {
             // Signal timeout
@@ -225,15 +225,20 @@ static u32 MOS_USED Scheduler(u32 sp) {
             MosRemoveFromList(tmr);
         } else break;
     }
+#if 0
+    // outputs: runnable_cnt (0, 1 or 2), run_thd
+    // function output: queue, run_thd
+    // Move run_thd to end of queue here, not in function
+#else
     u32 runnable_cnt = 0;
     // Process Priority Queues
     // TODO: iterative scheduler (nested priority inheritance)
     // TODO: proper setting of to_yield flag.
-    Thread *run_thd = &Threads[MOS_IDLE_THREAD_ID];
+    Thread * run_thd = &Threads[MOS_IDLE_THREAD_ID];
     for (MosThreadPriority pri = 0; pri < MOS_MAX_THREAD_PRIORITIES; pri++) {
-        MosList *elm;
+        MosList * elm;
         for (elm = PriQueues[pri].next; elm != &PriQueues[pri]; elm = elm->next) {
-            Thread *thd = container_of(elm, Thread, run_q);
+            Thread * thd = container_of(elm, Thread, run_q);
             switch (thd->state & 0xF) {
             case THREAD_RUNNABLE:
                 break;
@@ -293,13 +298,14 @@ static u32 MOS_USED Scheduler(u32 sp) {
             break;
         }
     }
+#endif
     u32 next_tick_interval = 1;
     // Determine next timer interval
     //   If more than 1 active thread, enable tick to commutate threads
     //   If there is an active timer, delay tick to next expiration up to max
     if (runnable_cnt <= 1) {
         if (!MosIsListEmpty(&Timers)) {
-            Thread *thd = container_of(Timers.next, Thread, tmr_q);
+            Thread * thd = container_of(Timers.next, Thread, tmr_q);
             s32 tmr_ticks_rem = (s32)thd->wake_tick - adj_tick_count;
             // This ensures that the LOAD value will fit in SysTick counter...
             if (tmr_ticks_rem < MaxTickInterval)
@@ -837,14 +843,14 @@ void MOS_NAKED MosGiveMutex(MosMutex * mtx) {
     );
 }
 
-void MosRestoreMutex(MosMutex *mtx) {
+void MosRestoreMutex(MosMutex * mtx) {
     if (mtx->owner == RunningThreadID) {
         mtx->depth = 1;
         MosGiveMutex(mtx);
     }
 }
 
-bool MosIsMutexOwner(MosMutex *mtx) {
+bool MosIsMutexOwner(MosMutex * mtx) {
     return (mtx->owner == RunningThreadID);
 }
 
@@ -1032,7 +1038,7 @@ bool MosReceiveFromQueueOrTO(MosQueue * queue, u32 * data, u32 ticks) {
     return false;
 }
 
-void MosInitWaitMux(MosWaitMux *mux) {
+void MosInitWaitMux(MosWaitMux * mux) {
     mux->num = 0;
 }
 

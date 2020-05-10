@@ -1,5 +1,5 @@
 
-//  Copyright 2019 Matthew C Needes
+//  Copyright 2019-2020 Matthew C Needes
 //  You may not use this source file except in compliance with the
 //  terms and conditions contained within the LICENSE file (the
 //  "License") included under this distribution.
@@ -39,8 +39,8 @@ typedef struct {
 
 typedef struct {
     MosMutex mtx;
-    u8 *pit;
-    u8 *bot;
+    u8 * pit;
+    u8 * bot;
     MosList bsl; // block size list
     MosList bsl_free;
     MosList osl; // odd size list

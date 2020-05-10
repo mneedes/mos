@@ -74,7 +74,7 @@ void MostGiveMutex(void);
 
 // Command shell support
 MostCmdResult MostGetNextCmd(char * prompt, char * cmd, u32 max_cmd_len);
-u32 MostParseCmd(char * argv[], char *args, u32 max_argc);
+u32 MostParseCmd(char * argv[], char * args, u32 max_argc);
 MostCmd * MostFindCmd(char * name, MostCmd * commands, u32 num_cmds);
 void MostPrintHelp(MostCmd * commands, u32 num_cmds);
 

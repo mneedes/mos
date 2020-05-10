@@ -140,7 +140,7 @@ static void EXTILine0_Config(void) {
     HAL_NVIC_EnableIRQ(EXTI0_IRQn);
 }
 
-static HalRxUARTCallback *rx_callback = NULL;
+static HalRxUARTCallback * rx_callback = NULL;
 
 void USART2_IRQHandler(void) {
     if (UartHandle.Instance->SR & USART_SR_RXNE) {
@@ -148,7 +148,7 @@ void USART2_IRQHandler(void) {
     }
 }
 
-void HalRegisterRxUARTCallback(HalRxUARTCallback *cb) {
+void HalRegisterRxUARTCallback(HalRxUARTCallback * cb) {
     rx_callback = cb;
 }
 
@@ -157,7 +157,7 @@ void HalSendToTxUART(char ch) {
     UartHandle.Instance->DR = ch;
 }
 
-void HAL_UART_MspInit(UART_HandleTypeDef *huart)
+void HAL_UART_MspInit(UART_HandleTypeDef * huart)
 {
     GPIO_InitTypeDef  GPIO_InitStruct;
 
