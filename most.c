@@ -375,7 +375,7 @@ MostCmdResult MostGetNextCmd(char * prompt, char * cmd, u32 max_cmd_len) {
     static bool last_ch_was_arrow = false;
     MosTakeMutex(&MostMutex);
     if (buf_ix) {
-        for (u32 ix = 0; ix < buf_ix; ix++) _MostPrintCh(127);
+        for (u32 ix = 0; ix < buf_ix; ix++) _MostPrint("\b \b");
     } else if (prompt && !last_ch_was_arrow) {
         _MostPrint(prompt);
     }
@@ -402,7 +402,7 @@ MostCmdResult MostGetNextCmd(char * prompt, char * cmd, u32 max_cmd_len) {
             case '\b':
             case 127:
                 if (buf_ix) {
-                    MostPrintCh(ch);
+                    MostPrint("\b \b");
                     buf_ix--;
                 }
                 break;

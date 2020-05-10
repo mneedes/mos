@@ -30,9 +30,7 @@
 //
 // Application HAL
 //
-
 #include "stm32f4xx_hal.h"
-#include "stm32f4_discovery.h"
 #include "hal.h"
 #include "mos.h"
 #include "mos_phal.h"
@@ -57,7 +55,7 @@ static UART_HandleTypeDef   UartHandle;
 
 static void Error_Handler(void) {
     /* Turn LED5 on */
-    BSP_LED_On(LED5);
+    //BSP_LED_On(LED5);
     while (1)
         ;
 }
@@ -201,10 +199,10 @@ void HalInit() {
     HAL_Init();
 
     /* Configure LED3, LED4, LED5 and LED6 */
-    BSP_LED_Init(LED3);
-    BSP_LED_Init(LED4);
-    BSP_LED_Init(LED5);
-    BSP_LED_Init(LED6);
+    //BSP_LED_Init(LED3);
+    //BSP_LED_Init(LED4);
+    //BSP_LED_Init(LED5);
+    //BSP_LED_Init(LED6);
 
     /* Configure the system clock to 168 MHz */
     SystemClock_Config();
