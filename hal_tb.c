@@ -29,6 +29,10 @@ typedef enum {
 static const u32 timer_test_delay = 100;
 
 // Using LED pins as GPIO for logic analyzer
+void HalSetGpio(u32 num, bool value) {
+    if (value) LED_ON(num);
+    else LED_OFF(num);
+}
 
 static s32 TimerTestThread(s32 arg) {
     for (;;) {

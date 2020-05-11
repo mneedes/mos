@@ -17,14 +17,15 @@
 // TODO: Can use this to enable floating point context save for CM4F
 #endif
 
+// TODO: Thread killing self?
 // TODO: Improve Exception handling.  Maybe move thread kill into scheduler to
 //       help support this.
-// TODO: Clearing wait flags after thread kill / wait counter?
-// TODO: Thread killing self?
 // TODO: WaitForThreadStop on Mux?
+// TODO: Clearing wait flags after thread kill / wait counter?
 // TODO: Suppress yields on semaphores if no thread is waiting.  Unlike Mutex
 //       Semaphore yields may be tricky since they can happen during high
 //       priority interrupts that are interrupting PendSV handler.
+// TODO: Asserts / Warnings
 
 #define MOS_IDLE_THREAD_ID      0
 #define MOS_MAX_THREADS         (MOS_MAX_APP_THREADS + 1)
@@ -33,6 +34,9 @@
 #define MOS_SHIFT_PRI(pri)      ((pri) << (8 - __NVIC_PRIO_BITS))
 #define MOS_LOW_INT_PRI         ((1 << __NVIC_PRIO_BITS) - 1)
 #define MOS_LOW_INT_PRI_MASK    MOS_SHIFT_PRI(MOS_LOW_INT_PRI - 1)
+
+#define MOS_EVENT(e, v) \
+    { if (MOS_ENABLE_EVENTS) (*EventHook)((MOS_EVENT_ ## e), (v)); }
 
 typedef struct {
     u32 SWSAVE[8];   // R11-R4
@@ -46,12 +50,13 @@ typedef struct {
 typedef enum {
     THREAD_UNINIT = 0,
     THREAD_INIT,
+    THREAD_STOPPED,
+    //THREAD_TIME_TO_DIE,
     THREAD_RUNNABLE,
     THREAD_WAIT_FOR_MUTEX,
     THREAD_WAIT_FOR_SEM,
     THREAD_WAIT_ON_MUX,
     THREAD_WAIT_FOR_STOP,
-    THREAD_STOPPED,
     THREAD_WAIT_FOR_TICK = 16,
     THREAD_WAIT_FOR_SEM_OR_TICK = THREAD_WAIT_FOR_SEM + 16,
     THREAD_WAIT_ON_MUX_OR_TICK = THREAD_WAIT_ON_MUX + 16,
@@ -86,7 +91,14 @@ typedef struct {
 } ThreadAuxData;
 
 // Parameters
-static MosParams Params;
+static MosParams Params = { .version = MOS_TO_STR(MOS_VERSION) };
+
+// Hooks
+static MosRawPrintfHook * PrintfHook = NULL;
+static MosSleepHook * SleepHook = NULL;
+static MosWakeHook * WakeHook = NULL;
+void MosDummyEventHook(MosEvent e, u32 v) {}
+static MosEventHook * EventHook = MosDummyEventHook;
 
 // Threads and Events
 static volatile MosThreadID RunningThreadID = MOS_NO_THREADS;
@@ -94,7 +106,6 @@ static volatile error_t * ErrNo;
 static Thread Threads[MOS_MAX_THREADS];
 static MosList PriQueues[MOS_MAX_THREAD_PRIORITIES];
 static ThreadAuxData ThreadData[MOS_MAX_THREADS];
-static MosRawPrintfHook * PrintfHook = NULL;
 static u32 IntDisableCount = 0;
 
 // Timers and Ticks
@@ -104,7 +115,6 @@ static volatile u32 TickInterval = 1;
 static u32 MaxTickInterval;
 static u32 CyclesPerTick;
 static u32 MOS_USED CyclesPerMicroSec;
-static MosTimerHook * TimerHook = NULL;
 
 // Idle thread stack and initial PSP safe storage
 static u8 MOS_STACK_ALIGNED MosIdleStack[2 * sizeof(StackFrame)];
@@ -113,7 +123,8 @@ static u8 MOS_STACK_ALIGNED MosIdleStack[2 * sizeof(StackFrame)];
 //   disabling context switches.
 static void MOS_INLINE MosSetBasePri(u32 pri) {
     asm volatile (
-        "msr basepri, %0"
+        "msr basepri, %0\n\t"
+        "isb"
             : : "r" (pri) : "memory"
     );
 }
@@ -149,7 +160,7 @@ void SysTick_Handler(void) {
     if (RunningThreadID == MOS_NO_THREADS) return;
     TickCount += TickInterval;
     MosYieldThread();
-    if (TimerHook) (*TimerHook)(TickCount);
+    MOS_EVENT(TIMER, TickCount);
 }
 
 static bool CheckMux(Thread * thd) {
@@ -177,21 +188,26 @@ static bool CheckMux(Thread * thd) {
     return false;
 }
 
-static Thread * ProcessThread(Thread * thd) {
+// TODO: Fixes for second scan
+static Thread * ProcessThread(Thread * thd, MosThreadPriority pri) {
     switch (thd->state & 0xF) {
     case THREAD_RUNNABLE:
         return thd;
     case THREAD_WAIT_FOR_MUTEX: {
-            // Check mutex and perform nested priority inheritance if necessary
+            // Check mutex (nested priority inheritance algorithm)
             MosThreadID owner = thd->wait.mtx->owner;
             if (thd->wait.mtx->owner == MOS_NO_THREADS) {
                 thd->wait.mtx->to_yield = false;
                 return thd;
             } else {
+                // If owner thread is lower priority
                 thd->wait.mtx->to_yield = true;
-                if (Threads[owner].state == THREAD_RUNNABLE) {
-                    return &Threads[owner];
-                } else return ProcessThread(&Threads[owner]);
+                if (Threads[owner].pri > pri) {
+                    //thd->wait.mtx->to_yield = true;
+                    if (Threads[owner].state == THREAD_RUNNABLE) {
+                        return &Threads[owner];
+                    } else return ProcessThread(&Threads[owner], pri);
+                } else return thd;
             }
         }
         break;
@@ -215,7 +231,7 @@ static Thread * ScanThreads(MosThreadPriority * pri, MosList ** thd_elm) {
     for (; *pri < MOS_MAX_THREAD_PRIORITIES;) {
         for (; elm != &PriQueues[*pri]; elm = elm->next) {
             Thread * thd = container_of(elm, Thread, run_q);
-            Thread * run_thd = ProcessThread(thd);
+            Thread * run_thd = ProcessThread(thd, *pri);
             if (run_thd) {
                 *thd_elm = elm;
                 return run_thd;
@@ -227,13 +243,8 @@ static Thread * ScanThreads(MosThreadPriority * pri, MosList ** thd_elm) {
     return NULL;
 }
 
-// A little special something for profiling
-#define GPIO_BASE   0x40020C00
-#define LED_ON(x)   (MOS_VOL_U32(GPIO_BASE + 24) = (1 << (12 + (x))))
-#define LED_OFF(x)  (MOS_VOL_U32(GPIO_BASE + 24) = (1 << (12 + (x))) << 16)
-
 static u32 MOS_USED Scheduler(u32 sp) {
-    //LED_ON(3);
+    MOS_EVENT(SCHEDULER_ENTRY, 0);
     // Save SP and ErrNo context
     if (RunningThreadID != MOS_NO_THREADS) {
         Threads[RunningThreadID].sp = sp;
@@ -249,7 +260,7 @@ static u32 MOS_USED Scheduler(u32 sp) {
         asm volatile ( "cpsie if" );
         adj_tick_count = TickCount + (load - val) / CyclesPerTick;
     }
-    // Update running thread state
+    // Update running thread timer state
     if (Threads[RunningThreadID].state & THREAD_WAIT_FOR_TICK) {
         // Insertion sort in timer queue
         s32 rem_ticks = (s32)Threads[RunningThreadID].wake_tick - adj_tick_count;
@@ -337,7 +348,7 @@ static u32 MOS_USED Scheduler(u32 sp) {
     // Set next thread ID and errno and return its stack pointer
     RunningThreadID = run_thd->id;
     *ErrNo = Threads[RunningThreadID].err_no;
-    //LED_OFF(3);
+    MOS_EVENT(SCHEDULER_EXIT, 0);
     return (u32)Threads[RunningThreadID].sp;
 }
 
@@ -422,10 +433,6 @@ void MOS_NAKED UsageFault_Handler(void) {
     );
 }
 
-void MosRegisterRawPrintfHook(MosRawPrintfHook * printf_hook) {
-    PrintfHook = printf_hook;
-}
-
 u32 MosGetTickCount(void) {
     // Adjust tick count based on value in SysTick counter
     asm volatile ( "cpsid if" );
@@ -468,16 +475,14 @@ void MOS_NAKED MosDelayMicroSec(u32 usec) {
     );
 }
 
-void MosRegisterTimerHook(MosTimerHook * timer_hook) {
-    TimerHook = timer_hook;
-}
-
 static s32 MosIdleThread(s32 arg) {
     while (1) {
+        if (SleepHook) (*SleepHook)();
         asm volatile (
             "dsb\n\t"
             "wfi\n\t"
         );
+        if (WakeHook) (*WakeHook)();
     }
     return 0;
 }
@@ -516,6 +521,11 @@ void MosInit(void) {
     Params.int_pri_low = MOS_LOW_INT_PRI;
     Params.micro_sec_per_tick = MOS_MICRO_SEC_PER_TICK;
 }
+
+void MosRegisterRawPrintfHook(MosRawPrintfHook * hook) { PrintfHook = hook; }
+void MosRegisterSleepHook(MosSleepHook * hook) { SleepHook = hook; }
+void MosRegisterWakeHook(MosWakeHook * hook) { WakeHook = hook; }
+void MosRegisterEventHook(MosEventHook * hook) { EventHook = hook; }
 
 void MosRunScheduler(void) {
     // Start PSP in a safe place for first PendSV and then enable interrupts

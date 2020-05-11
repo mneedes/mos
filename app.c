@@ -1441,7 +1441,7 @@ int main() {
 
     MosInit();
     MostInit(TRACE_INFO | TRACE_ERROR | TRACE_FATAL, true);
-    MostPrint("\nWelcome to Maintainable OS\n");
+    MostPrintf("\nWelcome to Maintainable OS (Version %s)\n", MosGetParams()->version);
 
     MoshInitHeap(&TestThreadHeapDesc, TestThreadHeap, sizeof(TestThreadHeap));
     MoshReserveBlockSize(&TestThreadHeapDesc, 1024);

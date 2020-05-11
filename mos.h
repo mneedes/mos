@@ -17,6 +17,8 @@
 
 #include "mos_config.h"
 
+#define MOS_VERSION            0.1
+
 #ifndef count_of
 #define count_of(x)            (sizeof(x) / sizeof(x[0]))
 #endif
@@ -56,16 +58,13 @@ typedef int32_t     s32;
 typedef uint64_t    u64;
 typedef int64_t     s64;
 
-typedef s32 (MosThreadEntry)(s32 arg);
-typedef s32 (MosHandler)(s32 arg);
-typedef void (MosTimerHook)(u32 tick_count);
-typedef void (MosRawPrintfHook)(const char * fmt, ...);
 typedef s16 MosThreadID;
 typedef u16 MosThreadPriority;
 typedef volatile u32 MosSem;
 
 // Microkernel Parameters
 typedef struct {
+    char * version;
     u32 max_app_threads;
     MosThreadPriority thread_pri_hi;
     MosThreadPriority thread_pri_low;
@@ -87,6 +86,12 @@ typedef enum {
     MOS_WAIT_RECV_QUEUE,
     MOS_WAIT_SEND_QUEUE
 } MosWaitType;
+
+typedef enum {
+    MOS_EVENT_SCHEDULER_ENTRY,
+    MOS_EVENT_SCHEDULER_EXIT,
+    MOS_EVENT_TIMER
+} MosEvent;
 
 // Blocking mutex supporting recursion
 typedef struct {
@@ -125,12 +130,25 @@ typedef struct {
     MosMuxEntry * entries;
 } MosMux;
 
+typedef s32 (MosThreadEntry)(s32 arg);
+typedef s32 (MosHandler)(s32 arg);
+typedef void (MosRawPrintfHook)(const char * fmt, ...);
+typedef void (MosSleepHook)(void);
+typedef void (MosWakeHook)(void);
+typedef void (MosEventHook)(MosEvent evt, u32 val);
+
 // IS (Interrupt Safe) means the function can be called from ISRs.
 // It may make sense to disable interrupts when calling those functions.
 
 // Initialize and Run
 void MosInit(void);
 void MosRunScheduler(void);
+
+// Hooks
+void MosRegisterRawPrintfHook(MosRawPrintfHook * hook);
+void MosRegisterSleepHook(MosSleepHook * hook);
+void MosRegisterWakeHook(MosWakeHook * hook);
+void MosRegisterEventHook(MosEventHook * hook);
 
 // Obtain Microkernel parameters
 const MosParams * MosGetParams(void);
@@ -142,7 +160,6 @@ const MosParams * MosGetParams(void);
 u32 MosGetIRQNumber(void); // IS
 void MosDisableInterrupts(void); // IS
 void MosEnableInterrupts(void); // IS
-void MosRegisterRawPrintfHook(MosRawPrintfHook * printf_hook);
 
 // Time and Delays
 u32 MosGetTickCount(void);
@@ -150,7 +167,6 @@ void MosDelayThread(u32 ticks);
 // For short delays, e.g.: for bit-banging.
 //   Keep in mind there is an upper limit to usec.
 void MosDelayMicroSec(u32 usec); // IS
-void MosRegisterTimerHook(MosTimerHook * timer_hook);
 
 // Thread Functions
 
