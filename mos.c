@@ -19,7 +19,6 @@
 
 // TODO: Improve Exception handling.  Maybe move thread kill into scheduler to
 //       help support this.
-// TODO: Improve Exception handling *BEFORE* MOS scheduler start
 // TODO: Clearing wait flags after thread kill / wait counter?
 // TODO: Thread killing self?
 // TODO: WaitForThreadStop on Mux?
@@ -356,15 +355,16 @@ void MOS_NAKED PendSV_Handler(void) {
     );
 }
 
-// TODO: Which ISR Vector, limit stack dump to end
+// TODO: Limit stack dump to end of memory
 static void MOS_USED FaultHandler(u32 fault_no, u32 * sp, bool in_isr) {
     char * fault_type[] = {
         "Hard", "MemManage", "Bus", "Usage"
     };
     if (PrintfHook) {
-        (*PrintfHook)("*** %s Fault %s(ThreadID %u) ***\n",
-                      fault_type[fault_no - 3],
-                      in_isr ? "In ISR " : "", RunningThreadID);
+        (*PrintfHook)("*** %s Fault %s", fault_type[fault_no - 3],
+                      in_isr ? "IN ISR " : "");
+        if (RunningThreadID == MOS_NO_THREADS) (*PrintfHook)("(Before MOS Run) ***\n");
+        else (*PrintfHook)("(ThreadID %u) ***\n", RunningThreadID);
         (*PrintfHook)(" HFSR: %08X  CFSR: %08X AFSR: %08X\n", SCB->HFSR,
                       SCB->CFSR, SCB->AFSR);
         (*PrintfHook)(" BFAR: %08X MMFAR: %08X\n", SCB->BFAR, SCB->MMFAR);
@@ -374,10 +374,10 @@ static void MOS_USED FaultHandler(u32 fault_no, u32 * sp, bool in_isr) {
             if ((ix & 0x3) == 0x3) (*PrintfHook)("\n");
         }
     }
-    if (in_isr) {
-        // Hang if fault occurred in interrupt context
+    if (RunningThreadID == MOS_NO_THREADS || in_isr) {
+        // Hang if fault occurred anywhere but in thread context
         while (1)
-            ;
+          ;
     } else {
         // Stop thread if fault occurred in thread context
         MosRemoveFromList(&Threads[RunningThreadID].tmr_q);
@@ -391,12 +391,14 @@ void MOS_NAKED HardFault_Handler(void) {
     asm volatile (
         "mrs r0, psr\n\t"
         "and r0, #255\n\t"
-        "mov r2, #0\n\t"
         "tst lr, #4\n\t"
-        "itte eq\n\t"
+        "ite eq\n\t"
         "mrseq r1, msp\n\t"
-        "moveq r2, #1\n\t"
         "mrsne r1, psp\n\t"
+        "tst lr, #8\n\t"
+        "ite eq\n\t"
+        "moveq r2, #1\n\t"
+        "movne r2, #0\n\t"
         "b FaultHandler\n\t"
             : : : "r0", "r1", "r2", "r3"
     );
@@ -482,6 +484,11 @@ static s32 MosIdleThread(s32 arg) {
 
 // NOTE: SysTick should be set up by HAL before running.
 void MosInit(void) {
+    // Enable Bus, Memory and Usage Faults in general
+    SCB->SHCSR |= (SCB_SHCSR_BUSFAULTENA_Msk | SCB_SHCSR_MEMFAULTENA_Msk |
+                   SCB_SHCSR_USGFAULTENA_Msk);
+    // Trap Divide By 0 and "Unintentional" Unaligned Accesses
+    SCB->CCR |= (SCB_CCR_DIV_0_TRP_Msk | SCB_CCR_UNALIGN_TRP_Msk);
     // Cache errno pointer for use during context switch
     ErrNo = __errno();
     // Set up timers with tick-reduction
@@ -522,26 +529,23 @@ void MosRunScheduler(void) {
         "psp_start: .word MosIdleStack + 64\n\t"
             : : : "r0"
     );
-    // Enable Bus, Memory and Usage Faults in general
-    SCB->SHCSR |= (SCB_SHCSR_BUSFAULTENA_Msk | SCB_SHCSR_MEMFAULTENA_Msk |
-                   SCB_SHCSR_USGFAULTENA_Msk);
-    // Trap Divide By 0 and "Unintentional" Unaligned Accesses
-    SCB->CCR |= (SCB_CCR_DIV_0_TRP_Msk | SCB_CCR_UNALIGN_TRP_Msk);
-    // Invoke PendSV handler to potentially perform context switch
+    // Invoke PendSV handler to start scheduler (first context switch)
     SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
+    asm volatile ( "isb" );
     // Not reachable
     while (1)
         ;
 }
 
 const MosParams * MosGetParams(void) {
-    return (const MosParams *)&Params;
+    return (const MosParams *) &Params;
 }
 
 void MosYieldThread(void) {
     if (RunningThreadID == MOS_NO_THREADS) return;
     // Invoke PendSV handler to potentially perform context switch
     SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
+    asm volatile ( "isb" );
 }
 
 MosThreadID MosGetThreadID(void) {
