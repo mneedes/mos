@@ -32,8 +32,6 @@
 #define MOS_NO_THREADS          -1
 
 #define MOS_SHIFT_PRI(pri)      ((pri) << (8 - __NVIC_PRIO_BITS))
-#define MOS_LOW_INT_PRI         ((1 << __NVIC_PRIO_BITS) - 1)
-#define MOS_LOW_INT_PRI_MASK    MOS_SHIFT_PRI(MOS_LOW_INT_PRI - 1)
 
 #define MOS_EVENT(e, v) \
     { if (MOS_ENABLE_EVENTS) (*EventHook)((MOS_EVENT_ ## e), (v)); }
@@ -91,6 +89,7 @@ typedef struct {
 } ThreadAuxData;
 
 // Parameters
+static u8 IntPriMaskLow;
 static MosParams Params = { .version = MOS_TO_STR(MOS_VERSION) };
 
 // Hooks
@@ -488,7 +487,6 @@ static s32 MosIdleThread(s32 arg) {
     return 0;
 }
 
-// NOTE: SysTick should be set up by HAL before running.
 void MosInit(void) {
     // Enable Bus, Memory and Usage Faults in general
     SCB->SHCSR |= (SCB_SHCSR_BUSFAULTENA_Msk | SCB_SHCSR_MEMFAULTENA_Msk |
@@ -501,12 +499,27 @@ void MosInit(void) {
     CyclesPerTick = SysTick->LOAD + 1;
     MaxTickInterval = ((1 << 24) - 1) / CyclesPerTick;
     CyclesPerMicroSec = CyclesPerTick / MOS_MICRO_SEC_PER_TICK;
-    // Set lowest priority for PendSV and Tick
-    //  NOTE: The lower the number the higher the priority
-    //  TODO: This assumes there are zero bits allocated to subgroups, what to do here?
-    u32 pg = NVIC_GetPriorityGrouping();
-    NVIC_SetPriority(PendSV_IRQn, NVIC_EncodePriority(pg, MOS_LOW_INT_PRI, 0));
-    NVIC_SetPriority(SysTick_IRQn, NVIC_EncodePriority(pg, MOS_LOW_INT_PRI, 0));
+    // Set lowest preemption priority for SysTick and PendSV (highest number).
+    //  NOTE: The higher the number the lower the priority
+    u32 pri_grp = NVIC_GetPriorityGrouping();
+    u32 pri_bits = 7 - pri_grp;
+    if (pri_bits > __NVIC_PRIO_BITS) pri_bits = __NVIC_PRIO_BITS;
+    u32 pri_low = (1 << pri_bits) - 1;
+    // If there are subpriorities give SysTick higher subpriority (lower number).
+    u32 subpri_bits = pri_grp - 7 + __NVIC_PRIO_BITS;
+    if (pri_grp + __NVIC_PRIO_BITS < 7) subpri_bits = 0;
+    if (subpri_bits == 0) {
+        u32 pri = NVIC_EncodePriority(pri_grp, pri_low, 0);
+        IntPriMaskLow = MOS_SHIFT_PRI(pri);
+        NVIC_SetPriority(SysTick_IRQn, pri);
+        NVIC_SetPriority(PendSV_IRQn, pri);
+    } else {
+        u32 subpri = (1 << subpri_bits) - 2;
+        u32 pri = NVIC_EncodePriority(pri_grp, pri_low, subpri);
+        IntPriMaskLow = MOS_SHIFT_PRI(pri);
+        NVIC_SetPriority(SysTick_IRQn, pri);
+        NVIC_SetPriority(PendSV_IRQn, NVIC_EncodePriority(pri_grp, pri_low, subpri + 1));
+    }
     // Initialize empty priority, event and timer queues
     for (MosThreadPriority pri = 0; pri < MOS_MAX_THREAD_PRIORITIES; pri++)
         MosInitList(&PriQueues[pri]);
@@ -519,7 +532,7 @@ void MosInit(void) {
     Params.thread_pri_hi = 0;
     Params.thread_pri_low = MOS_MAX_THREAD_PRIORITIES - 1;
     Params.int_pri_hi = 0;
-    Params.int_pri_low = MOS_LOW_INT_PRI;
+    Params.int_pri_low = pri_low;
     Params.micro_sec_per_tick = MOS_MICRO_SEC_PER_TICK;
 }
 
@@ -585,7 +598,7 @@ MosThreadState MosGetThreadState(MosThreadID id, s32 * rtn_val) {
 }
 
 static void MosThreadExit(s32 rtn_val) {
-    MosSetBasePri(MOS_LOW_INT_PRI_MASK);
+    MosSetBasePri(IntPriMaskLow);
     ThreadData[RunningThreadID].rtn_val = rtn_val;
     MosSetThreadState(RunningThreadID, THREAD_STOPPED);
     MosRemoveFromList(&Threads[RunningThreadID].run_q);
@@ -605,7 +618,7 @@ s32 MosInitThread(MosThreadID id, MosThreadPriority pri,
                   u8 * s_addr, u32 s_size) {
     if (id == RunningThreadID) return -1;
     // Stop thread if running
-    MosSetBasePri(MOS_LOW_INT_PRI_MASK);
+    MosSetBasePri(IntPriMaskLow);
     ThreadState state = Threads[id].state;
     switch (state) {
     case THREAD_UNINIT:
@@ -647,7 +660,7 @@ s32 MosInitThread(MosThreadID id, MosThreadPriority pri,
 
 s32 MosRunThread(MosThreadID id) {
     if (Threads[id].state == THREAD_INIT) {
-        MosSetBasePri(MOS_LOW_INT_PRI_MASK);
+        MosSetBasePri(IntPriMaskLow);
         MosSetThreadState(id, THREAD_RUNNABLE);
         if (id != MOS_IDLE_THREAD_ID)
             MosAddToList(&PriQueues[Threads[id].pri], &Threads[id].run_q);
@@ -669,7 +682,7 @@ s32 MosInitAndRunThread(MosThreadID id,  MosThreadPriority pri,
 
 void MosChangeThreadPriority(MosThreadID id, MosThreadPriority pri) {
     if (Threads[id].pri == pri) return;
-    MosSetBasePri(MOS_LOW_INT_PRI_MASK);
+    MosSetBasePri(IntPriMaskLow);
     Threads[id].pri = pri;
     MosRemoveFromList(&Threads[id].run_q);
     MosAddToList(&PriQueues[pri], &Threads[id].run_q);
@@ -711,7 +724,7 @@ void MosKillThread(MosThreadID id) {
 }
 
 void MosSetKillHandler(MosThreadID id, MosHandler * handler, s32 arg) {
-    MosSetBasePri(MOS_LOW_INT_PRI_MASK);
+    MosSetBasePri(IntPriMaskLow);
     if (handler) ThreadData[id].kill_handler = handler;
     else ThreadData[id].kill_handler = MosDefaultKillHandler;
     ThreadData[id].kill_arg = arg;
@@ -1021,7 +1034,7 @@ bool MosSendToQueueOrTO(MosQueue * queue, u32 data, u32 ticks) {
 
 u32 MosReceiveFromQueue(MosQueue * queue) {
     MosTakeSem(&queue->sem_head);
-    MosSetBasePri(MOS_LOW_INT_PRI_MASK);
+    MosSetBasePri(IntPriMaskLow);
     u32 data = queue->buf[queue->head];
     if (++queue->head >= queue->len) queue->head = 0;
     MosSetBasePri(0);
@@ -1031,7 +1044,7 @@ u32 MosReceiveFromQueue(MosQueue * queue) {
 
 bool MosTryReceiveFromQueue(MosQueue * queue, u32 * data) {
     if (MosTrySem(&queue->sem_head)) {
-        MosSetBasePri(MOS_LOW_INT_PRI_MASK);
+        MosSetBasePri(IntPriMaskLow);
         *data = queue->buf[queue->head];
         if (++queue->head >= queue->len) queue->head = 0;
         MosSetBasePri(0);
@@ -1043,7 +1056,7 @@ bool MosTryReceiveFromQueue(MosQueue * queue, u32 * data) {
 
 bool MosReceiveFromQueueOrTO(MosQueue * queue, u32 * data, u32 ticks) {
     if (MosTakeSemOrTO(&queue->sem_head, ticks)) {
-        MosSetBasePri(MOS_LOW_INT_PRI_MASK);
+        MosSetBasePri(IntPriMaskLow);
         *data = queue->buf[queue->head];
         if (++queue->head >= queue->len) queue->head = 0;
         MosSetBasePri(0);

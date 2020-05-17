@@ -141,6 +141,7 @@ typedef void (MosEventHook)(MosEvent evt, u32 val);
 // It may make sense to disable interrupts when calling those functions.
 
 // Initialize and Run
+// NOTE: SysTick and NVIC priority groups should be set up by HAL before running Init.
 void MosInit(void);
 void MosRunScheduler(void);
 

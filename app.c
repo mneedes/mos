@@ -59,6 +59,8 @@ static volatile u32 TestHisto[MAX_TEST_HISTO_ENTRIES];
 #define MAX_TICK_HISTO_ENTRIES  101
 static volatile u32 TickHisto[MAX_TICK_HISTO_ENTRIES];
 
+static volatile u32 SchedCount;
+
 // Test Sem / Mutex / Mux
 static MosSem TestSem;
 static MosMutex TestMutex;
@@ -96,6 +98,8 @@ void EventCallback(MosEvent evt, u32 val) {
         else
             TickHisto[diff]++;
         last_tick = val;
+    } else if (evt == MOS_EVENT_SCHEDULER_EXIT) {
+        SchedCount++;
     }
 }
 
@@ -1333,6 +1337,7 @@ static s32 CmdPigeon(s32 argc, char * argv[]) {
 
 static s32 CmdClearTickHisto(s32 argc, char * argv[]) {
     for (u32 ix = 0; ix < MAX_TICK_HISTO_ENTRIES; ix++) TickHisto[ix] = 0;
+    SchedCount = 0;
     return CMD_OK;
 }
 
