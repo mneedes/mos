@@ -53,8 +53,11 @@ static u8 MOSH_HEAP_ALIGNED TestHeap[16384];
 static volatile u32 TestFlag = 0;
 
 // Generic histogram for tests
-#define MAX_HISTO_ENTRIES   102
-static volatile u32 TestHisto[MAX_HISTO_ENTRIES];
+#define MAX_TEST_HISTO_ENTRIES   16
+static volatile u32 TestHisto[MAX_TEST_HISTO_ENTRIES];
+
+#define MAX_TICK_HISTO_ENTRIES  101
+static volatile u32 TickHisto[MAX_TICK_HISTO_ENTRIES];
 
 // Test Sem / Mutex / Mux
 static MosSem TestSem;
@@ -75,15 +78,25 @@ static void DisplayHistogram(u32 cnt) {
         MostPrintf(" Histo[%u] = %u\n", ix, TestHisto[ix]);
 }
 
-void EXTI0_IRQHandler(void)
-{
+void EXTI0_IRQHandler(void) {
     MosGiveSem(&TestSem);
     TestHisto[0]++;
 }
 
-void EXTI1_IRQHandler(void)
-{
+void EXTI1_IRQHandler(void) {
     if (MosSendToQueue(&TestQueue, 1)) TestHisto[0]++;
+}
+
+void EventCallback(MosEvent evt, u32 val) {
+    static u32 last_tick = 0;
+    if (evt == MOS_EVENT_TICK) {
+        u32 diff = (val - last_tick);
+        if (diff > MAX_TICK_HISTO_ENTRIES - 1)
+            TickHisto[MAX_TICK_HISTO_ENTRIES - 1]++;
+        else
+            TickHisto[diff]++;
+        last_tick = val;
+    }
 }
 
 //
@@ -1318,9 +1331,15 @@ static s32 CmdPigeon(s32 argc, char * argv[]) {
     return CMD_OK;
 }
 
+static s32 CmdClearTickHisto(s32 argc, char * argv[]) {
+    for (u32 ix = 0; ix < MAX_TICK_HISTO_ENTRIES; ix++) TickHisto[ix] = 0;
+    return CMD_OK;
+}
+
 static MostCmd cmd_list[] = {
     { CmdTest, "run", "Run Test", "[TEST]" },
     { CmdPigeon, "p", "Toggle Pigeon Printing", "" },
+    { CmdClearTickHisto, "cth", "Clear tick histogram", "" },
 };
 
 #define MAX_CMD_ARGUMENTS       10
@@ -1441,7 +1460,9 @@ int main() {
 
     MosInit();
     MostInit(TRACE_INFO | TRACE_ERROR | TRACE_FATAL, true);
-    MostPrintf("\nWelcome to Maintainable OS (Version %s)\n", MosGetParams()->version);
+    MostPrintf("\nMaintainable OS (Version %s)\n", MosGetParams()->version);
+
+    MosRegisterEventHook(EventCallback);
 
     MoshInitHeap(&TestThreadHeapDesc, TestThreadHeap, sizeof(TestThreadHeap));
     MoshReserveBlockSize(&TestThreadHeapDesc, 1024);

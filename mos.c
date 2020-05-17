@@ -160,7 +160,7 @@ void SysTick_Handler(void) {
     if (RunningThreadID == MOS_NO_THREADS) return;
     TickCount += TickInterval;
     MosYieldThread();
-    MOS_EVENT(TIMER, TickCount);
+    MOS_EVENT(TICK, TickCount);
 }
 
 static bool CheckMux(Thread * thd) {
@@ -188,8 +188,8 @@ static bool CheckMux(Thread * thd) {
     return false;
 }
 
-// TODO: Fixes for second scan
-static Thread * ProcessThread(Thread * thd, MosThreadPriority pri) {
+static Thread *
+ProcessThread(Thread * thd, MosThreadPriority pri, bool first_scan) {
     switch (thd->state & 0xF) {
     case THREAD_RUNNABLE:
         return thd;
@@ -197,17 +197,16 @@ static Thread * ProcessThread(Thread * thd, MosThreadPriority pri) {
             // Check mutex (nested priority inheritance algorithm)
             MosThreadID owner = thd->wait.mtx->owner;
             if (thd->wait.mtx->owner == MOS_NO_THREADS) {
-                thd->wait.mtx->to_yield = false;
+                if (first_scan) thd->wait.mtx->to_yield = false;
                 return thd;
             } else {
-                // If owner thread is lower priority
-                thd->wait.mtx->to_yield = true;
                 if (Threads[owner].pri > pri) {
-                    //thd->wait.mtx->to_yield = true;
+                    // Owner thread is lower priority
                     if (Threads[owner].state == THREAD_RUNNABLE) {
+                        if (first_scan) thd->wait.mtx->to_yield = true;
                         return &Threads[owner];
-                    } else return ProcessThread(&Threads[owner], pri);
-                } else return thd;
+                    } else return ProcessThread(&Threads[owner], pri, first_scan);
+                } else if (!first_scan) return thd;
             }
         }
         break;
@@ -226,17 +225,19 @@ static Thread * ProcessThread(Thread * thd, MosThreadPriority pri) {
     return NULL;
 }
 
-static Thread * ScanThreads(MosThreadPriority * pri, MosList ** thd_elm) {
+static Thread *
+ScanThreads(MosThreadPriority * pri, MosList ** thd_elm, bool first_scan) {
     MosList * elm = *thd_elm;
     for (; *pri < MOS_MAX_THREAD_PRIORITIES;) {
         for (; elm != &PriQueues[*pri]; elm = elm->next) {
             Thread * thd = container_of(elm, Thread, run_q);
-            Thread * run_thd = ProcessThread(thd, *pri);
+            Thread * run_thd = ProcessThread(thd, *pri, first_scan);
             if (run_thd) {
                 *thd_elm = elm;
                 return run_thd;
             }
         }
+        if (!first_scan) break;
         (*pri)++;
         elm = PriQueues[*pri].next;
     }
@@ -293,7 +294,7 @@ static u32 MOS_USED Scheduler(u32 sp) {
     bool tick_en = false;
     MosThreadPriority pri = 0;
     MosList * thd_elm = PriQueues[pri].next;
-    Thread * run_thd = ScanThreads(&pri, &thd_elm);
+    Thread * run_thd = ScanThreads(&pri, &thd_elm, true);
     if (run_thd) {
         // Remove from timer and set thread runnable
         if ((run_thd->state & THREAD_WAIT_FOR_TICK) == THREAD_WAIT_FOR_TICK) {
@@ -302,7 +303,7 @@ static u32 MOS_USED Scheduler(u32 sp) {
         }
         MosSetThreadState(run_thd->id, THREAD_RUNNABLE);
         // Look for second potentially runnable thread
-        if (ScanThreads(&pri, &thd_elm)) tick_en = true;
+        if (ScanThreads(&pri, &thd_elm, false)) tick_en = true;
         // Move thread to end of priority queue (round-robin)
         if (!MosIsLastElement(&PriQueues[run_thd->pri], &run_thd->run_q))
             MosMoveToEndOfList(&PriQueues[run_thd->pri], &run_thd->run_q);
@@ -502,7 +503,7 @@ void MosInit(void) {
     CyclesPerMicroSec = CyclesPerTick / MOS_MICRO_SEC_PER_TICK;
     // Set lowest priority for PendSV and Tick
     //  NOTE: The lower the number the higher the priority
-    //  FIXME: This code assumes there are zero bits allocated to subgroups
+    //  TODO: This assumes there are zero bits allocated to subgroups, what to do here?
     u32 pg = NVIC_GetPriorityGrouping();
     NVIC_SetPriority(PendSV_IRQn, NVIC_EncodePriority(pg, MOS_LOW_INT_PRI, 0));
     NVIC_SetPriority(SysTick_IRQn, NVIC_EncodePriority(pg, MOS_LOW_INT_PRI, 0));
@@ -535,8 +536,10 @@ void MosRunScheduler(void) {
         "mov r0, #0\n\t"
         "msr basepri, r0\n\t"
         "cpsie if\n\t"
+        "b SkipRS\n\t"
         ".balign 4\n\t"
         "psp_start: .word MosIdleStack + 64\n\t"
+        "SkipRS:\n\t"
             : : : "r0"
     );
     // Invoke PendSV handler to start scheduler (first context switch)

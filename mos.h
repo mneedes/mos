@@ -90,7 +90,7 @@ typedef enum {
 typedef enum {
     MOS_EVENT_SCHEDULER_ENTRY,
     MOS_EVENT_SCHEDULER_EXIT,
-    MOS_EVENT_TIMER
+    MOS_EVENT_TICK
 } MosEvent;
 
 // Blocking mutex supporting recursion

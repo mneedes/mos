@@ -28,15 +28,15 @@
 // Starting tick count
 //   Set to early rollover to always test rollovers,
 //   Set to zero for more intuitive time keeping
-#define MOS_START_TICK_COUNT        0xFFFFFF00
-//#define MOS_START_TICK_COUNT        0x00000000
+//#define MOS_START_TICK_COUNT        0xFFFFFF00
+#define MOS_START_TICK_COUNT        0x00000000
 
 // Keep tick interrupt running at slowest rate to maintain
 // time even when there are no timer events scheduled.
 #define MOS_KEEP_TICKS_RUNNING      false
 
 // Enable events (required for MOS profiling)
-#define MOS_ENABLE_EVENTS           false
+#define MOS_ENABLE_EVENTS           true
 
 // Maximum number of supported block sizes for MOSH heap
 #define MOSH_MAX_HEAP_BLOCK_SIZES   6
