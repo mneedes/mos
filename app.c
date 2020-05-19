@@ -140,11 +140,30 @@ static s32 KillTestThread(s32 arg) {
     return TEST_FAIL;
 }
 
+static s32 KillSelfTestThread(s32 arg) {
+    if (arg) {
+        MosSetKillHandler(MosGetThreadID(), KillTestHandler, TEST_PASS_HANDLER);
+        // Take mutex a couple times... need to release it in handler
+        MosTakeMutex(&TestMutex);
+        MosTakeMutex(&TestMutex);
+    } else MosSetKillArg(MosGetThreadID(), TEST_PASS_HANDLER);
+    MostPrint("KillSelfTestThread: Killing Self\n");
+    MosKillThread(MosGetThreadID());
+    return TEST_FAIL;
+}
+
 static s32 ExcTestThread(s32 arg) {
     volatile u32 x;
+    MosSetKillArg(MosGetThreadID(), TEST_PASS_HANDLER + 1);
     MosDelayThread(50);
     x = 30 / arg;
     (void)x;
+    return TEST_FAIL;
+}
+
+static s32 AssertTestThread(s32 arg) {
+    MosSetKillArg(MosGetThreadID(), TEST_PASS_HANDLER);
+    MosAssert(arg == 0x1234);
     return TEST_FAIL;
 }
 
@@ -257,13 +276,43 @@ static bool ThreadTests(void) {
         tests_all_pass = false;
     }
     //
+    // Thread killing self
+    //
+    test_pass = true;
+    MostPrint("Kill Test 3\n");
+    ClearHistogram();
+    MosInitMutex(&TestMutex);
+    MosInitSem(&TestSem, 0);
+    MosInitAndRunThread(1, 1, KillSelfTestThread, 1, Stacks[1], DFT_STACK_SIZE);
+    MosDelayThread(10);
+    if (MosWaitForThreadStop(1) != TEST_PASS_HANDLER) test_pass = false;
+    if (TestMutex.owner != -1) test_pass = false;
+    if (test_pass) MostPrint(" Passed\n");
+    else {
+        MostPrint(" Failed\n");
+        tests_all_pass = false;
+    }
+    //
     // Thread exception handler
-    //   Currently passes if it doesn't hang, TODO: better recovery or error detection?
+    //
     test_pass = true;
     MostPrint("Exception Test\n");
     ClearHistogram();
     MosInitAndRunThread(1, 1, ExcTestThread, 0, Stacks[1], DFT_STACK_SIZE);
-    MosWaitForThreadStop(1);
+    if (MosWaitForThreadStop(1) != TEST_PASS_HANDLER + 1) test_pass = false;
+    if (test_pass) MostPrint(" Passed\n");
+    else {
+        MostPrint(" Failed\n");
+        tests_all_pass = false;
+    }
+    //
+    // Assertion test
+    //
+    test_pass = true;
+    MostPrint("Assertion Test\n");
+    ClearHistogram();
+    MosInitAndRunThread(1, 1, AssertTestThread, 0, Stacks[1], DFT_STACK_SIZE);
+    if (MosWaitForThreadStop(1) != TEST_PASS_HANDLER) test_pass = false;
     if (test_pass) MostPrint(" Passed\n");
     else {
         MostPrint(" Failed\n");

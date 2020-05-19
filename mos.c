@@ -17,15 +17,11 @@
 // TODO: Can use this to enable floating point context save for CM4F
 #endif
 
-// TODO: Thread killing self?
-// TODO: Improve Exception handling.  Maybe move thread kill into scheduler to
-//       help support this.
 // TODO: WaitForThreadStop on Mux?
 // TODO: Clearing wait flags after thread kill / wait counter?
 // TODO: Suppress yields on semaphores if no thread is waiting.  Unlike Mutex
 //       Semaphore yields may be tricky since they can happen during high
 //       priority interrupts that are interrupting PendSV handler.
-// TODO: Asserts / Warnings
 
 #define MOS_IDLE_THREAD_ID      0
 #define MOS_MAX_THREADS         (MOS_MAX_APP_THREADS + 1)
@@ -49,7 +45,7 @@ typedef enum {
     THREAD_UNINIT = 0,
     THREAD_INIT,
     THREAD_STOPPED,
-    //THREAD_TIME_TO_DIE,
+    THREAD_TIME_TO_DIE,
     THREAD_RUNNABLE,
     THREAD_WAIT_FOR_MUTEX,
     THREAD_WAIT_FOR_SEM,
@@ -96,7 +92,7 @@ static MosParams Params = { .version = MOS_TO_STR(MOS_VERSION) };
 static MosRawPrintfHook * PrintfHook = NULL;
 static MosSleepHook * SleepHook = NULL;
 static MosWakeHook * WakeHook = NULL;
-void MosDummyEventHook(MosEvent e, u32 v) {}
+void MosDummyEventHook(MosEvent e, u32 v) { }
 static MosEventHook * EventHook = MosDummyEventHook;
 
 // Threads and Events
@@ -120,7 +116,7 @@ static u8 MOS_STACK_ALIGNED MosIdleStack[2 * sizeof(StackFrame)];
 
 // Mask interrupts by priority, primarily for temporarily
 //   disabling context switches.
-static void MOS_INLINE MosSetBasePri(u32 pri) {
+static void MOS_INLINE SetBasePri(u32 pri) {
     asm volatile (
         "msr basepri, %0\n\t"
         "isb"
@@ -150,9 +146,52 @@ u32 MOS_NAKED MosGetIRQNumber(void) {
     );
 }
 
-static MOS_INLINE void MosSetThreadState(MosThreadID id, ThreadState state) {
+static MOS_INLINE void SetThreadState(MosThreadID id, ThreadState state) {
     asm volatile ( "dmb" );
     Threads[id].state = state;
+}
+
+static void ThreadExit(s32 rtn_val) {
+    SetBasePri(IntPriMaskLow);
+    ThreadData[RunningThreadID].rtn_val = rtn_val;
+    SetThreadState(RunningThreadID, THREAD_STOPPED);
+    if (MosIsOnList(&Threads[RunningThreadID].tmr_q))
+        MosRemoveFromList(&Threads[RunningThreadID].tmr_q);
+    MosRemoveFromList(&Threads[RunningThreadID].run_q);
+    SetBasePri(0);
+    MosYieldThread();
+    // Not reachable
+    while (1)
+        ;
+}
+
+static s32 DefaultKillHandler(s32 arg) {
+    return arg;
+}
+
+static void InitThread(MosThreadID id, MosThreadPriority pri,
+                       MosThreadEntry * entry, s32 arg,
+                       u8 * s_addr, u32 s_size) {
+    // Initialize aux data
+    ThreadData[id].stop_request = false;
+    ThreadData[id].kill_handler = DefaultKillHandler;
+    ThreadData[id].kill_arg = 0;
+    ThreadData[id].stack_addr = s_addr;
+    ThreadData[id].stack_size = s_size;
+    // Initialize Stack
+    StackFrame * sf = (StackFrame *) (s_addr + s_size);
+    sf--;
+    // Set Thumb Mode
+    sf->xPSR = 0x01000000;
+    sf->PC = (u32)entry;
+    sf->LR = (u32)ThreadExit;
+    sf->R12 = 0;
+    sf->HWSAVE[0] = arg;
+    // Initialize context and state
+    Threads[id].sp = (u32)sf;
+    Threads[id].err_no = 0;
+    Threads[id].id = id;
+    Threads[id].pri = pri;
 }
 
 void SysTick_Handler(void) {
@@ -260,8 +299,18 @@ static u32 MOS_USED Scheduler(u32 sp) {
         asm volatile ( "cpsie if" );
         adj_tick_count = TickCount + (load - val) / CyclesPerTick;
     }
-    // Update running thread timer state
-    if (Threads[RunningThreadID].state & THREAD_WAIT_FOR_TICK) {
+    if (Threads[RunningThreadID].state == THREAD_TIME_TO_DIE) {
+        // Arrange death of running thread via kill handler
+        if (MosIsOnList(&Threads[RunningThreadID].tmr_q))
+            MosRemoveFromList(&Threads[RunningThreadID].tmr_q);
+        InitThread(RunningThreadID, Threads[RunningThreadID].pri,
+                   ThreadData[RunningThreadID].kill_handler,
+                   ThreadData[RunningThreadID].kill_arg,
+                   ThreadData[RunningThreadID].stack_addr,
+                   ThreadData[RunningThreadID].stack_size);
+        SetThreadState(RunningThreadID, THREAD_RUNNABLE);
+    } else if (Threads[RunningThreadID].state & THREAD_WAIT_FOR_TICK) {
+        // Update running thread timer state
         // Insertion sort in timer queue
         s32 rem_ticks = (s32)Threads[RunningThreadID].wake_tick - adj_tick_count;
         MosList * tmr;
@@ -282,7 +331,7 @@ static u32 MOS_USED Scheduler(u32 sp) {
             // Signal timeout
             thd->wait.sem = NULL;
             ThreadData[thd->id].mux_idx = -1;
-            MosSetThreadState(thd->id, THREAD_RUNNABLE);
+            SetThreadState(thd->id, THREAD_RUNNABLE);
             MosRemoveFromList(tmr);
         } else break;
     }
@@ -300,7 +349,7 @@ static u32 MOS_USED Scheduler(u32 sp) {
             if (MosIsOnList(&run_thd->tmr_q))
                 MosRemoveFromList(&run_thd->tmr_q);
         }
-        MosSetThreadState(run_thd->id, THREAD_RUNNABLE);
+        SetThreadState(run_thd->id, THREAD_RUNNABLE);
         // Look for second potentially runnable thread
         if (ScanThreads(&pri, &thd_elm, false)) tick_en = true;
         // Move thread to end of priority queue (round-robin)
@@ -391,9 +440,7 @@ static void MOS_USED FaultHandler(u32 fault_no, u32 * sp, bool in_isr) {
           ;
     } else {
         // Stop thread if fault occurred in thread context
-        MosRemoveFromList(&Threads[RunningThreadID].tmr_q);
-        MosRemoveFromList(&Threads[RunningThreadID].run_q);
-        MosSetThreadState(RunningThreadID, THREAD_STOPPED);
+        SetThreadState(RunningThreadID, THREAD_TIME_TO_DIE);
         MosYieldThread();
     }
 }
@@ -443,7 +490,7 @@ u32 MosGetTickCount(void) {
     return adj_tick_cnt;
 }
 
-static void MOS_USED MosSetTimeout(u32 ticks) {
+static void MOS_USED SetTimeout(u32 ticks) {
     // Adjust tick count based on value in SysTick counter
     asm volatile ( "cpsid if" );
     u32 load = SysTick->LOAD;
@@ -454,8 +501,8 @@ static void MOS_USED MosSetTimeout(u32 ticks) {
 }
 
 void MosDelayThread(u32 ticks) {
-    MosSetTimeout(ticks);
-    MosSetThreadState(RunningThreadID, THREAD_WAIT_FOR_TICK);
+    SetTimeout(ticks);
+    SetThreadState(RunningThreadID, THREAD_WAIT_FOR_TICK);
     MosYieldThread();
 }
 
@@ -475,7 +522,7 @@ void MOS_NAKED MosDelayMicroSec(u32 usec) {
     );
 }
 
-static s32 MosIdleThread(s32 arg) {
+static s32 IdleThread(s32 arg) {
     while (1) {
         if (SleepHook) (*SleepHook)();
         asm volatile (
@@ -500,7 +547,6 @@ void MosInit(void) {
     MaxTickInterval = ((1 << 24) - 1) / CyclesPerTick;
     CyclesPerMicroSec = CyclesPerTick / MOS_MICRO_SEC_PER_TICK;
     // Set lowest preemption priority for SysTick and PendSV (highest number).
-    //  NOTE: The higher the number the lower the priority
     u32 pri_grp = NVIC_GetPriorityGrouping();
     u32 pri_bits = 7 - pri_grp;
     if (pri_bits > __NVIC_PRIO_BITS) pri_bits = __NVIC_PRIO_BITS;
@@ -526,7 +572,7 @@ void MosInit(void) {
     MosInitList(&Timers);
     // Create idle thread
     MosInitAndRunThread(MOS_IDLE_THREAD_ID, MOS_MAX_THREAD_PRIORITIES,
-                        MosIdleThread, 0, MosIdleStack, sizeof(MosIdleStack));
+                        IdleThread, 0, MosIdleStack, sizeof(MosIdleStack));
     // Fill out parameters
     Params.max_app_threads = MOS_MAX_APP_THREADS;
     Params.thread_pri_hi = 0;
@@ -597,74 +643,40 @@ MosThreadState MosGetThreadState(MosThreadID id, s32 * rtn_val) {
     return state;
 }
 
-static void MosThreadExit(s32 rtn_val) {
-    MosSetBasePri(IntPriMaskLow);
-    ThreadData[RunningThreadID].rtn_val = rtn_val;
-    MosSetThreadState(RunningThreadID, THREAD_STOPPED);
-    MosRemoveFromList(&Threads[RunningThreadID].run_q);
-    MosSetBasePri(0);
-    MosYieldThread();
-    // Not reachable
-    while (1)
-        ;
-}
-
-static s32 MosDefaultKillHandler(s32 arg) {
-    return arg;
-}
-
 s32 MosInitThread(MosThreadID id, MosThreadPriority pri,
                   MosThreadEntry * entry, s32 arg,
                   u8 * s_addr, u32 s_size) {
     if (id == RunningThreadID) return -1;
     // Stop thread if running
-    MosSetBasePri(IntPriMaskLow);
+    SetBasePri(IntPriMaskLow);
     ThreadState state = Threads[id].state;
     switch (state) {
     case THREAD_UNINIT:
     case THREAD_INIT:
     case THREAD_STOPPED:
+        MosInitList(&Threads[id].run_q);
+        MosInitList(&Threads[id].tmr_q);
         break;
     default:
-        MosRemoveFromList(&Threads[id].tmr_q);
+        if (MosIsOnList(&Threads[id].tmr_q))
+            MosRemoveFromList(&Threads[id].tmr_q);
         MosRemoveFromList(&Threads[id].run_q);
-        MosSetThreadState(id, THREAD_UNINIT);
+        SetThreadState(id, THREAD_UNINIT);
         break;
     }
-    MosSetBasePri(0);
-    // Initialize aux data
-    ThreadData[id].stop_request = false;
-    ThreadData[id].kill_handler = MosDefaultKillHandler;
-    ThreadData[id].kill_arg = 0;
-    ThreadData[id].stack_addr = s_addr;
-    ThreadData[id].stack_size = s_size;
-    // Initialize Stack
-    StackFrame * sf = (StackFrame *) (s_addr + s_size);
-    sf--;
-    // Set Thumb Mode
-    sf->xPSR = 0x01000000;
-    sf->PC = (u32)entry;
-    sf->LR = (u32)MosThreadExit;
-    sf->R12 = 0;
-    sf->HWSAVE[0] = arg;
-    // Initialize context and state
-    Threads[id].sp = (u32)sf;
-    Threads[id].err_no = 0;
-    MosInitList(&Threads[id].run_q);
-    MosInitList(&Threads[id].tmr_q);
-    Threads[id].id = id;
-    Threads[id].pri = pri;
-    MosSetThreadState(id, THREAD_INIT);
+    SetBasePri(0);
+    InitThread(id, pri, entry, arg, s_addr, s_size);
+    SetThreadState(id, THREAD_INIT);
     return id;
 }
 
 s32 MosRunThread(MosThreadID id) {
     if (Threads[id].state == THREAD_INIT) {
-        MosSetBasePri(IntPriMaskLow);
-        MosSetThreadState(id, THREAD_RUNNABLE);
+        SetBasePri(IntPriMaskLow);
+        SetThreadState(id, THREAD_RUNNABLE);
         if (id != MOS_IDLE_THREAD_ID)
             MosAddToList(&PriQueues[Threads[id].pri], &Threads[id].run_q);
-        MosSetBasePri(0);
+        SetBasePri(0);
         if (RunningThreadID > -1 &&
                 Threads[id].pri < Threads[RunningThreadID].pri)
             MosYieldThread();
@@ -682,11 +694,11 @@ s32 MosInitAndRunThread(MosThreadID id,  MosThreadPriority pri,
 
 void MosChangeThreadPriority(MosThreadID id, MosThreadPriority pri) {
     if (Threads[id].pri == pri) return;
-    MosSetBasePri(IntPriMaskLow);
+    SetBasePri(IntPriMaskLow);
     Threads[id].pri = pri;
     MosRemoveFromList(&Threads[id].run_q);
     MosAddToList(&PriQueues[pri], &Threads[id].run_q);
-    MosSetBasePri(0);
+    SetBasePri(0);
     if (RunningThreadID > -1 && pri < Threads[RunningThreadID].pri)
         MosYieldThread();
 }
@@ -701,15 +713,15 @@ bool MosIsStopRequested(void) {
 
 s32 MosWaitForThreadStop(MosThreadID id) {
     Threads[RunningThreadID].wait.thd = &Threads[id];
-    MosSetThreadState(RunningThreadID, THREAD_WAIT_FOR_STOP);
+    SetThreadState(RunningThreadID, THREAD_WAIT_FOR_STOP);
     MosYieldThread();
     return ThreadData[id].rtn_val;
 }
 
 bool MosWaitForThreadStopOrTO(MosThreadID id, s32 * rtn_val, u32 ticks) {
-    MosSetTimeout(ticks);
+    SetTimeout(ticks);
     Threads[RunningThreadID].wait.thd = &Threads[id];
-    MosSetThreadState(RunningThreadID, THREAD_WAIT_FOR_STOP_OR_TICK);
+    SetThreadState(RunningThreadID, THREAD_WAIT_FOR_STOP_OR_TICK);
     MosYieldThread();
     if (Threads[RunningThreadID].wait.thd == NULL) return false;
     *rtn_val = ThreadData[id].rtn_val;
@@ -717,18 +729,24 @@ bool MosWaitForThreadStopOrTO(MosThreadID id, s32 * rtn_val, u32 ticks) {
 }
 
 void MosKillThread(MosThreadID id) {
-    if (id == RunningThreadID) return;
-    MosInitAndRunThread(id, Threads[id].pri, ThreadData[id].kill_handler,
-                        ThreadData[id].kill_arg, ThreadData[id].stack_addr,
-                        ThreadData[id].stack_size);
+    if (id == RunningThreadID) {
+        SetThreadState(RunningThreadID, THREAD_TIME_TO_DIE);
+        MosYieldThread();
+        // not reachable
+        while (1)
+            ;
+    }
+    else MosInitAndRunThread(id, Threads[id].pri, ThreadData[id].kill_handler,
+                             ThreadData[id].kill_arg, ThreadData[id].stack_addr,
+                             ThreadData[id].stack_size);
 }
 
 void MosSetKillHandler(MosThreadID id, MosHandler * handler, s32 arg) {
-    MosSetBasePri(IntPriMaskLow);
+    SetBasePri(IntPriMaskLow);
     if (handler) ThreadData[id].kill_handler = handler;
-    else ThreadData[id].kill_handler = MosDefaultKillHandler;
+    else ThreadData[id].kill_handler = DefaultKillHandler;
     ThreadData[id].kill_arg = arg;
-    MosSetBasePri(0);
+    SetBasePri(0);
 }
 
 void MosSetKillArg(MosThreadID id, s32 arg) {
@@ -779,9 +797,9 @@ void MosInitMutex(MosMutex * mtx) {
     mtx->to_yield = false;
 }
 
-static void MOS_USED MosBlockOnMutex(MosMutex * mtx) {
+static void MOS_USED BlockOnMutex(MosMutex * mtx) {
     Threads[RunningThreadID].wait.mtx = mtx;
-    MosSetThreadState(RunningThreadID, THREAD_WAIT_FOR_MUTEX);
+    SetThreadState(RunningThreadID, THREAD_WAIT_FOR_MUTEX);
     MosYieldThread();
 }
 
@@ -806,7 +824,7 @@ void MOS_NAKED MosTakeMutex(MosMutex * mtx) {
         "bx lr\n\t"
         "BlockTM:\n\t"
         "push {r0, r1, lr}\n\t"
-        "bl MosBlockOnMutex\n\t"
+        "bl BlockOnMutex\n\t"
         "pop {r0, r1, lr}\n\t"
         "b RetryTM\n\t"
         ".balign 4\n\t"
@@ -886,9 +904,9 @@ void MosInitSem(MosSem * sem, u32 start_count) {
     *sem = start_count;
 }
 
-static void MOS_USED MosBlockOnSem(MosSem * sem) {
+static void MOS_USED BlockOnSem(MosSem * sem) {
     Threads[RunningThreadID].wait.sem = sem;
-    MosSetThreadState(RunningThreadID, THREAD_WAIT_FOR_SEM);
+    SetThreadState(RunningThreadID, THREAD_WAIT_FOR_SEM);
     MosYieldThread();
 }
 
@@ -905,16 +923,16 @@ void MOS_NAKED MosTakeSem(MosSem * sem) {
         "bx lr\n\t"
         "BlockTS:\n\t"
         "push {r0, lr}\n\t"
-        "bl MosBlockOnSem\n\t"
+        "bl BlockOnSem\n\t"
         "pop {r0, lr}\n\t"
         "b RetryTS\n\t"
             : : : "r0", "r1", "r2", "r3"
     );
 }
 
-static bool MOS_USED MosBlockOnSemOrTO(MosSem * sem) {
+static bool MOS_USED BlockOnSemOrTO(MosSem * sem) {
     Threads[RunningThreadID].wait.sem = sem;
-    MosSetThreadState(RunningThreadID, THREAD_WAIT_FOR_SEM_OR_TICK);
+    SetThreadState(RunningThreadID, THREAD_WAIT_FOR_SEM_OR_TICK);
     MosYieldThread();
     if (!Threads[RunningThreadID].wait.sem) return true;
     return false;
@@ -924,7 +942,7 @@ bool MOS_NAKED MosTakeSemOrTO(MosSem * sem, u32 ticks) {
     asm volatile (
         "push {r0, lr}\n\t"
         "mov r0, r1\n\t"
-        "bl MosSetTimeout\n\t"
+        "bl SetTimeout\n\t"
         "pop {r0, lr}\n\t"
         "RetryTSTO:\n\t"
         "ldrex r1, [r0]\n\t"
@@ -938,7 +956,7 @@ bool MOS_NAKED MosTakeSemOrTO(MosSem * sem, u32 ticks) {
         "bx lr\n\t"
         "BlockTSTO:\n\t"
         "push {r0, lr}\n\t"
-        "bl MosBlockOnSemOrTO\n\t"
+        "bl BlockOnSemOrTO\n\t"
         "cmp r0, #0\n\t"
         "pop {r0, lr}\n\t"
         "beq RetryTSTO\n\t"
@@ -1034,20 +1052,20 @@ bool MosSendToQueueOrTO(MosQueue * queue, u32 data, u32 ticks) {
 
 u32 MosReceiveFromQueue(MosQueue * queue) {
     MosTakeSem(&queue->sem_head);
-    MosSetBasePri(IntPriMaskLow);
+    SetBasePri(IntPriMaskLow);
     u32 data = queue->buf[queue->head];
     if (++queue->head >= queue->len) queue->head = 0;
-    MosSetBasePri(0);
+    SetBasePri(0);
     MosGiveSem(&queue->sem_tail);
     return data;
 }
 
 bool MosTryReceiveFromQueue(MosQueue * queue, u32 * data) {
     if (MosTrySem(&queue->sem_head)) {
-        MosSetBasePri(IntPriMaskLow);
+        SetBasePri(IntPriMaskLow);
         *data = queue->buf[queue->head];
         if (++queue->head >= queue->len) queue->head = 0;
-        MosSetBasePri(0);
+        SetBasePri(0);
         MosGiveSem(&queue->sem_tail);
         return true;
     }
@@ -1056,10 +1074,10 @@ bool MosTryReceiveFromQueue(MosQueue * queue, u32 * data) {
 
 bool MosReceiveFromQueueOrTO(MosQueue * queue, u32 * data, u32 ticks) {
     if (MosTakeSemOrTO(&queue->sem_head, ticks)) {
-        MosSetBasePri(IntPriMaskLow);
+        SetBasePri(IntPriMaskLow);
         *data = queue->buf[queue->head];
         if (++queue->head >= queue->len) queue->head = 0;
-        MosSetBasePri(0);
+        SetBasePri(0);
         MosGiveSem(&queue->sem_tail);
         return true;
     }
@@ -1077,16 +1095,26 @@ void MosSetActiveMux(MosMux * mux, MosMuxEntry * entries, u32 len) {
 }
 
 u32 MosWaitOnMux(MosMux * mux) {
-    MosSetThreadState(RunningThreadID, THREAD_WAIT_ON_MUX);
+    SetThreadState(RunningThreadID, THREAD_WAIT_ON_MUX);
     MosYieldThread();
     return (u32)ThreadData[RunningThreadID].mux_idx;
 }
 
 bool MosWaitOnMuxOrTO(MosMux * mux, u32 * idx, u32 ticks) {
-    MosSetTimeout(ticks);
-    MosSetThreadState(RunningThreadID, THREAD_WAIT_ON_MUX_OR_TICK);
+    SetTimeout(ticks);
+    SetThreadState(RunningThreadID, THREAD_WAIT_ON_MUX_OR_TICK);
     MosYieldThread();
     if (ThreadData[RunningThreadID].mux_idx < 0) return false;
     *idx = (u32)ThreadData[RunningThreadID].mux_idx;
     return true;
 }
+
+void MosAssertAt(char * file, u32 line) {
+    if (PrintfHook) (*PrintfHook)("Assertion failed in %s on line %u\n", file, line);
+    SetThreadState(RunningThreadID, THREAD_TIME_TO_DIE);
+    MosYieldThread();
+    // not reachable
+    while (1)
+        ;
+}
+

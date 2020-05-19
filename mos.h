@@ -165,7 +165,7 @@ void MosEnableInterrupts(void); // IS
 // Time and Delays
 u32 MosGetTickCount(void);
 void MosDelayThread(u32 ticks);
-// For short delays, e.g.: for bit-banging.
+// For short delays, e.g.: useful for bit-banging.
 //   Keep in mind there is an upper limit to usec.
 void MosDelayMicroSec(u32 usec); // IS
 
@@ -186,7 +186,7 @@ void MosRequestThreadStop(MosThreadID id);
 bool MosIsStopRequested(void);
 s32 MosWaitForThreadStop(MosThreadID id);
 bool MosWaitForThreadStopOrTO(MosThreadID id, s32 * rtn_val, u32 ticks);
-// Forcible stop, works on blocked threads. N.B.: Thread cannot kill itself.
+// Forcible stop, works on blocked threads.
 void MosKillThread(MosThreadID id);
 // Handler to run if thread is killed.  Thread can set own handler.
 void MosSetKillHandler(MosThreadID id, MosHandler * handler, s32 arg);
@@ -253,4 +253,8 @@ u32 MosWaitOnMux(MosMux * mux);
 // Returns false on timeout, true if pending
 bool MosWaitOnMuxOrTO(MosMux * mux, u32 * idx, u32 ticks);
 
+#define MosAssert(c) { if (!(c)) MosAssertAt(__FILE__, __LINE__); }
+void MosAssertAt(char * file, u32 line);
+
 #endif
+
