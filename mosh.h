@@ -32,31 +32,26 @@
 #define MOSH_HEAP_ALIGNMENT    MOS_STACK_ALIGNMENT
 
 typedef struct {
-    u32 bs;
-    MosList fl;
-    MosList bsl;
-} MoshBlockSize;
-
-typedef struct {
     MosMutex mtx;
     u8 * pit;
     u8 * bot;
-    MosList bsl; // block size list
-    MosList bsl_free;
-    MosList osl; // odd size list
-    MosList sl;  // short-lived list
-    MoshBlockSize bs[MOSH_MAX_HEAP_BLOCK_SIZES];
-    u32 max_bs;
+    MosList bsl;      // block size list
+    MosList bsl_free; // block descriptor free list
+    MosList osl;      // odd size list
+    MosList sl;       // short-lived list
+    u32 max_bs;       // Largest block size
 } MoshHeap;
 
-void MoshInitHeap(MoshHeap * heap, u8 * pit, u32 len);
+// Initialize heap of size with maximum number of blocks (nbs)
+// Pit shall be aligned to MOSH_HEAP_ALIGNMENT.
+void MoshInitHeap(MoshHeap * heap, u8 * pit, u32 size, u8 nbs);
 bool MoshReserveBlockSize(MoshHeap * heap, u32 bs);
 
-void * MoshAlloc(MoshHeap * heap, u32 bs);
+void * MoshAlloc(MoshHeap * heap, u32 size);
 void MoshFree(MoshHeap * heap, void * block);
 
 void * MoshAllocBlock(MoshHeap * heap, u32 size);
 void * MoshAllocOddBlock(MoshHeap * heap, u32 size);
-void * MoshAllocShortLived(MoshHeap * heap, u32 bs);
+void * MoshAllocShortLived(MoshHeap * heap, u32 size);
 
 #endif

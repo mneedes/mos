@@ -313,6 +313,8 @@ static bool ThreadTests(void) {
     ClearHistogram();
     MosInitAndRunThread(1, 1, AssertTestThread, 0, Stacks[1], DFT_STACK_SIZE);
     if (MosWaitForThreadStop(1) != TEST_PASS_HANDLER) test_pass = false;
+    MosInitAndRunThread(1, 1, AssertTestThread, 0x1234, Stacks[1], DFT_STACK_SIZE);
+    if (MosWaitForThreadStop(1) != TEST_FAIL) test_pass = false;
     if (test_pass) MostPrint(" Passed\n");
     else {
         MostPrint(" Failed\n");
@@ -1229,7 +1231,7 @@ static bool HeapTests(void) {
     //
     test_pass = true;
     MostPrint("Heap Test 1: Reserved block sizes\n");
-    MoshInitHeap(&TestHeapDesc, TestHeap, sizeof(TestHeap));
+    MoshInitHeap(&TestHeapDesc, TestHeap, sizeof(TestHeap), 3);
     if (TestHeapDesc.max_bs != 0) test_pass = false;
     MoshReserveBlockSize(&TestHeapDesc, 128);
     if (TestHeapDesc.max_bs != 128) test_pass = false;
@@ -1250,14 +1252,14 @@ static bool HeapTests(void) {
     //
     test_pass = true;
     MostPrint("Heap Test 2: Odd blocks\n");
-    MoshInitHeap(&TestHeapDesc, TestHeap, sizeof(TestHeap));
+    MoshInitHeap(&TestHeapDesc, TestHeap, sizeof(TestHeap), 3);
     MoshReserveBlockSize(&TestHeapDesc, 64);
     MoshReserveBlockSize(&TestHeapDesc, 128);
     MoshReserveBlockSize(&TestHeapDesc, 256);
     if (TestHeapDesc.max_bs != 256) test_pass = false;
     rem = TestHeapDesc.bot - TestHeapDesc.pit + 16;
     MostPrintf("  Starting: %u bytes\n", rem);
-    if (rem != sizeof(TestHeap)) test_pass = false;
+    if (rem != sizeof(TestHeap) - 3 * 24) test_pass = false;
     const u16 num_blocks = 5;
     void * blocks[num_blocks];
     for (u32 ix = 0; ix < num_blocks; ix++) {
@@ -1268,7 +1270,7 @@ static bool HeapTests(void) {
     }
     rem = TestHeapDesc.bot - TestHeapDesc.pit + 16;
     MostPrintf(" Remaining: %u bytes\n", rem);
-    if (rem != sizeof(TestHeap) - (264 + 16) * num_blocks)
+    if (rem != sizeof(TestHeap) - (264 + 16) * num_blocks - 3 * 24)
         test_pass = false;
     for (u32 ix = 0; ix < num_blocks; ix++) {
         MoshFree(&TestHeapDesc, blocks[ix]);
@@ -1283,7 +1285,7 @@ static bool HeapTests(void) {
     if (!MosIsListEmpty(&TestHeapDesc.osl)) test_pass = false;
     rem = TestHeapDesc.bot - TestHeapDesc.pit + 16;
     MostPrintf(" Remaining: %u bytes\n", rem);
-    if (rem != sizeof(TestHeap) - (264 + 16) * num_blocks)
+    if (rem != sizeof(TestHeap) - (264 + 16) * num_blocks - 3 * 24)
         test_pass = false;
     if (test_pass) MostPrint(" Passed\n");
     else {
@@ -1518,7 +1520,7 @@ int main() {
 
     MosRegisterEventHook(EventCallback);
 
-    MoshInitHeap(&TestThreadHeapDesc, TestThreadHeap, sizeof(TestThreadHeap));
+    MoshInitHeap(&TestThreadHeapDesc, TestThreadHeap, sizeof(TestThreadHeap), 5);
     MoshReserveBlockSize(&TestThreadHeapDesc, 1024);
     MoshReserveBlockSize(&TestThreadHeapDesc, 512);
     MoshReserveBlockSize(&TestThreadHeapDesc, 256);

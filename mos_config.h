@@ -38,9 +38,6 @@
 // Enable events (required for MOS profiling)
 #define MOS_ENABLE_EVENTS           false
 
-// Maximum number of supported block sizes for MOSH heap
-#define MOSH_MAX_HEAP_BLOCK_SIZES   6
-
 // Length of internal buffer for terminal messages
 #define MOST_PRINT_BUFFER_SIZE      128
 

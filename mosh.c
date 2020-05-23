@@ -11,28 +11,41 @@
 #define MOSH_ODD_BLOCK_ID      0xba5eba11
 #define MOSH_SL_ID             0x7331e711
 
-// MoshLink size should ensure MOSH_HEAP_ALIGNED alignment
+// MoshBlockDesc and MoshLink shall be sized to guarantee
+//   MOSH_HEAP_ALIGNED alignment.
+
+typedef struct {
+    u32 bs;
+    u32 pad;       // TODO: Remove pad and then align
+    MosList fl;
+    MosList bsl;
+} MoshBlockDesc;
+
 typedef struct {
     u32 id_canary;
     union {
-        MoshBlockSize * bss;
+        MoshBlockDesc * bd;
         u32 bs;
     };
     MosList fl;
 } MoshLink;
 
-void MoshInitHeap(MoshHeap * heap, u8 * pit, u32 len) {
-    heap->pit = pit;
-    heap->bot = pit + len - sizeof(MoshLink);
+void MoshInitHeap(MoshHeap * heap, u8 * pit, u32 size, u8 nbs) {
     MosInitList(&heap->bsl);
     MosInitList(&heap->bsl_free);
     MosInitList(&heap->osl);
     MosInitList(&heap->sl);
-    for (u32 ix = 0; ix < MOSH_MAX_HEAP_BLOCK_SIZES; ix++) {
-        heap->bs[ix].bs = 0;
-        MosInitList(&heap->bs[ix].fl);
-        MosAddToList(&heap->bsl_free, &heap->bs[ix].bsl);
+    // Allocate block descriptors from the pit
+    MoshBlockDesc * bd = (MoshBlockDesc *) pit;
+    for (u32 ix = 0; ix < nbs; ix++) {
+        bd->bs = 0;
+        MosInitList(&bd->fl);
+        MosAddToList(&heap->bsl_free, &bd->bsl);
+        bd++;
     }
+    heap->pit = (u8 *) bd;
+    heap->bot = heap->pit + size;
+    heap->bot -= (nbs * sizeof(MoshBlockDesc) + sizeof(MoshLink));
     heap->max_bs = 0;
     MosInitMutex(&heap->mtx);
 }
@@ -44,16 +57,16 @@ bool MoshReserveBlockSize(MoshHeap * heap, u32 bs) {
         bs += (MOSH_HEAP_ALIGNMENT - (bs % MOSH_HEAP_ALIGNMENT));
     MosTakeMutex(&heap->mtx);
     if (!MosIsListEmpty(&heap->bsl_free)) {
-        MoshBlockSize * new_bss = container_of(heap->bsl_free.next,
-                                               MoshBlockSize, bsl);
-        MosRemoveFromList(&new_bss->bsl);
-        new_bss->bs = bs;
+        MoshBlockDesc * new_bd = container_of(heap->bsl_free.next,
+                                              MoshBlockDesc, bsl);
+        MosRemoveFromList(&new_bd->bsl);
+        new_bd->bs = bs;
         MosList * elm;
         // Insertion sort into reserved block sizes
         for (elm = heap->bsl.next; elm != &heap->bsl; elm = elm->next) {
-            if (container_of(elm, MoshBlockSize, bsl)->bs >= bs) break;
+            if (container_of(elm, MoshBlockDesc, bsl)->bs >= bs) break;
         }
-        MosAddToListBefore(elm, &new_bss->bsl);
+        MosAddToListBefore(elm, &new_bd->bsl);
         if (bs > heap->max_bs) heap->max_bs = bs;
         success = true;
     }
@@ -62,8 +75,12 @@ bool MoshReserveBlockSize(MoshHeap * heap, u32 bs) {
 }
 
 void * MoshAlloc(MoshHeap * heap, u32 bs) {
-    if (bs > heap->max_bs) return MoshAllocOddBlock(heap, bs);
-    return MoshAllocBlock(heap, bs);
+    void * block;
+    MosTakeMutex(&heap->mtx);
+    if (bs > heap->max_bs) block = MoshAllocOddBlock(heap, bs);
+    else block = MoshAllocBlock(heap, bs);
+    MosGiveMutex(&heap->mtx);
+    return block;
 }
 
 void MoshFree(MoshHeap * heap, void * block) {
@@ -71,7 +88,7 @@ void MoshFree(MoshHeap * heap, void * block) {
     MosTakeMutex(&heap->mtx);
     switch (link->id_canary) {
     case MOSH_BLOCK_ID:
-        MosAddToList(&link->bss->fl, &link->fl);
+        MosAddToList(&link->bd->fl, &link->fl);
         break;
     case MOSH_ODD_BLOCK_ID:
         {
@@ -99,28 +116,28 @@ void MoshFree(MoshHeap * heap, void * block) {
     MosGiveMutex(&heap->mtx);
 }
 
-void * MoshAllocBlock(MoshHeap * heap, u32 size) {
+void * MoshAllocBlock(MoshHeap * heap, u32 bs) {
     u8 * block = NULL;
     MosTakeMutex(&heap->mtx);
     if (!MosIsListEmpty(&heap->bsl)) {
         // Find the smallest block size to accommodate request
         MosList * elm;
         for (elm = heap->bsl.next; elm != &heap->bsl; elm = elm->next) {
-            if (container_of(elm, MoshBlockSize, bsl)->bs >= size) {
+            if (container_of(elm, MoshBlockDesc, bsl)->bs >= bs) {
                 // Allocate free block if available...
-                MoshBlockSize * bss = container_of(elm, MoshBlockSize, bsl);
-                if (!MosIsListEmpty(&bss->fl)) {
-                    MoshLink * link = container_of(bss->fl.next, MoshLink, fl);
-                    MosRemoveFromList(bss->fl.next);
-                    block = (u8 *)link + sizeof(MoshLink);
+                MoshBlockDesc * bd = container_of(elm, MoshBlockDesc, bsl);
+                if (!MosIsListEmpty(&bd->fl)) {
+                    MoshLink * link = container_of(bd->fl.next, MoshLink, fl);
+                    MosRemoveFromList(bd->fl.next);
+                    block = (u8 *) link + sizeof(MoshLink);
                     break;
-                } else if (heap->pit + bss->bs < heap->bot) {
+                } else if (heap->pit + bd->bs < heap->bot) {
                     // ...allocate new block from pit since there is room
                     MoshLink * link = (MoshLink *)heap->pit;
-                    link->bss = bss;
-                    heap->pit += (bss->bs + sizeof(MoshLink));
+                    link->bd = bd;
+                    heap->pit += (bd->bs + sizeof(MoshLink));
                     link->id_canary = MOSH_BLOCK_ID;
-                    block = (u8 *)link + sizeof(MoshLink);
+                    block = (u8 *) link + sizeof(MoshLink);
                     break;
                 }
                 // continue to see if next higher block size is available
