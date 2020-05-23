@@ -18,17 +18,18 @@
 #include <stdarg.h>
 
 // Display trace message
-#define MostTrace(level, args...) \
+#define MostLogTrace(level, args...) \
     if (MostTraceMask & (level)) \
-        { MostTraceMessage(__FILE__ "[" MOS__LINE__ "]:", args); }
+        { MostLogTraceMessage(__FILE__ "[" MOS__LINE__ "]:", args); }
 
 // Display trace hex dump
-#define MostHexDump(level, name_p, addr_p, size) \
+#define MostLogHexDump(level, name_p, addr_p, size) \
     if (MostTraceMask & (level)) \
-        { MostHexDumpMessage(__FILE__ "[" MOS__LINE__ "]:", (name_p), (addr_p), (size)); }
+        { MostLogHexDumpMessage(__FILE__ "[" MOS__LINE__ "]:", \
+                               (name_p), (addr_p), (size)); }
 
 // Set the trace mask
-#define MostSetMask(mask)          { MostTraceMask = (mask); }
+#define MostSetMask(mask) { MostTraceMask = (mask); }
 
 // Trace mask
 extern u32 MostTraceMask;
@@ -61,11 +62,11 @@ u32 MostPrint(char * str);
 u32 MostPrintf(const char * fmt, ...);
 
 // Parse format string and arguments into provided buffer
-void MostTraceMessage(const char * id, const char * fmt, ...);
+void MostLogTraceMessage(const char * id, const char * fmt, ...);
 
 // Create a hex dump into provided buffer
-void MostHexDumpMessage(const char * id, const char * name,
-                        const void * addr, u32 size);
+void MostLogHexDumpMessage(const char * id, const char * name,
+                           const void * addr, u32 size);
 
 // Callers can take mutex for multi-line prints
 void MostTakeMutex(void);
@@ -73,13 +74,15 @@ bool MostTryMutex(void);
 void MostGiveMutex(void);
 
 // Command shell support
+//  Parser support quotes and escape character '\'
 MostCmdResult MostGetNextCmd(char * prompt, char * cmd, u32 max_cmd_len);
 u32 MostParseCmd(char * argv[], char * args, u32 max_argc);
 MostCmd * MostFindCmd(char * name, MostCmd * commands, u32 num_cmds);
 void MostPrintHelp(MostCmd * commands, u32 num_cmds);
 
 // Initialize module
-//   if enable_raw_print_hook is true, run mos low-level print through MOST
+//   if enable_raw_print_hook is true, then operate low-level prints
+//   through this module.
 void MostInit(u32 mask, bool enable_raw_print_hook);
 
 #endif

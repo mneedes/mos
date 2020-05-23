@@ -135,7 +135,7 @@ static s32 KillTestThread(s32 arg) {
         MosTakeMutex(&TestMutex);
         MosTakeMutex(&TestMutex);
     } else MosSetKillArg(MosGetThreadID(), TEST_PASS_HANDLER);
-    MostPrint("KillTestThread: Blocking\n");
+    MostLogTrace(TRACE_INFO, "KillTestThread: Blocking\n");
     MosTakeSem(&TestSem);
     return TEST_FAIL;
 }
@@ -147,7 +147,7 @@ static s32 KillSelfTestThread(s32 arg) {
         MosTakeMutex(&TestMutex);
         MosTakeMutex(&TestMutex);
     } else MosSetKillArg(MosGetThreadID(), TEST_PASS_HANDLER);
-    MostPrint("KillSelfTestThread: Killing Self\n");
+    MostLogTrace(TRACE_INFO, "KillSelfTestThread: Killing Self\n");
     MosKillThread(MosGetThreadID());
     return TEST_FAIL;
 }
@@ -1227,7 +1227,7 @@ static bool HeapTests(void) {
     MoshHeap TestHeapDesc;
     u32 rem;
     //
-    // Allocate and Free of reserved block sizes
+    // Allocate and Free of blocks with reserved block sizes
     //
     test_pass = true;
     MostPrint("Heap Test 1: Reserved block sizes\n");
@@ -1418,8 +1418,9 @@ static CmdStatus RunCmd(char * cmd_buf_in) {
     u32 argc;
     char * argv[MAX_CMD_ARGUMENTS];
     char cmd_buf[MAX_CMD_LINE_SIZE];
-    strcpy(cmd_buf, cmd_buf_in);
+    strncpy(cmd_buf, cmd_buf_in, sizeof(cmd_buf));
     argc = MostParseCmd(argv, cmd_buf, MAX_CMD_ARGUMENTS);
+    if (argc == 0) return CMD_OK_NO_HISTORY;
     MostCmd * cmd = MostFindCmd(argv[0], cmd_list, count_of(cmd_list));
     if (cmd) {
         return (CmdStatus)cmd->func(argc, argv);
@@ -1516,7 +1517,8 @@ int main() {
 
     MosInit();
     MostInit(TRACE_INFO | TRACE_ERROR | TRACE_FATAL, true);
-    MostPrintf("\nMaintainable OS (Version %s)\n", MosGetParams()->version);
+    MostLogTrace(TRACE_INFO, "\nMaintainable OS (Version %s)\n",
+                              MosGetParams()->version);
 
     MosRegisterEventHook(EventCallback);
 
