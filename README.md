@@ -13,7 +13,7 @@ Design Goals:
 * Simple configuration (mos_config.h)
 * Low usage of conditional compilation
 * Short critical sections:  Full interrupt locking only for short periods of time.  BASEPRI used for scheduler-only locking, allowing high priority interrupts to run.
-* Small code size (mos.c microkernel size is < ~4KB)
+* Small code size (mos.c microkernel size is < 5kb)
 * Easily extendable
 * Thread timers based on SysTick
 * Tick reduction (_i.e.:_ the so-called "tickless" operation)
