@@ -189,23 +189,25 @@ FormatString(char * restrict buffer, size_t sz,
                 long_cnt++;
                 in_arg = true;
                 break;
+            case 'b':
+                base = 2;
+                do_numeric = true;
+                is_signed = false;
+                break;
             case 'o':
                 base = 8;
                 do_numeric = true;
                 is_signed = false;
-                is_upper = false;
                 break;
             case 'd':
                 base = 10;
                 do_numeric = true;
                 is_signed = true;
-                is_upper = false;
                 break;
             case 'u':
                 base = 10;
                 do_numeric = true;
                 is_signed = false;
-                is_upper = false;
                 break;
             case 'x':
                 base = 16;
