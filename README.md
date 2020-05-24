@@ -9,20 +9,27 @@ HAL layer example should work immediately with the STM32F4Discovery or
 similar boards.  Otherwise you will need to create your own HAL to try it out.
 
 Design Goals:
-+ RTOS: Hard priorities and bounded execution
-+ Thread timers based on SysTick
-+ Recursive mutex with priority inheritance
-+ Semaphores
-+ Message queues
-+ Tick reduction (the so-called "tickless" operation)
-+ Simple configuration (mos_config.h)
-+ Easily extendable
-+ Optional modules (heap, trace)
-+ Low usage of conditional compilation (i.e.: very few #ifdefs)
-+ Kernel (mos.c) has small code size (currently ~5KB)
-+ Includes test bench
-+ Sensible/Simple use of abstraction
-+ C++ implementation (future)
+* RTOS: Hard priorities and bounded execution
+* Short critical sections
+ * Interrupts are locked out in a few situations but only for a short time
+ * BASEPRI ise used for internal scheduler locking, allowing higher priority interrupts to run.
+* Simple configuration (mos_config.h)
+* Low usage of conditional compilation
+* Small code size (mos.c microkernel size is < ~4KB)
+Features:
+* Thread timers based on SysTick
+* Tick reduction (_i.e.:_ the so-called "tickless" operation)
+Supported Primitives:
+ * Recursive mutex with priority inheritance
+ * Semaphores
+ * Message queues
+Optional modules:
+ * Heap
+ * Logging
+ * Command shell)
+* Includes test bench
+* Easily extendable
+* C++ bindings (future)
 
 Supported toolchains / architectures:
 + GCC
