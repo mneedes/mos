@@ -1517,8 +1517,7 @@ int main() {
 
     MosInit();
     MostInit(TRACE_INFO | TRACE_ERROR | TRACE_FATAL, true);
-    MostLogTrace(TRACE_INFO, "\nMaintainable OS (Version %s)\n",
-                              MosGetParams()->version);
+    MostPrintf("\nMaintainable OS (Version %s)\n", MosGetParams()->version);
 
     MosRegisterEventHook(EventCallback);
 

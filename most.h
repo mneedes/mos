@@ -52,20 +52,20 @@ typedef enum {
     //MOST_CMD_TIMEOUT,
 } MostCmdResult;
 
-void MostItoa(char * restrict * out, s32 input, u16 base, bool is_upper,
-              u16 min_digits, char pad_char, bool is_signed);
+u32 MostItoa(char * restrict out, s32 input, u16 base, bool is_upper,
+             u16 min_digits, char pad_char, bool is_signed);
 
-void MostItoa64(char * restrict * out, s64 input, u16 base, bool is_upper,
+u32 MostItoa64(char * restrict out, s64 input, u16 base, bool is_upper,
                u16 min_digits, char pad_char, bool is_signed);
 
 u32 MostPrint(char * str);
 u32 MostPrintf(const char * fmt, ...);
 
 // Parse format string and arguments into provided buffer
-void MostLogTraceMessage(const char * id, const char * fmt, ...);
+void MostLogTraceMessage(char * id, const char * fmt, ...);
 
 // Create a hex dump into provided buffer
-void MostLogHexDumpMessage(const char * id, const char * name,
+void MostLogHexDumpMessage(char * id, char * name,
                            const void * addr, u32 size);
 
 // Callers can take mutex for multi-line prints
@@ -76,6 +76,7 @@ void MostGiveMutex(void);
 // Command shell support
 //  Parser support quotes and escape character '\'
 MostCmdResult MostGetNextCmd(char * prompt, char * cmd, u32 max_cmd_len);
+//  NOTE: MostParseCmd modifies args in place
 u32 MostParseCmd(char * argv[], char * args, u32 max_argc);
 MostCmd * MostFindCmd(char * name, MostCmd * commands, u32 num_cmds);
 void MostPrintHelp(MostCmd * commands, u32 num_cmds);
