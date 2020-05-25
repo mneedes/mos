@@ -34,7 +34,7 @@ static char PrintBuffer[MOST_PRINT_BUFFER_SIZE];
 static char RawPrintBuffer[MOST_PRINT_BUFFER_SIZE];
 
 static u32 PadAndReverse(char * restrict out, u16 min_digits,
-                          char pad_char, u32 cnt) {
+                         char pad_char, u32 cnt) {
     // Pad to minimum number of digits
     for (; cnt < min_digits; cnt++) *out++ = pad_char;
     // Reverse digit order in place
@@ -46,97 +46,93 @@ static u32 PadAndReverse(char * restrict out, u16 min_digits,
     return cnt;
 }
 
-static u32 ItoaPow2Div(char * restrict out, u32 in, u32 shift,
-                       const char * restrict digits, u16 min_digits,
-                       char pad_char) {
-    u32 mask = (1 << shift) - 1;
-    u32 cnt = 0;
-    do {
-        *out++ = digits[in & mask];
-        in >>= shift;
-        cnt++;
-    } while (in != 0);
-    return PadAndReverse(out, min_digits, pad_char, cnt);
-}
-
-static u32 ItoaPow2Div64(char * restrict out, u64 in, u32 shift,
-                         const char * restrict digits, u16 min_digits,
-                         char pad_char) {
-    u32 mask = (1 << shift) - 1;
-    u32 cnt = 0;
-    do {
-        *out++ = digits[in & mask];
-        in >>= shift;
-        cnt++;
-    } while (in != 0);
-    return PadAndReverse(out, min_digits, pad_char, cnt);
-}
-
 u32 MostItoa(char * restrict out, s32 in, u16 base, bool is_upper,
              u16 min_digits, char pad_char, bool is_signed) {
-    const char * restrict digits = LowerCaseDigits;
-    if (is_upper) digits = UpperCaseDigits;
+    u32 adj = (u32) in;
+    u8 shift = 0;
     switch (base) {
     case 2:
-        return ItoaPow2Div(out, in, 1, digits, min_digits, pad_char);
+        shift = 1;
+        break;
     case 8:
-        return ItoaPow2Div(out, in, 3, digits, min_digits, pad_char);
+        shift = 3;
+        break;
     case 16:
-        return ItoaPow2Div(out, in, 4, digits, min_digits, pad_char);
-    default:
+        shift = 4;
         break;
     }
-    u32 adj = (u32) in;
-    if (is_signed && in < 0) adj = (u32) -in;
-    // Determine digits (in reverse order)
     u32 cnt = 0;
-    do {
-        *out++ = digits[adj % base];
-        adj = adj / base;
-        cnt++;
-    } while (adj != 0);
-    // Write sign
-    if (is_signed && in < 0) {
-        *out++ = '-';
-        cnt++;
+    if (shift) {
+        const char * restrict digits = LowerCaseDigits;
+        if (is_upper) digits = UpperCaseDigits;
+        u32 mask = (1 << shift) - 1;
+        do {
+            *out++ = digits[adj & mask];
+            adj >>= shift;
+            cnt++;
+        } while (adj != 0);
+    } else {
+        if (is_signed && in < 0) adj = (u32) -in;
+        // Determine digits (in reverse order)
+        do {
+            *out++ = LowerCaseDigits[adj % base];
+            adj = adj / base;
+            cnt++;
+        } while (adj != 0);
+        // Write sign
+        if (is_signed && in < 0) {
+            *out++ = '-';
+            cnt++;
+        }
     }
     return PadAndReverse(out, min_digits, pad_char, cnt);
 }
 
-u32 MostItoa64(char * restrict out, s64 input, u16 base, bool is_upper,
+u32 MostItoa64(char * restrict out, s64 in, u16 base, bool is_upper,
                u16 min_digits, char pad_char, bool is_signed) {
-    const char * restrict digits = LowerCaseDigits;
-    if (is_upper) digits = UpperCaseDigits;
+    u64 adj = (u64) in;
+    u32 cnt = 0;
+    u8 shift = 0;
     switch (base) {
     case 2:
-        return ItoaPow2Div64(out, input, 1, digits, min_digits, pad_char);
+        shift = 1;
+        break;
     case 8:
-        return ItoaPow2Div64(out, input, 3, digits, min_digits, pad_char);
+        shift = 3;
+        break;
     case 16:
-        return ItoaPow2Div64(out, input, 4, digits, min_digits, pad_char);
-    default:
+        shift = 4;
         break;
     }
-    u64 adj = (u64) input;
-    if (is_signed && input < 0) adj = (u64) -input;
-    // Determine digits (in reverse order)
-    u32 cnt = 0;
-    do {
-        *out++ = digits[adj % base];
-        adj = adj / base;
-        cnt++;
-    } while (adj != 0);
-    // Write sign
-    if (is_signed && input < 0) {
-        *out++ = '-';
-        cnt++;
+    if (shift) {
+        const char * restrict digits = LowerCaseDigits;
+        if (is_upper) digits = UpperCaseDigits;
+        u32 mask = (1 << shift) - 1;
+        do {
+            *out++ = digits[adj & mask];
+            adj >>= shift;
+            cnt++;
+        } while (adj != 0);
+    } else {
+        if (is_signed && in < 0) adj = (u64) -in;
+        // Determine digits (in reverse order)
+        do {
+            *out++ = LowerCaseDigits[adj % base];
+            adj = adj / base;
+            cnt++;
+        } while (adj != 0);
+        // Write sign
+        if (is_signed && in < 0) {
+            *out++ = '-';
+            cnt++;
+        }
     }
     return PadAndReverse(out, min_digits, pad_char, cnt);
 }
 
 static void
 WriteBuf(char * restrict * out, const char * restrict in,
-         u32 len, s32 * buf_rem) {
+         s16 len, s16 * buf_rem) {
     u32 cnt = (len < *buf_rem) ? len : *buf_rem;
     *buf_rem -= cnt;
     for (; cnt > 0; cnt--) {
@@ -146,14 +142,14 @@ WriteBuf(char * restrict * out, const char * restrict in,
 }
 
 static void
-FormatString(char * restrict buffer, size_t sz,
+FormatString(char * restrict buffer, s16 sz,
              const char * restrict fmt, va_list args) {
     const char * restrict ch = fmt;
-    char * restrict out = buffer, * arg;
-    s32 buf_rem = (s32) sz - 1;
-    s32 arg32, base, long_cnt, min_digits;
+    char * restrict out = buffer;
+    s16 buf_rem = (s16) sz - 1;
     bool do_numeric, is_signed, is_upper, in_arg = false;
-    char tmp32[32], pad_char;
+    u8 base, long_cnt, min_digits;
+    char pad_char;
     for (ch = fmt; *ch != '\0'; ch++) {
         if (!in_arg) {
             if (*ch == '%') {
@@ -184,9 +180,12 @@ FormatString(char * restrict buffer, size_t sz,
                 break;
             }
             case 's':
-                arg = va_arg(args, char *);
-                for (; *arg != '\0'; arg++) WriteBuf(&out, arg, 1, &buf_rem);
+            {
+                char * arg = va_arg(args, char *);
+                for (; *arg != '\0'; arg++)
+                    WriteBuf(&out, arg, 1, &buf_rem);
                 break;
+            }
             case 'l':
                 long_cnt++;
                 in_arg = true;
@@ -225,14 +224,16 @@ FormatString(char * restrict buffer, size_t sz,
                 break;
             case 'p':
             {
-                arg32 = (u32) va_arg(args, u32 *);
+                s32 arg32 = (u32) va_arg(args, u32 *);
+                char tmp32[8];
                 u32 cnt = MostItoa(tmp32, arg32, 16, false, 8, '0', false);
                 WriteBuf(&out, tmp32, cnt, &buf_rem);
                 break;
             }
             case 'P':
             {
-                arg32 = (u32) va_arg(args, u32 *);
+                s32 arg32 = (u32) va_arg(args, u32 *);
+                char tmp32[8];
                 u32 cnt = MostItoa(tmp32, arg32, 16, true, 8, '0', false);
                 WriteBuf(&out, tmp32, cnt, &buf_rem);
                 break;
@@ -243,7 +244,8 @@ FormatString(char * restrict buffer, size_t sz,
             // Convert numeric types to text
             if (do_numeric) {
                 if (long_cnt <= 1) {
-                    arg32 = va_arg(args, s32);
+                    s32 arg32 = va_arg(args, s32);
+                    char tmp32[32];
                     u32 cnt = MostItoa(tmp32, arg32, base, is_upper,
                                        min_digits, pad_char, is_signed);
                     WriteBuf(&out, tmp32, cnt, &buf_rem);
