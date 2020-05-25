@@ -18,7 +18,7 @@
 
 #include "hal_tb.h"
 
-#define DFT_STACK_SIZE           256
+#define DFT_STACK_SIZE           512
 #define TEST_SHELL_STACK_SIZE    2048
 #define MAX_TEST_SUB_THREADS     (MOS_MAX_APP_THREADS - 2)
 #define MAX_TEST_THREADS         (MAX_TEST_SUB_THREADS + 2)
@@ -1317,6 +1317,7 @@ static bool HeapTests(void) {
 }
 
 typedef enum {
+    CMD_ERR_OUT_OF_RANGE = -3,
     CMD_ERR_NOT_FOUND = -2,
     CMD_ERR = -1,
     CMD_OK,
@@ -1426,15 +1427,19 @@ static CmdStatus RunCmd(char * cmd_buf_in) {
         return (CmdStatus)cmd->func(argc, argv);
     } else if (argv[0][0] == '!') {
         if (argv[0][1] == '!') {
-            u32 run_cmd_ix = CalcOffsetCmdIx(CmdIx, CmdMaxIx, -1);
-            strcpy(CmdBuffers[CmdIx], CmdBuffers[run_cmd_ix]);
-            return (CmdStatus)RunCmd(CmdBuffers[CmdIx]);
-        } else if (argv[0][1] == '-') {
-            if (argv[0][2] >= '1' && argv[0][2] <= '9') {
-                u32 run_cmd_ix = CalcOffsetCmdIx(CmdIx, CmdMaxIx,
-                                                 -(s8)(argv[0][2] - '0'));
+            if (CmdMaxIx > 0) {
+                u32 run_cmd_ix = CalcOffsetCmdIx(CmdIx, CmdMaxIx, -1);
                 strcpy(CmdBuffers[CmdIx], CmdBuffers[run_cmd_ix]);
                 return (CmdStatus)RunCmd(CmdBuffers[CmdIx]);
+            } else return CMD_ERR_OUT_OF_RANGE;
+        } else if (argv[0][1] == '-') {
+            if (argv[0][2] >= '1' && argv[0][2] <= '9') {
+                s8 offset = argv[0][2] - '0';
+                if (offset <= CmdMaxIx) {
+                    u32 run_cmd_ix = CalcOffsetCmdIx(CmdIx, CmdMaxIx, -offset);
+                    strcpy(CmdBuffers[CmdIx], CmdBuffers[run_cmd_ix]);
+                    return (CmdStatus)RunCmd(CmdBuffers[CmdIx]);
+                } else return CMD_ERR_OUT_OF_RANGE;
             }
         }
     } else if (strcmp(argv[0], "?") == 0 || strcmp(argv[0], "help") == 0) {
@@ -1473,6 +1478,9 @@ static s32 TestShell(s32 arg) {
                 break;
             case CMD_ERR_NOT_FOUND:
                 MostPrint("[ERR] Command not found...\n");
+                break;
+            case CMD_ERR_OUT_OF_RANGE:
+                MostPrint("[ERR] Index out of range...\n");
                 break;
             case CMD_OK:
                 MostPrint("[OK]\n");

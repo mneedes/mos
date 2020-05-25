@@ -11,6 +11,7 @@
 // TODO: Split shell out into another file?
 // TODO: Install/Remove commands?
 // TODO: Rotating logs
+// TODO: Minimize stack requirements?
 
 #include <string.h>
 
@@ -134,7 +135,8 @@ u32 MostItoa64(char * restrict out, s64 input, u16 base, bool is_upper,
 }
 
 static void
-WriteBuf(char * restrict * out, const char * restrict in, u32 len, s32 * buf_rem) {
+WriteBuf(char * restrict * out, const char * restrict in,
+         u32 len, s32 * buf_rem) {
     u32 cnt = (len < *buf_rem) ? len : *buf_rem;
     *buf_rem -= cnt;
     for (; cnt > 0; cnt--) {
