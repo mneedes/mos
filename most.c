@@ -11,7 +11,6 @@
 // TODO: Split shell out into another file?
 // TODO: Install/Remove commands?
 // TODO: Rotating logs
-// TODO: Minimize stack requirements?
 
 #include <string.h>
 
@@ -32,19 +31,6 @@ static const char UpperCaseDigits[] = "0123456789ABCDEF";
 
 static char PrintBuffer[MOST_PRINT_BUFFER_SIZE];
 static char RawPrintBuffer[MOST_PRINT_BUFFER_SIZE];
-
-static u32 PadAndReverse(char * restrict out, u16 min_digits,
-                         char pad_char, u32 cnt) {
-    // Pad to minimum number of digits
-    for (; cnt < min_digits; cnt++) *out++ = pad_char;
-    // Reverse digit order in place
-    for (u32 idx = 0; idx < ((cnt + 1) >> 1); idx++) {
-        char tmp = out[idx - cnt];
-        out[idx - cnt] = out[-idx - 1];
-        out[-idx - 1] = tmp;
-    }
-    return cnt;
-}
 
 u32 MostItoa(char * restrict out, s32 in, u16 base, bool is_upper,
              u16 min_digits, char pad_char, bool is_signed) {
@@ -85,7 +71,15 @@ u32 MostItoa(char * restrict out, s32 in, u16 base, bool is_upper,
             cnt++;
         }
     }
-    return PadAndReverse(out, min_digits, pad_char, cnt);
+    // Pad to minimum number of digits
+    for (; cnt < min_digits; cnt++) *out++ = pad_char;
+    // Reverse digit order in place
+    for (u32 idx = 0; idx < ((cnt + 1) >> 1); idx++) {
+        char tmp = out[idx - cnt];
+        out[idx - cnt] = out[-idx - 1];
+        out[-idx - 1] = tmp;
+    }
+    return cnt;
 }
 
 u32 MostItoa64(char * restrict out, s64 in, u16 base, bool is_upper,
@@ -127,7 +121,15 @@ u32 MostItoa64(char * restrict out, s64 in, u16 base, bool is_upper,
             cnt++;
         }
     }
-    return PadAndReverse(out, min_digits, pad_char, cnt);
+    // Pad to minimum number of digits
+    for (; cnt < min_digits; cnt++) *out++ = pad_char;
+    // Reverse digit order in place
+    for (u32 idx = 0; idx < ((cnt + 1) >> 1); idx++) {
+        char tmp = out[idx - cnt];
+        out[idx - cnt] = out[-idx - 1];
+        out[-idx - 1] = tmp;
+    }
+    return cnt;
 }
 
 static void
