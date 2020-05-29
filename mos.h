@@ -256,5 +256,13 @@ bool MosWaitOnMuxOrTO(MosMux * mux, u32 * idx, u32 ticks);
 #define MosAssert(c) { if (!(c)) MosAssertAt(__FILE__, __LINE__); }
 void MosAssertAt(char * file, u32 line);
 
-#endif
+static u32 MOS_INLINE MosGetStackDepth(u8 * top) {
+    u32 sp;
+    asm volatile (
+        "mrs %0, psp\n\t"
+                : "=r" (sp)
+    );
+    return ((u32) top) - sp;
+}
 
+#endif

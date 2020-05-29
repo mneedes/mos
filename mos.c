@@ -26,6 +26,7 @@
 #define MOS_IDLE_THREAD_ID      0
 #define MOS_MAX_THREADS         (MOS_MAX_APP_THREADS + 1)
 #define MOS_NO_THREADS          -1
+#define MOS_STACK_CANARY        0xba5eba11
 
 #define MOS_SHIFT_PRI(pri)      ((pri) << (8 - __NVIC_PRIO_BITS))
 
@@ -179,6 +180,7 @@ static void InitThread(MosThreadID id, MosThreadPriority pri,
     ThreadData[id].stack_addr = s_addr;
     ThreadData[id].stack_size = s_size;
     // Initialize Stack
+    *((u32 *) s_addr) = MOS_STACK_CANARY;
     StackFrame * sf = (StackFrame *) (s_addr + s_size);
     sf--;
     // Set Thumb Mode
@@ -424,7 +426,16 @@ static void MOS_USED FaultHandler(u32 fault_no, u32 * sp, bool in_isr) {
         (*PrintfHook)("*** %s Fault %s", fault_type[fault_no - 3],
                       in_isr ? "IN ISR " : "");
         if (RunningThreadID == MOS_NO_THREADS) (*PrintfHook)("(Before MOS Run) ***\n");
-        else (*PrintfHook)("(ThreadID %u) ***\n", RunningThreadID);
+        else {
+            (*PrintfHook)("(ThreadID %u) ***\n", RunningThreadID);
+            // Check for stack overflow
+            for (u32 ix = 0; ix < MOS_MAX_THREADS; ix++) {
+                if (Threads[ix].state != THREAD_UNINIT) {
+                    if (*((u32 *)ThreadData[ix].stack_addr) != MOS_STACK_CANARY)
+                        (*PrintfHook)("!!! ThreadID %u Stack overflow !!!\n", ix);
+                }
+            }
+        }
         (*PrintfHook)(" HFSR: %08X  CFSR: %08X AFSR: %08X\n", SCB->HFSR,
                       SCB->CFSR, SCB->AFSR);
         (*PrintfHook)(" BFAR: %08X MMFAR: %08X\n", SCB->BFAR, SCB->MMFAR);
@@ -661,9 +672,9 @@ s32 MosInitThread(MosThreadID id, MosThreadPriority pri,
         if (MosIsOnList(&Threads[id].tmr_q))
             MosRemoveFromList(&Threads[id].tmr_q);
         MosRemoveFromList(&Threads[id].run_q);
-        SetThreadState(id, THREAD_UNINIT);
         break;
     }
+    SetThreadState(id, THREAD_UNINIT);
     SetBasePri(0);
     InitThread(id, pri, entry, arg, s_addr, s_size);
     SetThreadState(id, THREAD_INIT);
@@ -1117,4 +1128,3 @@ void MosAssertAt(char * file, u32 line) {
     while (1)
         ;
 }
-

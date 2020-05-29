@@ -38,7 +38,4 @@
 // Enable events (required for MOS profiling)
 #define MOS_ENABLE_EVENTS           false
 
-// Maximum number of arguments on shell command line 
-#define MOST_CMD_MAX_ARGC           10
-
 #endif

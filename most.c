@@ -192,11 +192,6 @@ FormatString(char * restrict buffer, s16 sz,
                 long_cnt++;
                 in_arg = true;
                 break;
-            case 'b':
-                base = 2;
-                do_numeric = true;
-                is_signed = false;
-                break;
             case 'o':
                 base = 8;
                 do_numeric = true;
@@ -247,13 +242,13 @@ FormatString(char * restrict buffer, s16 sz,
             if (do_numeric) {
                 if (long_cnt <= 1) {
                     s32 arg32 = va_arg(args, s32);
-                    char tmp32[32];
+                    char tmp32[11];
                     u32 cnt = MostItoa(tmp32, arg32, base, is_upper,
                                        min_digits, pad_char, is_signed);
                     WriteBuf(&out, tmp32, cnt, &buf_rem);
                 } else {
                     s64 arg64 = va_arg(args, s64);
-                    char tmp64[64];
+                    char tmp64[22];
                     u32 cnt = MostItoa64(tmp64, arg64, base, is_upper,
                                          min_digits, pad_char, is_signed);
                     WriteBuf(&out, tmp64, cnt, &buf_rem);

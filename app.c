@@ -18,7 +18,7 @@
 
 #include "hal_tb.h"
 
-#define DFT_STACK_SIZE           512
+#define DFT_STACK_SIZE           384
 #define TEST_SHELL_STACK_SIZE    2048
 #define MAX_TEST_SUB_THREADS     (MOS_MAX_APP_THREADS - 2)
 #define MAX_TEST_THREADS         (MAX_TEST_SUB_THREADS + 2)
@@ -1369,7 +1369,8 @@ static s32 PigeonThread(s32 arg) {
     u32 cnt = 0;
     while (1) {
         MosDelayThread(877);
-        if (PigeonFlag) MostPrintf("Incoming ---- .. .. %u .. . ------\n", cnt);
+        MostPrintf("Incoming ---- .. .. %u %08X.. ------\n", cnt,
+                       MosGetStackDepth(PigeonStack + DFT_STACK_SIZE));
         cnt++;
     }
     return 0;
