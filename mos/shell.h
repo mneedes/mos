@@ -5,97 +5,55 @@
 //  "License") included under this distribution.
 
 //
-// MOS tracing facility and command shell
-//   Mutex to synchronize printing from different threads
-//   Lightweight format strings
-//   Maskable trace messaging
+// MOS command shell
 //   Serial command shell
+//   Up and down arrows can be used for command history
+//   Dynamic command tables add/remove)
+//   Double quote (") allows for embedded spaces in arguments
 //
 
-#ifndef _MOS_TRACE_H_
-#define _MOS_TRACE_H_
+#ifndef _MOS_SHELL_H_
+#define _MOS_SHELL_H_
 
 #include <stdarg.h>
 
 #include "mos/kernel.h"
 
-// Display trace message
-#define MostLogTrace(level, args...) \
-    if (MostTraceMask & (level)) \
-        { MostLogTraceMessage(__FILE__ "[" MOS__LINE__ "]:", args); }
-
-// Display trace hex dump
-#define MostLogHexDump(level, name_p, addr_p, size) \
-    if (MostTraceMask & (level)) \
-        { MostLogHexDumpMessage(__FILE__ "[" MOS__LINE__ "]:", \
-                               (name_p), (addr_p), (size)); }
-
-// Set the trace mask
-#define MostSetMask(mask) { MostTraceMask = (mask); }
-
-// Trace mask
-extern u32 MostTraceMask;
-
 // Command shell callback
-typedef s32 (MostCmdFunc)(s32 argc, char * argv[]);
+typedef s32 (MossCmdFunc)(s32 argc, char * argv[]);
 
 // Command entry
-typedef struct MostCmd {
-    MostCmdFunc * func;
+typedef struct MossCmd {
+    MossCmdFunc * func;
     char * name;
     char * desc;
     char * usage;
     MosList list;
-} MostCmd;
+} MossCmd;
 
 // Command List
-typedef struct MostCmdList {
+typedef struct MossCmdList {
     MosList list;
     MosMutex mtx;
-} MostCmdList;
+} MossCmdList;
 
 typedef enum {
-    MOST_CMD_RECEIVED,
-    MOST_CMD_UP_ARROW,
-    MOST_CMD_DOWN_ARROW,
-    //MOST_CMD_TIMEOUT,
-} MostCmdResult;
-
-u32 MostItoa(char * restrict out, s32 input, u16 base, bool is_upper,
-             u16 min_digits, char pad_char, bool is_signed);
-
-u32 MostItoa64(char * restrict out, s64 input, u16 base, bool is_upper,
-               u16 min_digits, char pad_char, bool is_signed);
-
-u32 MostPrint(char * str);
-u32 MostPrintf(const char * fmt, ...);
-
-// Parse format string and arguments into provided buffer
-void MostLogTraceMessage(char * id, const char * fmt, ...);
-
-// Create a hex dump into provided buffer
-void MostLogHexDumpMessage(char * id, char * name,
-                           const void * addr, u32 size);
-
-// Callers can take mutex for multi-line prints
-void MostTakeMutex(void);
-bool MostTryMutex(void);
-void MostGiveMutex(void);
+    MOSS_CMD_RECEIVED,
+    MOSS_CMD_UP_ARROW,
+    MOSS_CMD_DOWN_ARROW,
+    //MOSS_CMD_TIMEOUT,
+} MossCmdResult;
 
 // Command shell support
-void MostInitCmdList(MostCmdList * cmd_list);
-void MostAddCmd(MostCmdList * cmd_list, MostCmd * cmd);
-void MostRemoveCmd(MostCmdList * cmd_list, MostCmd * cmd);
-MostCmd * MostFindCmd(MostCmdList * cmd_list, char * name);
-void MostPrintCmdHelp(MostCmdList * cmd_list);
+void MossInit(void);
+void MossInitCmdList(MossCmdList * cmd_list);
+void MossAddCmd(MossCmdList * cmd_list, MossCmd * cmd);
+void MossRemoveCmd(MossCmdList * cmd_list, MossCmd * cmd);
+MossCmd * MossFindCmd(MossCmdList * cmd_list, char * name);
+void MossPrintCmdHelp(MossCmdList * cmd_list);
 //  Parser support quotes and escape character '\'
-MostCmdResult MostGetNextCmd(char * prompt, char * cmd, u32 max_cmd_len);
-//  NOTE: MostParseCmd modifies args in place
-u32 MostParseCmd(char * argv[], char * args, u32 max_argc);
-
-// Initialize module
-//   if enable_raw_print_hook is true, then operate low-level prints
-//   through this module.
-void MostInit(u32 mask, bool enable_raw_print_hook);
+MossCmdResult MossGetNextCmd(char * prompt, char * cmd, u32 max_cmd_len);
+//  NOTE: MossParseCmd modifies args in place like _strtok()
+u32 MossParseCmd(char * argv[], char * args, u32 max_argc);
 
 #endif
