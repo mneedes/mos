@@ -5,10 +5,11 @@
 //  "License") included under this distribution.
 
 //
-// MOS tracing facility
+// MOS tracing facility and command shell
 //   Mutex to synchronize printing from different threads
 //   Lightweight format strings
 //   Maskable trace messaging
+//   Serial command shell
 //
 
 #ifndef _MOS_TRACE_H_
@@ -35,10 +36,30 @@
 // Trace mask
 extern u32 MostTraceMask;
 
-// Initialize module
-//   if enable_raw_print_hook is true, then operate low-level prints
-//   through this module.
-void MostInit(u32 mask, bool enable_raw_print_hook);
+// Command shell callback
+typedef s32 (MostCmdFunc)(s32 argc, char * argv[]);
+
+// Command entry
+typedef struct MostCmd {
+    MostCmdFunc * func;
+    char * name;
+    char * desc;
+    char * usage;
+    MosList list;
+} MostCmd;
+
+// Command List
+typedef struct MostCmdList {
+    MosList list;
+    MosMutex mtx;
+} MostCmdList;
+
+typedef enum {
+    MOST_CMD_RECEIVED,
+    MOST_CMD_UP_ARROW,
+    MOST_CMD_DOWN_ARROW,
+    //MOST_CMD_TIMEOUT,
+} MostCmdResult;
 
 u32 MostItoa(char * restrict out, s32 input, u16 base, bool is_upper,
              u16 min_digits, char pad_char, bool is_signed);
@@ -56,9 +77,25 @@ void MostLogTraceMessage(char * id, const char * fmt, ...);
 void MostLogHexDumpMessage(char * id, char * name,
                            const void * addr, u32 size);
 
-// Callers can use mutex for multi-line prints
+// Callers can take mutex for multi-line prints
 void MostTakeMutex(void);
 bool MostTryMutex(void);
 void MostGiveMutex(void);
+
+// Command shell support
+void MostInitCmdList(MostCmdList * cmd_list);
+void MostAddCmd(MostCmdList * cmd_list, MostCmd * cmd);
+void MostRemoveCmd(MostCmdList * cmd_list, MostCmd * cmd);
+MostCmd * MostFindCmd(MostCmdList * cmd_list, char * name);
+void MostPrintCmdHelp(MostCmdList * cmd_list);
+//  Parser support quotes and escape character '\'
+MostCmdResult MostGetNextCmd(char * prompt, char * cmd, u32 max_cmd_len);
+//  NOTE: MostParseCmd modifies args in place
+u32 MostParseCmd(char * argv[], char * args, u32 max_argc);
+
+// Initialize module
+//   if enable_raw_print_hook is true, then operate low-level prints
+//   through this module.
+void MostInit(u32 mask, bool enable_raw_print_hook);
 
 #endif

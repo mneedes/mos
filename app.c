@@ -15,6 +15,7 @@
 #include "mos/kernel.h"
 #include "mos/heap.h"
 #include "mos/trace.h"
+#include "mos/shell.h"
 
 #include "hal_tb.h"
 
@@ -1394,7 +1395,7 @@ static s32 CmdClearTickHisto(s32 argc, char * argv[]) {
     return CMD_OK;
 }
 
-static MostCmdList CmdList;
+static MossCmdList CmdList;
 
 #define MAX_CMD_ARGUMENTS       10
 #define MAX_CMD_BUFFER_LENGTH   10
@@ -1417,9 +1418,9 @@ static CmdStatus RunCmd(char * cmd_buf_in) {
     char * argv[MAX_CMD_ARGUMENTS];
     char cmd_buf[MAX_CMD_LINE_SIZE];
     strncpy(cmd_buf, cmd_buf_in, sizeof(cmd_buf));
-    argc = MostParseCmd(argv, cmd_buf, MAX_CMD_ARGUMENTS);
+    argc = MossParseCmd(argv, cmd_buf, MAX_CMD_ARGUMENTS);
     if (argc == 0) return CMD_OK_NO_HISTORY;
-    MostCmd * cmd = MostFindCmd(&CmdList, argv[0]);
+    MossCmd * cmd = MossFindCmd(&CmdList, argv[0]);
     if (cmd) {
         return (CmdStatus)cmd->func(argc, argv);
     } else if (argv[0][0] == '!') {
@@ -1440,7 +1441,7 @@ static CmdStatus RunCmd(char * cmd_buf_in) {
             }
         }
     } else if (strcmp(argv[0], "?") == 0 || strcmp(argv[0], "help") == 0) {
-        MostPrintCmdHelp(&CmdList);
+        MossPrintCmdHelp(&CmdList);
         MostPrint("!!: Repeat prior command\n");
         MostPrint("!-#: Repeat #th prior command\n");
         MostPrint("h -or- history: Display command history\n");
@@ -1464,23 +1465,24 @@ static CmdStatus RunCmd(char * cmd_buf_in) {
 
 static s32 TestShell(s32 arg) {
 
-    static MostCmd list_cmds[] = {
+    static MossCmd list_cmds[] = {
         { CmdTest,           "run", "Run Test", "[TEST]" },
         { CmdPigeon,         "p",   "Toggle Pigeon Printing", "" },
         { CmdClearTickHisto, "cth", "Clear tick histogram", "" },
     };
 
-    MostInitCmdList(&CmdList);
-    MostAddCmd(&CmdList, &list_cmds[0]);
-    MostAddCmd(&CmdList, &list_cmds[1]);
-    MostAddCmd(&CmdList, &list_cmds[2]);
+    MossInit();
+    MossInitCmdList(&CmdList);
+    MossAddCmd(&CmdList, &list_cmds[0]);
+    MossAddCmd(&CmdList, &list_cmds[1]);
+    MossAddCmd(&CmdList, &list_cmds[2]);
 
     while (1) {
-        MostCmdResult result;
+        MossCmdResult result;
         CmdStatus status;
-        result = MostGetNextCmd("# ", CmdBuffers[CmdIx], MAX_CMD_LINE_SIZE);
+        result = MossGetNextCmd("# ", CmdBuffers[CmdIx], MAX_CMD_LINE_SIZE);
         switch (result) {
-        case MOST_CMD_RECEIVED:
+        case MOSS_CMD_RECEIVED:
             status = RunCmd(CmdBuffers[CmdIx]);
             switch (status) {
             case CMD_OK_NO_HISTORY:
@@ -1506,14 +1508,14 @@ static s32 TestShell(s32 arg) {
             CmdHistoryIx = CmdIx;
             CmdBuffers[CmdIx][0] = '\0';
             break;
-        case MOST_CMD_UP_ARROW:
+        case MOSS_CMD_UP_ARROW:
             // Rotate history back one, skipping over current index
             CmdHistoryIx = CalcOffsetCmdIx(CmdHistoryIx, CmdMaxIx, -1);
             if (CmdHistoryIx == CmdIx)
                 CmdHistoryIx = CalcOffsetCmdIx(CmdHistoryIx, CmdMaxIx, -1);
             strcpy(CmdBuffers[CmdIx], CmdBuffers[CmdHistoryIx]);
             break;
-        case MOST_CMD_DOWN_ARROW:
+        case MOSS_CMD_DOWN_ARROW:
             // Rotate history forward one, skipping over current index
             CmdHistoryIx = CalcOffsetCmdIx(CmdHistoryIx, CmdMaxIx, 1);
             if (CmdHistoryIx == CmdIx)
