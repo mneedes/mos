@@ -4,8 +4,7 @@
 //  terms and conditions contained within the LICENSE file (the
 //  "License") included under this distribution.
 
-#include "mos.h"
-#include "mosh.h"
+#include "mos/heap.h"
 
 #define MOSH_BLOCK_ID          0xe711dead
 #define MOSH_ODD_BLOCK_ID      0xba5eba11

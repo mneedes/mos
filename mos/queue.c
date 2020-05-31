@@ -8,8 +8,7 @@
 // Miscellaneous
 //
 
-#include "mos.h"
-#include "mosq.h"
+#include "mos/queue.h"
 
 void MosqInitFIFO(MosqFIFO * fifo, u32 * buf, u32 len) {
     fifo->buf = buf;

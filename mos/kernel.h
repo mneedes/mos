@@ -8,8 +8,8 @@
 //  MOS Microkernel
 //
 
-#ifndef _MOS_H_
-#define _MOS_H_
+#ifndef _MOS_KERNEL_H_
+#define _MOS_KERNEL_H_
 
 #include <stddef.h>
 #include <stdbool.h>

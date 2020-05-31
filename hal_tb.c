@@ -11,8 +11,8 @@
 
 #include "stm32f4xx_hal.h"
 #include "hal.h"
-#include "mos.h"
-#include "most.h"
+#include "mos/kernel.h"
+#include "mos/trace.h"
 #include "hal_tb.h"
 
 typedef enum {

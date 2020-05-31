@@ -8,10 +8,11 @@
 //  MOS Microkernel
 //
 
+#include "mos/kernel.h"
+
 #include <errno.h>
 
 #include "mos_phal.h"
-#include "mos.h"
 
 #if (__FPU_USED == 1U)
 // TODO: Can use this to enable floating point context save for CM4F

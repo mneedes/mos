@@ -32,7 +32,8 @@
 //
 #include "stm32f4xx_hal.h"
 #include "hal.h"
-#include "mos.h"
+
+#include "mos/kernel.h"
 #include "mos_phal.h"
 
 #define USARTx                           USART2

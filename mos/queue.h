@@ -8,8 +8,10 @@
 // Miscellaneous
 //
 
-#ifndef _MOSQ_H_
-#define _MOSQ_H_
+#ifndef _MOS_QUEUE_H_
+#define _MOS_QUEUE_H_
+
+#include "mos/kernel.h"
 
 // Single-reader / single-writer non-blocking lock-free FIFO
 //   NOTE: Usable depth is len - 1.

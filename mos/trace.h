@@ -12,10 +12,12 @@
 //   Serial command shell
 //
 
-#ifndef _MOST_H_
-#define _MOST_H_
+#ifndef _MOS_TRACE_H_
+#define _MOS_TRACE_H_
 
 #include <stdarg.h>
+
+#include "mos/kernel.h"
 
 // Display trace message
 #define MostLogTrace(level, args...) \
@@ -37,13 +39,20 @@ extern u32 MostTraceMask;
 // Command shell callback
 typedef s32 (MostCmdFunc)(s32 argc, char * argv[]);
 
-// Command list
+// Command entry
 typedef struct MostCmd {
     MostCmdFunc * func;
     char * name;
     char * desc;
     char * usage;
+    MosList list;
 } MostCmd;
+
+// Command List
+typedef struct MostCmdList {
+    MosList list;
+    MosMutex mtx;
+} MostCmdList;
 
 typedef enum {
     MOST_CMD_RECEIVED,
@@ -74,12 +83,15 @@ bool MostTryMutex(void);
 void MostGiveMutex(void);
 
 // Command shell support
+void MostInitCmdList(MostCmdList * cmd_list);
+void MostAddCmd(MostCmdList * cmd_list, MostCmd * cmd);
+void MostRemoveCmd(MostCmdList * cmd_list, MostCmd * cmd);
+MostCmd * MostFindCmd(MostCmdList * cmd_list, char * name);
+void MostPrintCmdHelp(MostCmdList * cmd_list);
 //  Parser support quotes and escape character '\'
 MostCmdResult MostGetNextCmd(char * prompt, char * cmd, u32 max_cmd_len);
 //  NOTE: MostParseCmd modifies args in place
 u32 MostParseCmd(char * argv[], char * args, u32 max_argc);
-MostCmd * MostFindCmd(char * name, MostCmd * commands, u32 num_cmds);
-void MostPrintHelp(MostCmd * commands, u32 num_cmds);
 
 // Initialize module
 //   if enable_raw_print_hook is true, then operate low-level prints

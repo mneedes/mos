@@ -25,8 +25,10 @@
 //     be returned "within a tick or two" to prevent fragmentation. These
 //     blocks can be of any size.
 
-#ifndef _MOSH_H_
-#define _MOSH_H_
+#ifndef _MOS_HEAP_H_
+#define _MOS_HEAP_H_
+
+#include "mos/kernel.h"
 
 #define MOSH_HEAP_ALIGNED      MOS_STACK_ALIGNED
 #define MOSH_HEAP_ALIGNMENT    MOS_STACK_ALIGNMENT
@@ -42,7 +44,7 @@ typedef struct {
     u32 max_bs;       // Largest block size
 } MoshHeap;
 
-// Initialize heap of size with maximum number of blocks (nbs)
+// Initialize heap with maximum number of reserved block sizes (nbs)
 // Pit shall be aligned to MOSH_HEAP_ALIGNMENT.
 void MoshInitHeap(MoshHeap * heap, u8 * pit, u32 size, u8 nbs);
 bool MoshReserveBlockSize(MoshHeap * heap, u32 bs);

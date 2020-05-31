@@ -12,9 +12,9 @@
 #include <string.h>
 
 #include "hal.h"
-#include "mos.h"
-#include "mosh.h"
-#include "most.h"
+#include "mos/kernel.h"
+#include "mos/heap.h"
+#include "mos/trace.h"
 
 #include "hal_tb.h"
 
@@ -1394,11 +1394,7 @@ static s32 CmdClearTickHisto(s32 argc, char * argv[]) {
     return CMD_OK;
 }
 
-static MostCmd cmd_list[] = {
-    { CmdTest, "run", "Run Test", "[TEST]" },
-    { CmdPigeon, "p", "Toggle Pigeon Printing", "" },
-    { CmdClearTickHisto, "cth", "Clear tick histogram", "" },
-};
+static MostCmdList CmdList;
 
 #define MAX_CMD_ARGUMENTS       10
 #define MAX_CMD_BUFFER_LENGTH   10
@@ -1423,7 +1419,7 @@ static CmdStatus RunCmd(char * cmd_buf_in) {
     strncpy(cmd_buf, cmd_buf_in, sizeof(cmd_buf));
     argc = MostParseCmd(argv, cmd_buf, MAX_CMD_ARGUMENTS);
     if (argc == 0) return CMD_OK_NO_HISTORY;
-    MostCmd * cmd = MostFindCmd(argv[0], cmd_list, count_of(cmd_list));
+    MostCmd * cmd = MostFindCmd(&CmdList, argv[0]);
     if (cmd) {
         return (CmdStatus)cmd->func(argc, argv);
     } else if (argv[0][0] == '!') {
@@ -1444,7 +1440,7 @@ static CmdStatus RunCmd(char * cmd_buf_in) {
             }
         }
     } else if (strcmp(argv[0], "?") == 0 || strcmp(argv[0], "help") == 0) {
-        MostPrintHelp(cmd_list, count_of(cmd_list));
+        MostPrintCmdHelp(&CmdList);
         MostPrint("!!: Repeat prior command\n");
         MostPrint("!-#: Repeat #th prior command\n");
         MostPrint("h -or- history: Display command history\n");
@@ -1467,6 +1463,18 @@ static CmdStatus RunCmd(char * cmd_buf_in) {
 }
 
 static s32 TestShell(s32 arg) {
+
+    static MostCmd list_cmds[] = {
+        { CmdTest,           "run", "Run Test", "[TEST]" },
+        { CmdPigeon,         "p",   "Toggle Pigeon Printing", "" },
+        { CmdClearTickHisto, "cth", "Clear tick histogram", "" },
+    };
+
+    MostInitCmdList(&CmdList);
+    MostAddCmd(&CmdList, &list_cmds[0]);
+    MostAddCmd(&CmdList, &list_cmds[1]);
+    MostAddCmd(&CmdList, &list_cmds[2]);
+
     while (1) {
         MostCmdResult result;
         CmdStatus status;
