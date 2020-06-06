@@ -16,17 +16,17 @@
 #include "mos/trace.h"
 #include "mos/internal/trace.h"
 
-#define MOST_PRINT_BUFFER_SIZE   128
+#define Mos_PRINT_BUFFER_SIZE   128
 
-u32 MostTraceMask = 0;
+u32 MosTraceMask = 0;
 
 static MosMutex PrintMutex;
 
 static const char LowerCaseDigits[] = "0123456789abcdef";
 static const char UpperCaseDigits[] = "0123456789ABCDEF";
 
-static char PrintBuffer[MOST_PRINT_BUFFER_SIZE];
-static char RawPrintBuffer[MOST_PRINT_BUFFER_SIZE];
+static char PrintBuffer[Mos_PRINT_BUFFER_SIZE];
+static char RawPrintBuffer[Mos_PRINT_BUFFER_SIZE];
 
 static void
 WriteBuf(char * restrict * out, const char * restrict in,
@@ -119,7 +119,7 @@ FormatString(char * restrict buffer, s16 sz,
             {
                 s32 arg32 = (u32) va_arg(args, u32 *);
                 char tmp32[8];
-                u32 cnt = MostItoa(tmp32, arg32, 16, false, 8, '0', false);
+                u32 cnt = MosItoa(tmp32, arg32, 16, false, 8, '0', false);
                 WriteBuf(&out, tmp32, cnt, &buf_rem);
                 break;
             }
@@ -127,7 +127,7 @@ FormatString(char * restrict buffer, s16 sz,
             {
                 s32 arg32 = (u32) va_arg(args, u32 *);
                 char tmp32[8];
-                u32 cnt = MostItoa(tmp32, arg32, 16, true, 8, '0', false);
+                u32 cnt = MosItoa(tmp32, arg32, 16, true, 8, '0', false);
                 WriteBuf(&out, tmp32, cnt, &buf_rem);
                 break;
             }
@@ -139,13 +139,13 @@ FormatString(char * restrict buffer, s16 sz,
                 if (long_cnt <= 1) {
                     s32 arg32 = va_arg(args, s32);
                     char tmp32[11];
-                    u32 cnt = MostItoa(tmp32, arg32, base, is_upper,
+                    u32 cnt = MosItoa(tmp32, arg32, base, is_upper,
                                        min_digits, pad_char, is_signed);
                     WriteBuf(&out, tmp32, cnt, &buf_rem);
                 } else {
                     s64 arg64 = va_arg(args, s64);
                     char tmp64[22];
-                    u32 cnt = MostItoa64(tmp64, arg64, base, is_upper,
+                    u32 cnt = MosItoa64(tmp64, arg64, base, is_upper,
                                          min_digits, pad_char, is_signed);
                     WriteBuf(&out, tmp64, cnt, &buf_rem);
                 }
@@ -155,13 +155,13 @@ FormatString(char * restrict buffer, s16 sz,
     *out = '\0';
 }
 
-void _MostPrintCh(char ch) {
+void _MosPrintCh(char ch) {
     MosTakeMutex(&PrintMutex);
     HalSendToTxUART(ch);
     MosGiveMutex(&PrintMutex);
 }
 
-u32 _MostPrint(char * str) {
+u32 _MosPrint(char * str) {
     u32 cnt = 0;
     for (char * ch = str; *ch != '\0'; ch++, cnt++) {
         if (*ch == '\n') HalSendToTxUART('\r');
@@ -170,22 +170,22 @@ u32 _MostPrint(char * str) {
     return cnt;
 }
 
-static void MostRawPrintfCallback(const char * fmt, ...) {
+static void MosRawPrintfCallback(const char * fmt, ...) {
     va_list args;
     va_start(args, fmt);
-    FormatString(RawPrintBuffer, MOST_PRINT_BUFFER_SIZE, fmt, args);
+    FormatString(RawPrintBuffer, Mos_PRINT_BUFFER_SIZE, fmt, args);
     va_end(args);
-    _MostPrint(RawPrintBuffer);
+    _MosPrint(RawPrintBuffer);
 }
 
-void MostInit(u32 mask, bool enable_raw_printf_hook) {
-    MostTraceMask = mask;
+void MosInitTrace(u32 mask, bool enable_raw_printf_hook) {
+    MosTraceMask = mask;
     MosInitMutex(&PrintMutex);
     if (enable_raw_printf_hook)
-        MosRegisterRawPrintfHook(MostRawPrintfCallback);
+        MosRegisterRawPrintfHook(MosRawPrintfCallback);
 }
 
-u32 MostItoa(char * restrict out, s32 in, u16 base, bool is_upper,
+u32 MosItoa(char * restrict out, s32 in, u16 base, bool is_upper,
              u16 min_digits, char pad_char, bool is_signed) {
     u32 adj = (u32) in;
     u8 shift = 0;
@@ -235,7 +235,7 @@ u32 MostItoa(char * restrict out, s32 in, u16 base, bool is_upper,
     return cnt;
 }
 
-u32 MostItoa64(char * restrict out, s64 in, u16 base, bool is_upper,
+u32 MosItoa64(char * restrict out, s64 in, u16 base, bool is_upper,
                u16 min_digits, char pad_char, bool is_signed) {
     u64 adj = (u64) in;
     u32 cnt = 0;
@@ -285,42 +285,42 @@ u32 MostItoa64(char * restrict out, s64 in, u16 base, bool is_upper,
     return cnt;
 }
 
-u32 MostPrint(char * str) {
+u32 MosPrint(char * str) {
     MosTakeMutex(&PrintMutex);
-    u32 cnt = _MostPrint(str);
+    u32 cnt = _MosPrint(str);
     MosGiveMutex(&PrintMutex);
     return cnt;
 }
 
-u32 MostPrintf(const char * fmt, ...) {
+u32 MosPrintf(const char * fmt, ...) {
     va_list args;
     va_start(args, fmt);
     MosTakeMutex(&PrintMutex);
-    FormatString(PrintBuffer, MOST_PRINT_BUFFER_SIZE, fmt, args);
-    u32 cnt = _MostPrint(PrintBuffer);
+    FormatString(PrintBuffer, Mos_PRINT_BUFFER_SIZE, fmt, args);
+    u32 cnt = _MosPrint(PrintBuffer);
     MosGiveMutex(&PrintMutex);
     va_end(args);
     return cnt;
 }
 
-void MostLogTraceMessage(char * id, const char * fmt, ...) {
+void MosLogTraceMessage(char * id, const char * fmt, ...) {
     va_list args;
     va_start(args, fmt);
     MosTakeMutex(&PrintMutex);
-    _MostPrint(id);
-    FormatString(PrintBuffer, MOST_PRINT_BUFFER_SIZE, fmt, args);
-    _MostPrint(PrintBuffer);
+    _MosPrint(id);
+    FormatString(PrintBuffer, Mos_PRINT_BUFFER_SIZE, fmt, args);
+    _MosPrint(PrintBuffer);
     MosGiveMutex(&PrintMutex);
     va_end(args);
 }
 
-void MostLogHexDumpMessage(char * id, char * name,
+void MosLogHexDumpMessage(char * id, char * name,
                            const void * addr, u32 size) {
     const u8 * restrict data = (const u8 *) addr;
     MosTakeMutex(&PrintMutex);
-    _MostPrint(id);
-    _MostPrint(name);
-    _MostPrint("\n");
+    _MosPrint(id);
+    _MosPrint(name);
+    _MosPrint("\n");
     // 16 bytes per line
     for (u32 lines = (size >> 4) + 1; lines > 0; lines--) {
         char * buf = PrintBuffer;
@@ -330,29 +330,29 @@ void MostLogHexDumpMessage(char * id, char * name,
             if (bytes == 0) break;
         }
         // Address
-        buf += MostItoa(buf, (s32) data, 16, true, 8, '0', false);
+        buf += MosItoa(buf, (s32) data, 16, true, 8, '0', false);
         *buf++ = ' ';
         *buf++ = ' ';
         for (; bytes > 0; bytes--) {
-            buf += MostItoa(buf, *data, 16, true, 2, '0', false);
+            buf += MosItoa(buf, *data, 16, true, 2, '0', false);
             *buf++ = ' ';
             data++;
         }
         *buf++ = '\n';
         *buf++ = '\0';
-        _MostPrint(PrintBuffer);
+        _MosPrint(PrintBuffer);
     }
     MosGiveMutex(&PrintMutex);
 }
 
-void MostTakeMutex(void) {
+void MosTakeTraceMutex(void) {
     MosTakeMutex(&PrintMutex);
 }
 
-bool MostTryMutex(void) {
+bool MosTryTraceMutex(void) {
     return MosTryMutex(&PrintMutex);
 }
 
-void MostGiveMutex(void) {
+void MosGiveTraceMutex(void) {
     MosGiveMutex(&PrintMutex);
 }

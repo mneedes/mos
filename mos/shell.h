@@ -20,40 +20,40 @@
 #include "mos/kernel.h"
 
 // Command shell callback
-typedef s32 (MossCmdFunc)(s32 argc, char * argv[]);
+typedef s32 (MosCmdFunc)(s32 argc, char * argv[]);
 
 // Command entry
-typedef struct MossCmd {
-    MossCmdFunc * func;
+typedef struct MosCmd {
+    MosCmdFunc * func;
     char * name;
     char * desc;
     char * usage;
     MosList list;
-} MossCmd;
+} MosCmd;
 
 // Command List
-typedef struct MossCmdList {
+typedef struct MosCmdList {
     MosList list;
     MosMutex mtx;
-} MossCmdList;
+} MosCmdList;
 
 typedef enum {
     MOSS_CMD_RECEIVED,
     MOSS_CMD_UP_ARROW,
     MOSS_CMD_DOWN_ARROW,
     //MOSS_CMD_TIMEOUT,
-} MossCmdResult;
+} MosCmdResult;
 
 // Command shell support
-void MossInit(void);
-void MossInitCmdList(MossCmdList * cmd_list);
-void MossAddCmd(MossCmdList * cmd_list, MossCmd * cmd);
-void MossRemoveCmd(MossCmdList * cmd_list, MossCmd * cmd);
-MossCmd * MossFindCmd(MossCmdList * cmd_list, char * name);
-void MossPrintCmdHelp(MossCmdList * cmd_list);
+void MosInitShell(void);
+void MosInitCmdList(MosCmdList * cmd_list);
+void MosAddCmd(MosCmdList * cmd_list, MosCmd * cmd);
+void MosRemoveCmd(MosCmdList * cmd_list, MosCmd * cmd);
+MosCmd * MosFindCmd(MosCmdList * cmd_list, char * name);
+void MosPrintCmdHelp(MosCmdList * cmd_list);
 //  Parser support quotes and escape character '\'
-MossCmdResult MossGetNextCmd(char * prompt, char * cmd, u32 max_cmd_len);
-//  NOTE: MossParseCmd modifies args in place like _strtok()
-u32 MossParseCmd(char * argv[], char * args, u32 max_argc);
+MosCmdResult MosGetNextCmd(char * prompt, char * cmd, u32 max_cmd_len);
+//  NOTE: MosParseCmd modifies args in place like _strtok()
+u32 MosParseCmd(char * argv[], char * args, u32 max_argc);
 
 #endif

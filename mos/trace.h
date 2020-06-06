@@ -19,46 +19,46 @@
 #include "mos/kernel.h"
 
 // Display trace message
-#define MostLogTrace(level, args...) \
-    if (MostTraceMask & (level)) \
-        { MostLogTraceMessage(__FILE__ "[" MOS__LINE__ "]:", args); }
+#define MosLogTrace(level, args...) \
+    if (MosTraceMask & (level)) \
+        { MosLogTraceMessage(__FILE__ "[" MOS__LINE__ "]:", args); }
 
 // Display trace hex dump
-#define MostLogHexDump(level, name_p, addr_p, size) \
-    if (MostTraceMask & (level)) \
-        { MostLogHexDumpMessage(__FILE__ "[" MOS__LINE__ "]:", \
+#define MosLogHexDump(level, name_p, addr_p, size) \
+    if (MosTraceMask & (level)) \
+        { MosLogHexDumpMessage(__FILE__ "[" MOS__LINE__ "]:", \
                                (name_p), (addr_p), (size)); }
 
 // Set the trace mask
-#define MostSetMask(mask) { MostTraceMask = (mask); }
+#define MosSetMask(mask) { MosTraceMask = (mask); }
 
 // Trace mask
-extern u32 MostTraceMask;
+extern u32 MosTraceMask;
 
 // Initialize module
 //   if enable_raw_print_hook is true, then operate low-level prints
 //   through this module.
-void MostInit(u32 mask, bool enable_raw_print_hook);
+void MosInitTrace(u32 mask, bool enable_raw_print_hook);
 
-u32 MostItoa(char * restrict out, s32 input, u16 base, bool is_upper,
+u32 MosItoa(char * restrict out, s32 input, u16 base, bool is_upper,
              u16 min_digits, char pad_char, bool is_signed);
 
-u32 MostItoa64(char * restrict out, s64 input, u16 base, bool is_upper,
+u32 MosItoa64(char * restrict out, s64 input, u16 base, bool is_upper,
                u16 min_digits, char pad_char, bool is_signed);
 
-u32 MostPrint(char * str);
-u32 MostPrintf(const char * fmt, ...);
+u32 MosPrint(char * str);
+u32 MosPrintf(const char * fmt, ...);
 
 // Parse format string and arguments into provided buffer
-void MostLogTraceMessage(char * id, const char * fmt, ...);
+void MosLogTraceMessage(char * id, const char * fmt, ...);
 
 // Create a hex dump into provided buffer
-void MostLogHexDumpMessage(char * id, char * name,
+void MosLogHexDumpMessage(char * id, char * name,
                            const void * addr, u32 size);
 
 // Callers can use mutex for multi-line prints
-void MostTakeMutex(void);
-bool MostTryMutex(void);
-void MostGiveMutex(void);
+void MosTakeTraceMutex(void);
+bool MosTryTraceMutex(void);
+void MosGiveTraceMutex(void);
 
 #endif

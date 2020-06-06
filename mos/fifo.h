@@ -8,8 +8,8 @@
 // Miscellaneous
 //
 
-#ifndef _MOS_QUEUE_H_
-#define _MOS_QUEUE_H_
+#ifndef _MOS_FIFO_H_
+#define _MOS_FIFO_H_
 
 #include "mos/kernel.h"
 
@@ -21,14 +21,14 @@ typedef struct {
     u32 len;
     volatile u32 tail;
     volatile u32 head;
-} MosqFIFO;
+} MosFIFO32;
 
 // Non-blocking FIFO
-void MosqInitFIFO(MosqFIFO * fifo, u32 * buf, u32 len);
-bool MosqWriteToFIFO(MosqFIFO * fifo, u32 data);
-bool MosqReadFromFIFO(MosqFIFO * fifo, u32 * data);
+void MosInitFIFO32(MosFIFO32 * fifo, u32 * buf, u32 len);
+bool MosWriteToFIFO32(MosFIFO32 * fifo, u32 data);
+bool MosReadFromFIFO32(MosFIFO32 * fifo, u32 * data);
 
 // Read head without removing entry
-bool MosqSnoopFIFO(MosqFIFO * fifo, u32 * data);
+bool MosSnoopFIFO32(MosFIFO32 * fifo, u32 * data);
 
 #endif

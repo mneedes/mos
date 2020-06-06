@@ -19,38 +19,38 @@ static MosQueue RxQueue;
 static u32 RxQueueBuf[16];
 
 // Callback must be ISR safe
-static void MossRxCallback(char ch) {
+static void MosRxCallback(char ch) {
     MosSendToQueue(&RxQueue, (u32)ch);
 }
 
-void MossInit() {
+void MosInitShell() {
     MosInitQueue(&RxQueue, RxQueueBuf, count_of(RxQueueBuf));
-    HalRegisterRxUARTCallback(MossRxCallback);
+    HalRegisterRxUARTCallback(MosRxCallback);
 }
 
-void MossInitCmdList(MossCmdList * cmd_list) {
+void MosInitCmdList(MosCmdList * cmd_list) {
     MosInitMutex(&cmd_list->mtx);
     MosInitList(&cmd_list->list);
 }
 
-void MossAddCmd(MossCmdList * cmd_list, MossCmd * cmd) {
+void MosAddCmd(MosCmdList * cmd_list, MosCmd * cmd) {
     MosTakeMutex(&cmd_list->mtx);
     MosInitList(&cmd->list);
     MosAddToList(&cmd_list->list, &cmd->list);
     MosGiveMutex(&cmd_list->mtx);
 }
 
-void MossRemoveCmd(MossCmdList * cmd_list, MossCmd * cmd) {
+void MosRemoveCmd(MosCmdList * cmd_list, MosCmd * cmd) {
     MosTakeMutex(&cmd_list->mtx);
     MosRemoveFromList(&cmd->list);
     MosGiveMutex(&cmd_list->mtx);
 }
 
-MossCmd * MossFindCmd(MossCmdList * cmd_list, char * name) {
+MosCmd * MosFindCmd(MosCmdList * cmd_list, char * name) {
     MosTakeMutex(&cmd_list->mtx);
     MosList * list = &cmd_list->list;
     for (MosList * elm = list->next; elm != list; elm = elm->next) {
-        MossCmd * cmd = container_of(elm, MossCmd, list);
+        MosCmd * cmd = container_of(elm, MosCmd, list);
         if (strcmp(name, cmd->name) == 0) {
             MosGiveMutex(&cmd_list->mtx);
             return cmd;
@@ -60,19 +60,19 @@ MossCmd * MossFindCmd(MossCmdList * cmd_list, char * name) {
     return NULL;
 }
 
-void MossPrintCmdHelp(MossCmdList * cmd_list) {
+void MosPrintCmdHelp(MosCmdList * cmd_list) {
     MosList * list = &cmd_list->list;
     MosTakeMutex(&cmd_list->mtx);
-    MostTakeMutex();
+    MosTakeTraceMutex();
     for (MosList * elm = list->next; elm != list; elm = elm->next) {
-        MossCmd * cmd = container_of(elm, MossCmd, list);
-        MostPrintf("%s %s: %s\n", cmd->name, cmd->usage, cmd->desc);
+        MosCmd * cmd = container_of(elm, MosCmd, list);
+        MosPrintf("%s %s: %s\n", cmd->name, cmd->usage, cmd->desc);
     }
-    MostGiveMutex();
+    MosGiveTraceMutex();
     MosGiveMutex(&cmd_list->mtx);
 }
 
-MossCmdResult MossGetNextCmd(char * prompt, char * cmd, u32 max_cmd_len) {
+MosCmdResult MosGetNextCmd(char * prompt, char * cmd, u32 max_cmd_len) {
     enum {
         KEY_NORMAL,
         KEY_ESCAPE,
@@ -80,14 +80,14 @@ MossCmdResult MossGetNextCmd(char * prompt, char * cmd, u32 max_cmd_len) {
     };
     static u32 buf_ix = 0;
     static bool last_ch_was_arrow = false;
-    MostTakeMutex();
+    MosTakeTraceMutex();
     if (buf_ix) {
-        for (u32 ix = 0; ix < buf_ix; ix++) _MostPrint("\b \b");
+        for (u32 ix = 0; ix < buf_ix; ix++) _MosPrint("\b \b");
     } else if (prompt && !last_ch_was_arrow) {
-        _MostPrint(prompt);
+        _MosPrint(prompt);
     }
-    buf_ix = _MostPrint(cmd);
-    MostGiveMutex();
+    buf_ix = _MosPrint(cmd);
+    MosGiveTraceMutex();
     last_ch_was_arrow = false;
     u32 state = KEY_NORMAL;
     while (1) {
@@ -98,7 +98,7 @@ MossCmdResult MossGetNextCmd(char * prompt, char * cmd, u32 max_cmd_len) {
             switch (ch) {
             default:
                 if (buf_ix < max_cmd_len && ch > 31) {
-                    _MostPrintCh(ch);
+                    _MosPrintCh(ch);
                     cmd[buf_ix++] = ch;
                 }
                 break;
@@ -108,12 +108,12 @@ MossCmdResult MossGetNextCmd(char * prompt, char * cmd, u32 max_cmd_len) {
             case '\b':
             case 127:
                 if (buf_ix) {
-                    MostPrint("\b \b");
+                    MosPrint("\b \b");
                     buf_ix--;
                 }
                 break;
             case '\r':
-                MostPrint("\n");
+                MosPrint("\n");
                 cmd[buf_ix] = '\0';
                 buf_ix = 0;
                 return MOSS_CMD_RECEIVED;
@@ -140,7 +140,7 @@ MossCmdResult MossGetNextCmd(char * prompt, char * cmd, u32 max_cmd_len) {
     }
 }
 
-u32 MossParseCmd(char * argv[], char * args, u32 max_argc) {
+u32 MosParseCmd(char * argv[], char * args, u32 max_argc) {
     if (args == NULL || args[0] == '\0') return 0;
     char * ch_in = args, * ch_out = args;
     bool in_arg = false, in_quote = false;

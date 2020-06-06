@@ -18,11 +18,11 @@
 // TODO: Can use this to enable floating point context save for CM4F
 #endif
 
-// TODO: WaitForThreadStop on Mux?
 // TODO: Clearing wait flags after thread kill / wait counter?
 // TODO: Suppress yields on semaphores if no thread is waiting.  Unlike Mutex
 //       Semaphore yields may be tricky since they can happen during high
 //       priority interrupts that are interrupting PendSV handler.
+// TODO: Timer queue --> For threads / Timer queue --> Timer messages to threads
 
 #define MOS_IDLE_THREAD_ID      0
 #define MOS_MAX_THREADS         (MOS_MAX_APP_THREADS + 1)

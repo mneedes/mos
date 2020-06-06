@@ -84,7 +84,7 @@ bool HalTests(u8 * stacks[], u32 stack_size) {
     // Run two timers over busy thread
     //
     test_pass = true;
-    MostPrint("Hal Timer Test\n");
+    MosPrint("Hal Timer Test\n");
     MosInitAndRunThread(1, 1, TimerTestThread, 0, stacks[1], stack_size);
     MosInitAndRunThread(2, 1, TimerTestThread2, 1, stacks[2], stack_size);
     MosInitAndRunThread(3, 2, TimerTestBusyThread, 2, stacks[3], stack_size);
@@ -95,14 +95,14 @@ bool HalTests(u8 * stacks[], u32 stack_size) {
     if (MosWaitForThreadStop(1) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(2) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(3) != TEST_PASS) test_pass = false;
-    if (test_pass) MostPrint(" Passed\n");
-    else MostPrint(" Failed\n");
+    if (test_pass) MosPrint(" Passed\n");
+    else MosPrint(" Failed\n");
 #elif RUN_TEST == 2
     //
     // Run timer over two busy threads
     //
     test_pass = true;
-    MostPrint("Hal Timer Test 2\n");
+    MosPrint("Hal Timer Test 2\n");
     MosInitAndRunThread(1, 1, TimerTestThread, 0, stacks[1], stack_size);
     MosInitAndRunThread(2, 2, TimerTestBusyThread, 1, stacks[2], stack_size);
     MosInitAndRunThread(3, 2, TimerTestBusyThread, 2, stacks[3], stack_size);
@@ -113,14 +113,14 @@ bool HalTests(u8 * stacks[], u32 stack_size) {
     if (MosWaitForThreadStop(1) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(2) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(3) != TEST_PASS) test_pass = false;
-    if (test_pass) MostPrint(" Passed\n");
-    else MostPrint(" Failed\n");
+    if (test_pass) MosPrint(" Passed\n");
+    else MosPrint(" Failed\n");
 #elif RUN_TEST == 3
     //
     // Run odd timers
     //
     test_pass = true;
-    MostPrint("Hal Timer Test 3\n");
+    MosPrint("Hal Timer Test 3\n");
     MosInitAndRunThread(1, 1, TimerTestThreadOdd, 33, stacks[1], stack_size);
     MosInitAndRunThread(2, 2, TimerTestThreadOdd, 13 | 0x10000, stacks[2], stack_size);
     MosInitAndRunThread(3, 3, TimerTestThreadOdd, 37 | 0x20000, stacks[3], stack_size);
@@ -131,14 +131,14 @@ bool HalTests(u8 * stacks[], u32 stack_size) {
     if (MosWaitForThreadStop(1) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(2) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(3) != TEST_PASS) test_pass = false;
-    if (test_pass) MostPrint(" Passed\n");
-    else MostPrint(" Failed\n");
+    if (test_pass) MosPrint(" Passed\n");
+    else MosPrint(" Failed\n");
 #elif RUN_TEST == 4
     //
     // Spin up max threads
     //
     test_pass = true;
-    MostPrint("Hal Timer Test 4\n");
+    MosPrint("Hal Timer Test 4\n");
     for (u32 ix = 1; ix <= MOS_MAX_APP_THREADS - 2; ix++)
         MosInitAndRunThread(ix, 1, TimerTestBusyThread, ix, stacks[ix], stack_size);
     MosDelayThread(test_time);
@@ -146,8 +146,8 @@ bool HalTests(u8 * stacks[], u32 stack_size) {
         MosRequestThreadStop(ix);
         if (MosWaitForThreadStop(ix) != TEST_PASS) test_pass = false;
     }
-    if (test_pass) MostPrint(" Passed\n");
-    else MostPrint(" Failed\n");
+    if (test_pass) MosPrint(" Passed\n");
+    else MosPrint(" Failed\n");
 #endif
     return test_pass;
 }

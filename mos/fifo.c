@@ -8,16 +8,16 @@
 // Miscellaneous
 //
 
-#include "mos/queue.h"
+#include <mos/fifo.h>
 
-void MosqInitFIFO(MosqFIFO * fifo, u32 * buf, u32 len) {
+void MosInitFIFO32(MosFIFO32 * fifo, u32 * buf, u32 len) {
     fifo->buf = buf;
     fifo->len = len;
     fifo->tail = 0;
     fifo->head = 0;
 }
 
-bool MosqWriteToFIFO(MosqFIFO * fifo, u32 data) {
+bool MosWriteToFIFO32(MosFIFO32 * fifo, u32 data) {
     u32 new_tail = fifo->tail + 1;
     if (new_tail >= fifo->len) new_tail = 0;
     if (fifo->head == new_tail) return false;
@@ -27,7 +27,7 @@ bool MosqWriteToFIFO(MosqFIFO * fifo, u32 data) {
     return true;
 }
 
-bool MosqReadFromFIFO(MosqFIFO * fifo, u32 * data) {
+bool MosReadFromFIFO32(MosFIFO32 * fifo, u32 * data) {
     if (fifo->head == fifo->tail) return false;
     *data = fifo->buf[fifo->head];
     asm volatile ( "dmb" );
@@ -36,7 +36,7 @@ bool MosqReadFromFIFO(MosqFIFO * fifo, u32 * data) {
     return true;
 }
 
-bool MosqSnoopFIFO(MosqFIFO * fifo, u32 * data) {
+bool MosSnoopFIFO32(MosFIFO32 * fifo, u32 * data) {
     if (fifo->head == fifo->tail) return false;
     *data = fifo->buf[fifo->head];
     return true;
