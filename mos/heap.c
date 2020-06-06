@@ -13,7 +13,7 @@ enum {
 };
 
 // MosBlockDesc and MosLink shall be sized to guarantee
-//   MOSH_HEAP_ALIGNED alignment.
+//   MOS_HEAP_ALIGNED alignment.
 
 typedef struct {
     u32 bs;
@@ -54,8 +54,8 @@ void MosInitHeap(MosHeap * heap, u8 * pit, u32 size, u8 nbs) {
 bool MosReserveBlockSize(MosHeap * heap, u32 bs) {
     bool success = false;
     // Round bs to next aligned value
-    if (bs % MOSH_HEAP_ALIGNMENT)
-        bs += (MOSH_HEAP_ALIGNMENT - (bs % MOSH_HEAP_ALIGNMENT));
+    if (bs % MOS_HEAP_ALIGNMENT)
+        bs += (MOS_HEAP_ALIGNMENT - (bs % MOS_HEAP_ALIGNMENT));
     MosTakeMutex(&heap->mtx);
     if (!MosIsListEmpty(&heap->bsl_free)) {
         MosBlockDesc * new_bd = container_of(heap->bsl_free.next,
@@ -153,8 +153,8 @@ void * MosAllocOddBlock(MosHeap * heap, u32 bs) {
     MosLink * link = NULL;
     MosLink * link_found = NULL;
     // Round bs to next aligned value
-    if (bs % MOSH_HEAP_ALIGNMENT)
-        bs += (MOSH_HEAP_ALIGNMENT - (bs % MOSH_HEAP_ALIGNMENT));
+    if (bs % MOS_HEAP_ALIGNMENT)
+        bs += (MOS_HEAP_ALIGNMENT - (bs % MOS_HEAP_ALIGNMENT));
     MosTakeMutex(&heap->mtx);
     // Find smallest available block in odd block list that accommodates size
     for (MosList * elm = heap->osl.next; elm != &heap->osl; elm = elm->next) {
@@ -188,8 +188,8 @@ void * MosAllocOddBlock(MosHeap * heap, u32 bs) {
 void * MosAllocShortLived(MosHeap * heap, u32 bs) {
     u8 * block = NULL;
     // Round bs to next aligned value
-    if (bs % MOSH_HEAP_ALIGNMENT)
-        bs += (MOSH_HEAP_ALIGNMENT - (bs % MOSH_HEAP_ALIGNMENT));
+    if (bs % MOS_HEAP_ALIGNMENT)
+        bs += (MOS_HEAP_ALIGNMENT - (bs % MOS_HEAP_ALIGNMENT));
     MosTakeMutex(&heap->mtx);
     if (heap->pit + bs < heap->bot) {
         heap->bot -= (bs + sizeof(MosLink));

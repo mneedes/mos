@@ -8,30 +8,25 @@
 //  MOS Microkernel
 //
 
+#include "mos_phal.h"
 #include "mos/kernel.h"
 
 #include <errno.h>
-
-#include "mos_phal.h"
 
 #if (__FPU_USED == 1U)
 // TODO: Can use this to enable floating point context save for CM4F
 #endif
 
-// TODO: Clearing wait flags after thread kill / wait counter?
 // TODO: Suppress yields on semaphores if no thread is waiting.  Unlike Mutex
 //       Semaphore yields may be tricky since they can happen during high
 //       priority interrupts that are interrupting PendSV handler.
 // TODO: Timer queue --> For threads / Timer queue --> Timer messages to threads
 
-#define MOS_IDLE_THREAD_ID      0
-#define MOS_MAX_THREADS         (MOS_MAX_APP_THREADS + 1)
-#define MOS_NO_THREADS          -1
-#define MOS_STACK_CANARY        0xba5eba11
+#define MAX_THREADS      (MOS_MAX_APP_THREADS + 1)
+#define NO_SUCH_THREAD    -1
+#define STACK_CANARY      0xba5eba11
 
-#define MOS_SHIFT_PRI(pri)      ((pri) << (8 - __NVIC_PRIO_BITS))
-
-#define MOS_EVENT(e, v) \
+#define EVENT(e, v) \
     { if (MOS_ENABLE_EVENTS) (*EventHook)((MOS_EVENT_ ## e), (v)); }
 
 typedef struct {
@@ -94,15 +89,15 @@ static MosParams Params = { .version = MOS_TO_STR(MOS_VERSION) };
 static MosRawPrintfHook * PrintfHook = NULL;
 static MosSleepHook * SleepHook = NULL;
 static MosWakeHook * WakeHook = NULL;
-void MosDummyEventHook(MosEvent e, u32 v) { }
-static MosEventHook * EventHook = MosDummyEventHook;
+static void DummyEventHook(MosEvent e, u32 v) { }
+static MosEventHook * EventHook = DummyEventHook;
 
 // Threads and Events
-static volatile MosThreadID RunningThreadID = MOS_NO_THREADS;
+static volatile MosThreadID RunningThreadID = NO_SUCH_THREAD;
 static volatile error_t * ErrNo;
-static Thread Threads[MOS_MAX_THREADS];
+static Thread Threads[MAX_THREADS];
 static MosList PriQueues[MOS_MAX_THREAD_PRIORITIES];
-static ThreadAuxData ThreadData[MOS_MAX_THREADS];
+static ThreadAuxData ThreadData[MAX_THREADS];
 static u32 IntDisableCount = 0;
 
 // Timers and Ticks
@@ -114,7 +109,7 @@ static u32 CyclesPerTick;
 static u32 MOS_USED CyclesPerMicroSec;
 
 // Idle thread stack and initial PSP safe storage
-static u8 MOS_STACK_ALIGNED MosIdleStack[2 * sizeof(StackFrame)];
+static u8 MOS_STACK_ALIGNED IdleStack[2 * sizeof(StackFrame)];
 
 // Mask interrupts by priority, primarily for temporarily
 //   disabling context switches.
@@ -181,7 +176,7 @@ static void InitThread(MosThreadID id, MosThreadPriority pri,
     ThreadData[id].stack_addr = s_addr;
     ThreadData[id].stack_size = s_size;
     // Initialize Stack
-    *((u32 *) s_addr) = MOS_STACK_CANARY;
+    *((u32 *) s_addr) = STACK_CANARY;
     StackFrame * sf = (StackFrame *) (s_addr + s_size);
     sf--;
     // Set Thumb Mode
@@ -198,10 +193,10 @@ static void InitThread(MosThreadID id, MosThreadPriority pri,
 }
 
 void SysTick_Handler(void) {
-    if (RunningThreadID == MOS_NO_THREADS) return;
+    if (RunningThreadID == NO_SUCH_THREAD) return;
     TickCount += TickInterval;
     MosYieldThread();
-    MOS_EVENT(TICK, TickCount);
+    EVENT(TICK, TickCount);
 }
 
 static bool CheckMux(Thread * thd) {
@@ -237,7 +232,7 @@ ProcessThread(Thread * thd, MosThreadPriority pri, bool first_scan) {
     case THREAD_WAIT_FOR_MUTEX: {
             // Check mutex (nested priority inheritance algorithm)
             MosThreadID owner = thd->wait.mtx->owner;
-            if (thd->wait.mtx->owner == MOS_NO_THREADS) {
+            if (thd->wait.mtx->owner == NO_SUCH_THREAD) {
                 if (first_scan) thd->wait.mtx->to_yield = false;
                 return thd;
             } else {
@@ -286,9 +281,9 @@ ScanThreads(MosThreadPriority * pri, MosList ** thd_elm, bool first_scan) {
 }
 
 static u32 MOS_USED Scheduler(u32 sp) {
-    MOS_EVENT(SCHEDULER_ENTRY, 0);
+    EVENT(SCHEDULER_ENTRY, 0);
     // Save SP and ErrNo context
-    if (RunningThreadID != MOS_NO_THREADS) {
+    if (RunningThreadID != NO_SUCH_THREAD) {
         Threads[RunningThreadID].sp = sp;
         Threads[RunningThreadID].err_no = *ErrNo;
     } else RunningThreadID = MOS_IDLE_THREAD_ID;
@@ -400,7 +395,7 @@ static u32 MOS_USED Scheduler(u32 sp) {
     // Set next thread ID and errno and return its stack pointer
     RunningThreadID = run_thd->id;
     *ErrNo = Threads[RunningThreadID].err_no;
-    MOS_EVENT(SCHEDULER_EXIT, 0);
+    EVENT(SCHEDULER_EXIT, 0);
     return (u32)Threads[RunningThreadID].sp;
 }
 
@@ -426,13 +421,13 @@ static void MOS_USED FaultHandler(u32 fault_no, u32 * sp, bool in_isr) {
     if (PrintfHook) {
         (*PrintfHook)("*** %s Fault %s", fault_type[fault_no - 3],
                       in_isr ? "IN ISR " : "");
-        if (RunningThreadID == MOS_NO_THREADS) (*PrintfHook)("(Before MOS Run) ***\n");
+        if (RunningThreadID == NO_SUCH_THREAD) (*PrintfHook)("(Before MOS Run) ***\n");
         else {
             (*PrintfHook)("(ThreadID %u) ***\n", RunningThreadID);
             // Check for stack overflow
-            for (u32 ix = 0; ix < MOS_MAX_THREADS; ix++) {
+            for (u32 ix = 0; ix < MAX_THREADS; ix++) {
                 if (Threads[ix].state != THREAD_UNINIT) {
-                    if (*((u32 *)ThreadData[ix].stack_addr) != MOS_STACK_CANARY)
+                    if (*((u32 *)ThreadData[ix].stack_addr) != STACK_CANARY)
                         (*PrintfHook)("!!! ThreadID %u Stack overflow !!!\n", ix);
                 }
             }
@@ -446,7 +441,7 @@ static void MOS_USED FaultHandler(u32 fault_no, u32 * sp, bool in_isr) {
             if ((ix & 0x3) == 0x3) (*PrintfHook)("\n");
         }
     }
-    if (RunningThreadID == MOS_NO_THREADS || in_isr) {
+    if (RunningThreadID == NO_SUCH_THREAD || in_isr) {
         // Hang if fault occurred anywhere but in thread context
         while (1)
           ;
@@ -568,13 +563,13 @@ void MosInit(void) {
     if (pri_grp + __NVIC_PRIO_BITS < 7) subpri_bits = 0;
     if (subpri_bits == 0) {
         u32 pri = NVIC_EncodePriority(pri_grp, pri_low, 0);
-        IntPriMaskLow = MOS_SHIFT_PRI(pri);
+        IntPriMaskLow = (pri << (8 - __NVIC_PRIO_BITS));
         NVIC_SetPriority(SysTick_IRQn, pri);
         NVIC_SetPriority(PendSV_IRQn, pri);
     } else {
         u32 subpri = (1 << subpri_bits) - 2;
         u32 pri = NVIC_EncodePriority(pri_grp, pri_low, subpri);
-        IntPriMaskLow = MOS_SHIFT_PRI(pri);
+        IntPriMaskLow = (pri << (8 - __NVIC_PRIO_BITS));
         NVIC_SetPriority(SysTick_IRQn, pri);
         NVIC_SetPriority(PendSV_IRQn, NVIC_EncodePriority(pri_grp, pri_low, subpri + 1));
     }
@@ -584,7 +579,7 @@ void MosInit(void) {
     MosInitList(&Timers);
     // Create idle thread
     MosInitAndRunThread(MOS_IDLE_THREAD_ID, MOS_MAX_THREAD_PRIORITIES,
-                        IdleThread, 0, MosIdleStack, sizeof(MosIdleStack));
+                        IdleThread, 0, IdleStack, sizeof(IdleStack));
     // Fill out parameters
     Params.max_app_threads = MOS_MAX_APP_THREADS;
     Params.thread_pri_hi = 0;
@@ -609,7 +604,7 @@ void MosRunScheduler(void) {
         "cpsie if\n\t"
         "b SkipRS\n\t"
         ".balign 4\n\t"
-        "psp_start: .word MosIdleStack + 64\n\t"
+        "psp_start: .word IdleStack + 64\n\t"
         "SkipRS:\n\t"
             : : : "r0"
     );
@@ -626,7 +621,7 @@ const MosParams * MosGetParams(void) {
 }
 
 void MosYieldThread(void) {
-    if (RunningThreadID == MOS_NO_THREADS) return;
+    if (RunningThreadID == NO_SUCH_THREAD) return;
     // Invoke PendSV handler to potentially perform context switch
     SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
     asm volatile ( "isb" );
@@ -804,7 +799,7 @@ void MosMoveToEndOfList(MosList * elm_exist, MosList * elm_move) {
 }
 
 void MosInitMutex(MosMutex * mtx) {
-    mtx->owner = MOS_NO_THREADS;
+    mtx->owner = NO_SUCH_THREAD;
     mtx->depth = 0;
     mtx->to_yield = false;
 }

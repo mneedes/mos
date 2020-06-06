@@ -43,6 +43,7 @@
 #define MOS_OPT(x)             __attribute__((optimize(x)))
 #define MOS_ALIGNED(x)         __attribute__((aligned(x)))
 
+#define MOS_IDLE_THREAD_ID     0
 #define MOS_STACK_ALIGNMENT    8
 #define MOS_STACK_ALIGNED      MOS_ALIGNED(MOS_STACK_ALIGNMENT)
 

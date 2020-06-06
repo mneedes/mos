@@ -38,10 +38,10 @@ typedef struct MosCmdList {
 } MosCmdList;
 
 typedef enum {
-    MOSS_CMD_RECEIVED,
-    MOSS_CMD_UP_ARROW,
-    MOSS_CMD_DOWN_ARROW,
-    //MOSS_CMD_TIMEOUT,
+    MOS_CMD_RECEIVED,
+    MOS_CMD_UP_ARROW,
+    MOS_CMD_DOWN_ARROW,
+    //MOS_CMD_TIMEOUT,
 } MosCmdResult;
 
 // Command shell support

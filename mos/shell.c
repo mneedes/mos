@@ -116,7 +116,7 @@ MosCmdResult MosGetNextCmd(char * prompt, char * cmd, u32 max_cmd_len) {
                 MosPrint("\n");
                 cmd[buf_ix] = '\0';
                 buf_ix = 0;
-                return MOSS_CMD_RECEIVED;
+                return MOS_CMD_RECEIVED;
             }
             break;
         case KEY_ESCAPE:
@@ -127,11 +127,11 @@ MosCmdResult MosGetNextCmd(char * prompt, char * cmd, u32 max_cmd_len) {
             if (ch == 'A') {
                 last_ch_was_arrow = true;
                 cmd[buf_ix] = '\0';
-                return MOSS_CMD_UP_ARROW;
+                return MOS_CMD_UP_ARROW;
             } else if (ch == 'B') {
                 last_ch_was_arrow = true;
                 cmd[buf_ix] = '\0';
-                return MOSS_CMD_DOWN_ARROW;
+                return MOS_CMD_DOWN_ARROW;
             } else {
                 state = KEY_NORMAL;
             }

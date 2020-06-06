@@ -7,7 +7,7 @@
 //
 // MOS Heap Allocation Methods:
 //  1. MosReserveBlockSize() / MosAllocBlock() / MosFree()
-//     Allocation from a set of reserved block sizes.    Once a block has been
+//     Allocation from a set of reserved block sizes.  Once a block has been
 //     allocated using this method it can be returned and reallocated but its
 //     size cannot change.  This method is deterministic.
 //  2. MosAllocOddBlock() / MosFree()
@@ -25,13 +25,15 @@
 //     be returned "within a tick or two" to prevent fragmentation. These
 //     blocks can be of any size.
 
+//  All block sizes must be reserved prior to using heap
+
 #ifndef _MOS_HEAP_H_
 #define _MOS_HEAP_H_
 
 #include "mos/kernel.h"
 
-#define MOSH_HEAP_ALIGNED      MOS_STACK_ALIGNED
-#define MOSH_HEAP_ALIGNMENT    MOS_STACK_ALIGNMENT
+#define MOS_HEAP_ALIGNED      MOS_STACK_ALIGNED
+#define MOS_HEAP_ALIGNMENT    MOS_STACK_ALIGNMENT
 
 typedef struct {
     MosMutex mtx;
