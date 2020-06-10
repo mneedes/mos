@@ -1560,4 +1560,3 @@ int InitTestBench() {
                         Stacks[0], TEST_SHELL_STACK_SIZE);
     return 0;
 }
-

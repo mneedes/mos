@@ -186,7 +186,7 @@ void MosInitTrace(u32 mask, bool enable_raw_printf_hook) {
 }
 
 u32 MosItoa(char * restrict out, s32 in, u16 base, bool is_upper,
-             u16 min_digits, char pad_char, bool is_signed) {
+            u16 min_digits, char pad_char, bool is_signed) {
     u32 adj = (u32) in;
     u8 shift = 0;
     switch (base) {
@@ -236,7 +236,7 @@ u32 MosItoa(char * restrict out, s32 in, u16 base, bool is_upper,
 }
 
 u32 MosItoa64(char * restrict out, s64 in, u16 base, bool is_upper,
-               u16 min_digits, char pad_char, bool is_signed) {
+              u16 min_digits, char pad_char, bool is_signed) {
     u64 adj = (u64) in;
     u32 cnt = 0;
     u8 shift = 0;
@@ -315,7 +315,7 @@ void MosLogTraceMessage(char * id, const char * fmt, ...) {
 }
 
 void MosLogHexDumpMessage(char * id, char * name,
-                           const void * addr, u32 size) {
+                          const void * addr, u32 size) {
     const u8 * restrict data = (const u8 *) addr;
     MosTakeMutex(&PrintMutex);
     _MosPrint(id);

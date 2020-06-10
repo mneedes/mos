@@ -22,12 +22,14 @@ int main() {
 
     // Run init before calling any MOS functions
     MosInit();
+
+    // Init trace before calling any print functions
     MosInitTrace(TRACE_INFO | TRACE_ERROR | TRACE_FATAL, true);
     MosPrintf("\nMaintainable OS (Version %s)\n", MosGetParams()->version);
 
-    // Test bench is example App
+    // Initialize and Run test bench example Application.
     if (InitTestBench() == 0) {
-        // Start multitasking
+        // Start multitasking, running App threads.
         MosRunScheduler();
     }
     return -1;

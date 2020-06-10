@@ -41,10 +41,10 @@ extern u32 MosTraceMask;
 void MosInitTrace(u32 mask, bool enable_raw_print_hook);
 
 u32 MosItoa(char * restrict out, s32 input, u16 base, bool is_upper,
-             u16 min_digits, char pad_char, bool is_signed);
+            u16 min_digits, char pad_char, bool is_signed);
 
 u32 MosItoa64(char * restrict out, s64 input, u16 base, bool is_upper,
-               u16 min_digits, char pad_char, bool is_signed);
+              u16 min_digits, char pad_char, bool is_signed);
 
 u32 MosPrint(char * str);
 u32 MosPrintf(const char * fmt, ...);
@@ -54,7 +54,7 @@ void MosLogTraceMessage(char * id, const char * fmt, ...);
 
 // Create a hex dump into provided buffer
 void MosLogHexDumpMessage(char * id, char * name,
-                           const void * addr, u32 size);
+                          const void * addr, u32 size);
 
 // Callers can use mutex for multi-line prints
 void MosTakeTraceMutex(void);

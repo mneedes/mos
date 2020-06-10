@@ -25,7 +25,7 @@
 //     be returned "within a tick or two" to prevent fragmentation. These
 //     blocks can be of any size.
 
-//  All block sizes must be reserved prior to using heap
+//  NOTE: All reserved block sizes must be reserved prior to allocating from heap.
 
 #ifndef _MOS_HEAP_H_
 #define _MOS_HEAP_H_
