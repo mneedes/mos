@@ -525,6 +525,16 @@ static s32 SemTestThreadTx(s32 arg) {
     return TEST_PASS;
 }
 
+static s32 SemTestThreadTxFast(s32 arg) {
+    for (;;) {
+        MosGiveSem(&TestSem);
+        MosDelayMicroSec(10);
+        TestHisto[arg]++;
+        if (MosIsStopRequested()) break;
+    }
+    return TEST_PASS;
+}
+
 static s32 SemTestThreadRx(s32 arg) {
     for (;;) {
         MosTakeSem(&TestSem);
@@ -641,10 +651,38 @@ static bool SemTests(void) {
         tests_all_pass = false;
     }
     //
+    //
+    //
+    test_pass = true;
+    test_pass = true;
+    MosPrint("Sem Test 4\n");
+    ClearHistogram();
+    MosInitSem(&TestSem, 5);
+    MosInitAndRunThread(1, 2, SemTestThreadTxFast, 0, Stacks[1], DFT_STACK_SIZE);
+    MosInitAndRunThread(2, 2, SemTestThreadTxFast, 1, Stacks[2], DFT_STACK_SIZE);
+    MosInitAndRunThread(3, 2, SemTestThreadRx, 2, Stacks[3], DFT_STACK_SIZE);
+    MosDelayThread(test_time);
+    MosRequestThreadStop(1);
+    MosRequestThreadStop(2);
+    MosDelayThread(5);
+    MosRequestThreadStop(3);
+    MosGiveSem(&TestSem);  // Unblock thread to stop
+    if (MosWaitForThreadStop(1) != TEST_PASS) test_pass = false;
+    if (MosWaitForThreadStop(2) != TEST_PASS) test_pass = false;
+    if (MosWaitForThreadStop(3) != TEST_PASS) test_pass = false;
+    DisplayHistogram(3);
+    if (TestHisto[2] != TestHisto[0] + TestHisto[1] + 5 + 1)
+        test_pass = false;
+    if (test_pass) MosPrint(" Passed\n");
+    else {
+        MosPrint(" Failed\n");
+        tests_all_pass = false;
+    }
+    //
     // TrySem
     //
     test_pass = true;
-    MosPrint("Sem Test 4\n");
+    MosPrint("Sem Test 5\n");
     ClearHistogram();
     MosInitSem(&TestSem, 5);
     MosInitAndRunThread(1, 1, SemTestThreadTx, 0, Stacks[1], DFT_STACK_SIZE);

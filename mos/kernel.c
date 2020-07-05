@@ -17,14 +17,12 @@
 // TODO: Can use this to enable floating point context save for CM4F
 #endif
 
-// TODO: Timer queue --> For threads / Timer queue --> Timer messages to threads
-// TODO: Reduce unnecessary context switches with semaphore implementation
-// TODO: Muxed semaphores and to_yield -- Could have a mux be implemented as a fifo
-//         that only scheduler can write
+// TODO: Timer queue --> Timer messages to threads
 
-#define MAX_THREADS      (MOS_MAX_APP_THREADS + 1)
-#define NO_SUCH_THREAD   -1
-#define STACK_CANARY     0xba5eba11
+#define MAX_THREADS          (MOS_MAX_APP_THREADS + 1)
+#define NO_SUCH_THREAD       -1
+#define NO_SUCH_PRI          0xffff
+#define STACK_CANARY         0xba5eba11
 
 #define EVENT(e, v) \
     { if (MOS_ENABLE_EVENTS) (*EventHook)((MOS_EVENT_ ## e), (v)); }
@@ -213,7 +211,8 @@ void SysTick_Handler(void) {
     EVENT(TICK, TickCount);
 }
 
-static bool CheckMux(Thread * thd) {
+static bool CheckMux(Thread * thd, MosThreadPriority pri, bool first_scan) {
+    bool found = false;
     MosMux * mux = thd->mux;
     for (u32 idx = 0; idx < mux->num; idx++) {
         MosSem * sem;
@@ -230,12 +229,21 @@ static bool CheckMux(Thread * thd) {
         default:
             continue;
         }
-        if (*sem > 0) {
-            ThreadData[thd->id].mux_idx = idx;
-            return true;
-        }
+        // Another thread of equal priority is waiting on a sem,
+        //   keep tick running
+        if (!first_scan) return true;
+        // Lock interrupts since semaphore may be given from ISR
+        asm volatile ( "cpsid if" );
+        if (sem->count != 0) {
+            if (first_scan) {
+                sem->block_pri = NO_SUCH_PRI;
+                if (!found) ThreadData[thd->id].mux_idx = idx;
+            }
+            found = true;
+        } else if (sem->block_pri > pri) sem->block_pri = pri;
+        asm volatile ( "cpsie if" );
     }
-    return false;
+    return found;
 }
 
 static Thread *
@@ -243,7 +251,8 @@ ProcessThread(Thread * thd, MosThreadPriority pri, bool first_scan) {
     switch (thd->state & 0xF) {
     case THREAD_RUNNABLE:
         return thd;
-    case THREAD_WAIT_FOR_MUTEX: {
+    case THREAD_WAIT_FOR_MUTEX:
+        {
             // Check mutex (nested priority inheritance algorithm)
             MosThreadID owner = thd->wait.mtx->owner;
             if (thd->wait.mtx->owner == NO_SUCH_THREAD) {
@@ -263,10 +272,24 @@ ProcessThread(Thread * thd, MosThreadPriority pri, bool first_scan) {
         }
         break;
     case THREAD_WAIT_FOR_SEM:
-        if (*thd->wait.sem != 0) return thd;
+        {
+            // Another thread of equal priority is waiting on a sem,
+            //   keep tick running
+            if (!first_scan) return thd;
+            // Lock interrupts since semaphore may be given from ISR
+            asm volatile ( "cpsid if" );
+            if (thd->wait.sem->count != 0) {
+                thd->wait.sem->block_pri = NO_SUCH_PRI;
+                asm volatile ( "cpsie if" );
+                return thd;
+            } else {
+                if (thd->wait.sem->block_pri > pri) thd->wait.sem->block_pri = pri;
+                asm volatile ( "cpsie if" );
+            }
+        }
         break;
     case THREAD_WAIT_ON_MUX:
-        if (CheckMux(thd)) return thd;
+        if (CheckMux(thd, pri, first_scan)) return thd;
         break;
     case THREAD_WAIT_FOR_STOP:
         if (thd->wait.thd->state == THREAD_STOPPED) return thd;
@@ -920,7 +943,8 @@ bool MosIsMutexOwner(MosMutex * mtx) {
 }
 
 void MosInitSem(MosSem * sem, u32 start_count) {
-    *sem = start_count;
+    sem->count = start_count;
+    sem->block_pri = NO_SUCH_PRI;
 }
 
 static void MOS_USED BlockOnSem(MosSem * sem) {
@@ -1002,6 +1026,12 @@ bool MOS_NAKED MosTrySem(MosSem * sem) {
     );
 }
 
+static void MOS_USED YieldOnSem(MosSem * sem) {
+    SetBasePri(IntPriMaskLow);
+    if (sem->block_pri < Threads[RunningThreadID].pri) YieldThread();
+    SetBasePri(0);
+}
+
 void MOS_NAKED MosGiveSem(MosSem * sem) {
     asm volatile (
         "push { lr }\n\t"
@@ -1011,11 +1041,8 @@ void MOS_NAKED MosGiveSem(MosSem * sem) {
         "strex r2, r1, [r0]\n\t"
         "cmp r2, #0\n\t"
         "bne RetryGS\n\t"
-        "cmp r1, #1\n\t"
         "dmb\n\t"
-        "blt SkipGS\n\t"
-        "bl MosYieldThread\n\t"
-        "SkipGS:\n\t"
+        "bl YieldOnSem\n\t"
         "pop { pc }\n\t"
             : : : "r0", "r1", "r2", "r3"
     );

@@ -61,7 +61,6 @@ typedef int64_t     s64;
 
 typedef s16 MosThreadID;
 typedef u16 MosThreadPriority;
-typedef volatile u32 MosSem;
 
 // Microkernel Parameters
 typedef struct {
@@ -100,6 +99,11 @@ typedef struct {
     s32 depth;
     bool to_yield;
 } MosMutex;
+
+typedef struct {
+    u32 count;
+    MosThreadPriority block_pri;
+} MosSem;
 
 // Doubly-linked lists (idea borrowed from famous OS)
 typedef struct MosList {
