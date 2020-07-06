@@ -17,8 +17,6 @@
 // TODO: Can use this to enable floating point context save for CM4F
 #endif
 
-// TODO: Timer queue --> Timer messages to threads
-
 #define MAX_THREADS          (MOS_MAX_APP_THREADS + 1)
 #define NO_SUCH_THREAD       -1
 #define NO_SUCH_PRI          0xffff
@@ -99,7 +97,8 @@ static ThreadAuxData ThreadData[MAX_THREADS];
 static u32 IntDisableCount = 0;
 
 // Timers and Ticks
-static MosList Timers;
+static MosList ThreadTimers;
+static MosList MessageTimers;
 static volatile u32 TickCount = MOS_START_TICK_COUNT;
 static volatile u32 TickInterval = 1;
 static u32 MaxTickInterval;
@@ -351,16 +350,16 @@ static u32 MOS_USED Scheduler(u32 sp) {
         // Insertion sort in timer queue
         s32 rem_ticks = (s32)Threads[RunningThreadID].wake_tick - adj_tick_count;
         MosList * tmr;
-        for (tmr = Timers.next; tmr != &Timers; tmr = tmr->next) {
+        for (tmr = ThreadTimers.next; tmr != &ThreadTimers; tmr = tmr->next) {
             Thread * tmr_thd = container_of(tmr, Thread, tmr_q);
             s32 tmr_rem_ticks = (s32)tmr_thd->wake_tick - adj_tick_count;
             if (rem_ticks <= tmr_rem_ticks) break;
         }
         MosAddToListBefore(tmr, &Threads[RunningThreadID].tmr_q);
     }
-    // Process timer queue
+    // Process thread timer queue
     MosList * tmr_save;
-    for (MosList * tmr = Timers.next; tmr != &Timers; tmr = tmr_save) {
+    for (MosList * tmr = ThreadTimers.next; tmr != &ThreadTimers; tmr = tmr_save) {
         tmr_save = tmr->next;
         Thread * thd = container_of(tmr, Thread, tmr_q);
         s32 rem_ticks = (s32)thd->wake_tick - adj_tick_count;
@@ -370,6 +369,15 @@ static u32 MOS_USED Scheduler(u32 sp) {
             ThreadData[thd->id].mux_idx = -1;
             SetThreadState(thd->id, THREAD_RUNNABLE);
             MosRemoveFromList(tmr);
+        } else break;
+    }
+    // Process message timer queue
+    for (MosList * tmr = MessageTimers.next; tmr != &MessageTimers; tmr = tmr_save) {
+        tmr_save = tmr->next;
+        MosTimer * timer = container_of(tmr, MosTimer, tmr_q);
+        s32 rem_ticks = (s32)timer->wake_tick - adj_tick_count;
+        if (rem_ticks <= 0) {
+            if (MosSendToQueue(timer->q, timer->msg)) MosRemoveFromList(tmr);
         } else break;
     }
     // Process Priority Queues
@@ -398,9 +406,19 @@ static u32 MOS_USED Scheduler(u32 sp) {
     //   If there is an active timer, delay tick to next expiration up to max
     u32 next_tick_interval = 1;
     if (tick_en == false) {
-        if (!MosIsListEmpty(&Timers)) {
-            Thread * thd = container_of(Timers.next, Thread, tmr_q);
-            s32 tmr_ticks_rem = (s32)thd->wake_tick - adj_tick_count;
+        // This ensures that the LOAD value will fit in SysTick counter...
+        s32 tmr_ticks_rem = 0x7fffffff;
+        if (!MosIsListEmpty(&ThreadTimers)) {
+            Thread * thd = container_of(ThreadTimers.next, Thread, tmr_q);
+            tmr_ticks_rem = (s32)thd->wake_tick - adj_tick_count;
+        }
+        if (!MosIsListEmpty(&MessageTimers)) {
+            MosTimer * tmr = container_of(MessageTimers.next, MosTimer, tmr_q);
+            s32 message_tmr_ticks_rem = (s32)tmr->wake_tick - adj_tick_count;
+            if (message_tmr_ticks_rem < tmr_ticks_rem)
+                tmr_ticks_rem = message_tmr_ticks_rem;
+        }
+        if (tmr_ticks_rem != 0x7fffffff) {
             // This ensures that the LOAD value will fit in SysTick counter...
             if (tmr_ticks_rem < MaxTickInterval)
                 next_tick_interval = tmr_ticks_rem;
@@ -567,6 +585,44 @@ void MOS_NAKED MosDelayMicroSec(u32 usec) {
     );
 }
 
+// Timers (work in progress, needs locks etc etc etc)
+
+void MosInitTimer(MosTimer * timer, MosQueue * q) {
+    MosInitList(&timer->tmr_q);
+    timer->q = q;
+}
+
+static void AddMessageTimer(MosTimer * timer) {
+    MosList * tmr;
+    SetBasePri(IntPriMaskLow);
+    u32 tick_count = MosGetTickCount();
+    timer->wake_tick = tick_count + timer->ticks;
+    for (tmr = MessageTimers.next; tmr != &MessageTimers; tmr = tmr->next) {
+        MosTimer * tmr_msg = container_of(tmr, MosTimer, tmr_q);
+        s32 tmr_rem_ticks = (s32)tmr_msg->wake_tick - tick_count;
+        if (timer->ticks <= tmr_rem_ticks) break;
+    }
+    MosAddToListBefore(tmr, &timer->tmr_q);
+    SetBasePri(0);
+}
+
+void MosSetTimer(MosTimer * timer, u32 ticks, u32 msg) {
+    timer->ticks = ticks;
+    timer->msg = msg;
+    AddMessageTimer(timer);
+}
+
+void MosCancelTimer(MosTimer * timer) {
+    SetBasePri(IntPriMaskLow);
+    MosRemoveFromList(&timer->tmr_q);
+    SetBasePri(0);
+}
+
+void MosResetTimer(MosTimer * timer) {
+    MosCancelTimer(timer);
+    AddMessageTimer(timer);
+}
+
 static s32 IdleThread(s32 arg) {
     while (1) {
         if (SleepHook) (*SleepHook)();
@@ -585,7 +641,7 @@ void MosInit(void) {
                    SCB_SHCSR_USGFAULTENA_Msk);
     // Trap Divide By 0 and "Unintentional" Unaligned Accesses
     SCB->CCR |= (SCB_CCR_DIV_0_TRP_Msk | SCB_CCR_UNALIGN_TRP_Msk);
-    // Cache errno pointer for use during context switch
+    // Save errno pointer for use during context switch
     ErrNo = __errno();
     // Set up timers with tick-reduction
     CyclesPerTick = SysTick->LOAD + 1;
@@ -614,7 +670,8 @@ void MosInit(void) {
     // Initialize empty priority, event and timer queues
     for (MosThreadPriority pri = 0; pri < MOS_MAX_THREAD_PRIORITIES; pri++)
         MosInitList(&PriQueues[pri]);
-    MosInitList(&Timers);
+    MosInitList(&ThreadTimers);
+    MosInitList(&MessageTimers);
     // Create idle thread
     MosInitAndRunThread(MOS_IDLE_THREAD_ID, MOS_MAX_THREAD_PRIORITIES,
                         IdleThread, 0, IdleStack, sizeof(IdleStack));

@@ -121,6 +121,14 @@ typedef struct {
     u32 head;
 } MosQueue;
 
+typedef struct {
+    u32 msg;
+    u32 wake_tick;
+    u32 ticks;
+    MosQueue * q;
+    MosList tmr_q;
+} MosTimer;
+
 // Allows blocking on multiple data structures simultaneously
 typedef struct {
     MosWaitType type;
@@ -168,11 +176,19 @@ void MosDisableInterrupts(void); // IS
 void MosEnableInterrupts(void); // IS
 
 // Time and Delays
+
 u32 MosGetTickCount(void);
 void MosDelayThread(u32 ticks);
 // For short delays, e.g.: useful for bit-banging.
 //   Keep in mind there is an upper limit to usec.
 void MosDelayMicroSec(u32 usec); // IS
+
+// Timers - Write specified message to queue at appointed time
+
+void MosInitTimer(MosTimer * timer, MosQueue * q);
+void MosSetTimer(MosTimer * timer, u32 ticks, u32 msg);
+void MosCancelTimer(MosTimer * timer);
+void MosResetTimer(MosTimer * timer);
 
 // Thread Functions
 
@@ -198,6 +214,7 @@ void MosSetKillHandler(MosThreadID id, MosHandler * handler, s32 arg);
 void MosSetKillArg(MosThreadID id, s32 arg);
 
 // Doubly-Linked Lists
+
 void MosInitList(MosList * list); // IS
 void MosAddToList(MosList * list, MosList * elm_add); // IS
 static void MOS_INLINE
@@ -224,6 +241,7 @@ static bool MOS_INLINE MosIsOnList(MosList * elm) { // IS
 }
 
 // Blocking Recursive Mutex with priority inheritance
+
 void MosInitMutex(MosMutex * mtx);
 void MosTakeMutex(MosMutex * mtx);
 bool MosTryMutex(MosMutex * mtx);
@@ -233,6 +251,7 @@ void MosRestoreMutex(MosMutex * mtx);
 bool MosIsMutexOwner(MosMutex * mtx);
 
 // Blocking Semaphore, intended for signaling
+
 void MosInitSem(MosSem * sem, u32 start_count);
 void MosTakeSem(MosSem * sem);
 // Returns false on timeout, true if taken
@@ -241,6 +260,7 @@ bool MosTrySem(MosSem * sem); // IS
 void MosGiveSem(MosSem * sem); // IS
 
 // Blocking Queue
+
 void MosInitQueue(MosQueue * queue, u32 * buf, u32 len);
 bool MosSendToQueue(MosQueue * queue, u32 data); // IS
 // Returns false on timeout, true if sent
@@ -252,6 +272,7 @@ bool MosReceiveFromQueueOrTO(MosQueue * queue, u32 * data, u32 ticks);
 
 // Mux (Block on multiple "selected" queues and/or semaphores)
 // NOTE: An active Mux should only be changed by the thread using it
+
 void MosInitMux(MosMux * mux);
 void MosSetActiveMux(MosMux * mux, MosMuxEntry * entries, u32 len);
 u32 MosWaitOnMux(MosMux * mux);

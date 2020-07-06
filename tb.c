@@ -321,7 +321,7 @@ static bool ThreadTests(void) {
 // Make delay a multiple of 4
 static const u32 timer_test_delay = 100;
 
-static s32 TimerTestThread(s32 arg) {
+static s32 ThreadTimerTestThread(s32 arg) {
     for (;;) {
         if (MosIsStopRequested()) break;
         MosDelayThread(timer_test_delay);
@@ -330,7 +330,7 @@ static s32 TimerTestThread(s32 arg) {
     return TEST_PASS;
 }
 
-static s32 TimerTestThread2(s32 arg) {
+static s32 ThreadTimerTestThread2(s32 arg) {
     for (;;) {
         if (MosIsStopRequested()) break;
         MosDelayThread(timer_test_delay / 2);
@@ -339,7 +339,7 @@ static s32 TimerTestThread2(s32 arg) {
     return TEST_PASS;
 }
 
-static s32 TimerTestThread4(s32 arg) {
+static s32 ThreadTimerTestThread4(s32 arg) {
     for (;;) {
         if (MosIsStopRequested()) break;
         MosDelayThread(timer_test_delay / 4);
@@ -348,7 +348,7 @@ static s32 TimerTestThread4(s32 arg) {
     return TEST_PASS;
 }
 
-static s32 TimerTestThreadOdd(s32 arg) {
+static s32 ThreadTimerTestThreadOdd(s32 arg) {
     for (;;) {
         if (MosIsStopRequested()) break;
         MosDelayThread(arg & 0xFFFF);
@@ -357,7 +357,7 @@ static s32 TimerTestThreadOdd(s32 arg) {
     return TEST_PASS;
 }
 
-static s32 TimerTestBusyThread(s32 arg) {
+static s32 ThreadTimerTestBusyThread(s32 arg) {
     for (;;) {
         if (MosIsStopRequested()) break;
         TestHisto[arg]++;
@@ -366,9 +366,9 @@ static s32 TimerTestBusyThread(s32 arg) {
 }
 
 //
-// Timer Tests
+// Thread Timer Tests
 //
-static bool TimerTests(void) {
+static bool ThreadTimerTests(void) {
     const u32 test_time = 5000;
     u32 exp_iter = test_time / timer_test_delay;
     bool tests_all_pass = true;
@@ -377,11 +377,11 @@ static bool TimerTests(void) {
     // Run uniform timers
     //
     test_pass = true;
-    MosPrint("Timer Test 1\n");
+    MosPrint("Thread Timer Test 1\n");
     ClearHistogram();
-    MosInitAndRunThread(1, 1, TimerTestThread, 0, Stacks[1], DFT_STACK_SIZE);
-    MosInitAndRunThread(2, 3, TimerTestThread, 1, Stacks[2], DFT_STACK_SIZE);
-    MosInitAndRunThread(3, 3, TimerTestThread, 2, Stacks[3], DFT_STACK_SIZE);
+    MosInitAndRunThread(1, 1, ThreadTimerTestThread, 0, Stacks[1], DFT_STACK_SIZE);
+    MosInitAndRunThread(2, 3, ThreadTimerTestThread, 1, Stacks[2], DFT_STACK_SIZE);
+    MosInitAndRunThread(3, 3, ThreadTimerTestThread, 2, Stacks[3], DFT_STACK_SIZE);
     MosDelayThread(test_time);
     MosRequestThreadStop(1);
     MosRequestThreadStop(2);
@@ -402,11 +402,11 @@ static bool TimerTests(void) {
     // Run "harmonic" timers
     //
     test_pass = true;
-    MosPrint("Timer Test 2\n");
+    MosPrint("Thread Timer Test 2\n");
     ClearHistogram();
-    MosInitAndRunThread(1, 1, TimerTestThread, 0, Stacks[1], DFT_STACK_SIZE);
-    MosInitAndRunThread(2, 3, TimerTestThread2, 1, Stacks[2], DFT_STACK_SIZE);
-    MosInitAndRunThread(3, 3, TimerTestThread4, 2, Stacks[3], DFT_STACK_SIZE);
+    MosInitAndRunThread(1, 1, ThreadTimerTestThread, 0, Stacks[1], DFT_STACK_SIZE);
+    MosInitAndRunThread(2, 3, ThreadTimerTestThread2, 1, Stacks[2], DFT_STACK_SIZE);
+    MosInitAndRunThread(3, 3, ThreadTimerTestThread4, 2, Stacks[3], DFT_STACK_SIZE);
     MosDelayThread(test_time);
     MosRequestThreadStop(1);
     MosRequestThreadStop(2);
@@ -427,11 +427,11 @@ static bool TimerTests(void) {
     // Run odd timers
     //
     test_pass = true;
-    MosPrint("Timer Test 3\n");
+    MosPrint("Thread Timer Test 3\n");
     ClearHistogram();
-    MosInitAndRunThread(1, 1, TimerTestThreadOdd, 13, Stacks[1], DFT_STACK_SIZE);
-    MosInitAndRunThread(2, 2, TimerTestThreadOdd, 33 | 0x10000, Stacks[2], DFT_STACK_SIZE);
-    MosInitAndRunThread(3, 3, TimerTestThreadOdd, 37 | 0x20000, Stacks[3], DFT_STACK_SIZE);
+    MosInitAndRunThread(1, 1, ThreadTimerTestThreadOdd, 13, Stacks[1], DFT_STACK_SIZE);
+    MosInitAndRunThread(2, 2, ThreadTimerTestThreadOdd, 33 | 0x10000, Stacks[2], DFT_STACK_SIZE);
+    MosInitAndRunThread(3, 3, ThreadTimerTestThreadOdd, 37 | 0x20000, Stacks[3], DFT_STACK_SIZE);
     MosDelayThread(test_time);
     MosRequestThreadStop(1);
     MosRequestThreadStop(2);
@@ -452,11 +452,11 @@ static bool TimerTests(void) {
     // Run two timers over busy thread
     //
     test_pass = true;
-    MosPrint("Timer Test 4\n");
+    MosPrint("Thread Timer Test 4\n");
     ClearHistogram();
-    MosInitAndRunThread(1, 1, TimerTestThread, 0, Stacks[1], DFT_STACK_SIZE);
-    MosInitAndRunThread(2, 1, TimerTestThread2, 1, Stacks[2], DFT_STACK_SIZE);
-    MosInitAndRunThread(3, 2, TimerTestBusyThread, 2, Stacks[3], DFT_STACK_SIZE);
+    MosInitAndRunThread(1, 1, ThreadTimerTestThread, 0, Stacks[1], DFT_STACK_SIZE);
+    MosInitAndRunThread(2, 1, ThreadTimerTestThread2, 1, Stacks[2], DFT_STACK_SIZE);
+    MosInitAndRunThread(3, 2, ThreadTimerTestBusyThread, 2, Stacks[3], DFT_STACK_SIZE);
     MosDelayThread(test_time);
     MosRequestThreadStop(1);
     MosRequestThreadStop(2);
@@ -476,11 +476,11 @@ static bool TimerTests(void) {
     // Run timer over two busy threads
     //
     test_pass = true;
-    MosPrint("Timer Test 5\n");
+    MosPrint("Thread Timer Test 5\n");
     ClearHistogram();
-    MosInitAndRunThread(1, 1, TimerTestThread, 0, Stacks[1], DFT_STACK_SIZE);
-    MosInitAndRunThread(2, 2, TimerTestBusyThread, 1, Stacks[2], DFT_STACK_SIZE);
-    MosInitAndRunThread(3, 2, TimerTestBusyThread, 2, Stacks[3], DFT_STACK_SIZE);
+    MosInitAndRunThread(1, 1, ThreadTimerTestThread, 0, Stacks[1], DFT_STACK_SIZE);
+    MosInitAndRunThread(2, 2, ThreadTimerTestBusyThread, 1, Stacks[2], DFT_STACK_SIZE);
+    MosInitAndRunThread(3, 2, ThreadTimerTestBusyThread, 2, Stacks[3], DFT_STACK_SIZE);
     MosDelayThread(test_time);
     MosRequestThreadStop(1);
     MosRequestThreadStop(2);
@@ -489,6 +489,51 @@ static bool TimerTests(void) {
     if (MosWaitForThreadStop(2) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(3) != TEST_PASS) test_pass = false;
     DisplayHistogram(3);
+    if (TestHisto[0] != exp_iter) test_pass = false;
+    if (test_pass) MosPrint(" Passed\n");
+    else {
+        MosPrint(" Failed\n");
+        tests_all_pass = false;
+    }
+    return tests_all_pass;
+}
+
+//
+// Message Timer Tests
+//
+
+static s32 TimerTestThread(s32 arg) {
+    MosInitQueue(&TestQueue, queue, count_of(queue));
+    MosTimer self_timer;
+    MosInitTimer(&self_timer, &TestQueue);
+    u32 cnt = 0xdeadbeef;
+    for (;;) {
+        if (MosIsStopRequested()) break;
+        MosSetTimer(&self_timer, timer_test_delay, cnt);
+        u32 val = MosReceiveFromQueue(&TestQueue);
+        if (val != cnt) return TEST_FAIL;
+        cnt++;
+        TestHisto[arg]++;
+    }
+    return TEST_PASS;
+}
+
+static bool TimerTests(void) {
+    const u32 test_time = 5000;
+    u32 exp_iter = test_time / timer_test_delay;
+    bool tests_all_pass = true;
+    bool test_pass;
+    //
+    // Run uniform timers
+    //
+    test_pass = true;
+    MosPrint("Message Timer Test 1\n");
+    ClearHistogram();
+    MosInitAndRunThread(1, 1, TimerTestThread, 0, Stacks[1], DFT_STACK_SIZE);
+    MosDelayThread(test_time);
+    MosRequestThreadStop(1);
+    if (MosWaitForThreadStop(1) != TEST_PASS) test_pass = false;
+    DisplayHistogram(1);
     if (TestHisto[0] != exp_iter) test_pass = false;
     if (test_pass) MosPrint(" Passed\n");
     else {
@@ -658,14 +703,14 @@ static bool SemTests(void) {
     MosPrint("Sem Test 4\n");
     ClearHistogram();
     MosInitSem(&TestSem, 5);
-    MosInitAndRunThread(1, 2, SemTestThreadTxFast, 0, Stacks[1], DFT_STACK_SIZE);
-    MosInitAndRunThread(2, 2, SemTestThreadTxFast, 1, Stacks[2], DFT_STACK_SIZE);
-    MosInitAndRunThread(3, 2, SemTestThreadRx, 2, Stacks[3], DFT_STACK_SIZE);
+    MosInitAndRunThread(1, 2, SemTestThreadRx, 2, Stacks[3], DFT_STACK_SIZE);
+    MosInitAndRunThread(2, 2, SemTestThreadTxFast, 0, Stacks[1], DFT_STACK_SIZE);
+    MosInitAndRunThread(3, 2, SemTestThreadTxFast, 1, Stacks[2], DFT_STACK_SIZE);
     MosDelayThread(test_time);
-    MosRequestThreadStop(1);
     MosRequestThreadStop(2);
-    MosDelayThread(5);
     MosRequestThreadStop(3);
+    MosDelayThread(5);
+    MosRequestThreadStop(1);
     MosGiveSem(&TestSem);  // Unblock thread to stop
     if (MosWaitForThreadStop(1) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(2) != TEST_PASS) test_pass = false;
@@ -1362,6 +1407,7 @@ static s32 CmdTest(s32 argc, char * argv[]) {
     if (argc == 2) {
         if (strcmp(argv[1], "main") == 0) {
             if (ThreadTests() == false) test_pass = false;
+            if (ThreadTimerTests() == false) test_pass = false;
             if (TimerTests() == false) test_pass = false;
             if (SemTests() == false) test_pass = false;
             if (QueueTests() == false) test_pass = false;
@@ -1372,6 +1418,8 @@ static s32 CmdTest(s32 argc, char * argv[]) {
             test_pass = HalTests(Stacks, DFT_STACK_SIZE);
         } else if (strcmp(argv[1], "thread") == 0) {
             test_pass = ThreadTests();
+        } else if (strcmp(argv[1], "thread_timer") == 0) {
+            test_pass = ThreadTimerTests();
         } else if (strcmp(argv[1], "timer") == 0) {
             test_pass = TimerTests();
         } else if (strcmp(argv[1], "sem") == 0) {
