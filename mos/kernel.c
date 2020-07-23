@@ -13,8 +13,15 @@
 
 #include <errno.h>
 
-#if (__FPU_USED == 1U)
-// TODO: Can use this to enable floating point context save for CM4F
+#if (MOS_FP_CONTEXT_SWITCHING == true)
+  #if (__FPU_USED == 1U)
+    #define ENABLE_FP_CONTEXT_SAVE    1
+  #else
+    #define ENABLE_FP_CONTEXT_SAVE    0
+    #error "Processor does not support floating point"
+  #endif
+#else
+  #define ENABLE_FP_CONTEXT_SAVE    0
 #endif
 
 #define MAX_THREADS          (MOS_MAX_APP_THREADS + 1)
@@ -27,11 +34,17 @@
 
 typedef struct {
     u32 SWSAVE[8];   // R11-R4
+#if (ENABLE_FP_CONTEXT_SAVE == 1)
+    u32 LR_EXC;      // Exception LR
+#endif
     u32 HWSAVE[4];   // R3-R0
     u32 R12;         // R12
     u32 LR;          // R14
     u32 PC;          // R15
     u32 xPSR;
+#if (ENABLE_FP_CONTEXT_SAVE == 1)
+    u32 ALIGNMENT_PAD;  // Not sure this is needed
+#endif
 } StackFrame;
 
 typedef enum {
@@ -196,6 +209,9 @@ static void InitThread(MosThreadID id, MosThreadPriority pri,
     sf->LR = (u32)ThreadExit;
     sf->R12 = 0;
     sf->HWSAVE[0] = arg;
+#if (ENABLE_FP_CONTEXT_SAVE == 1)
+    sf->LR_EXC = 0xfffffffd;
+#endif
     // Initialize context and state
     Threads[id].sp = (u32)sf;
     Threads[id].err_no = 0;
@@ -456,19 +472,42 @@ static u32 MOS_USED Scheduler(u32 sp) {
     return (u32)Threads[RunningThreadID].sp;
 }
 
+#if (ENABLE_FP_CONTEXT_SAVE == 1)
+
 void MOS_NAKED PendSV_Handler(void) {
-    // M3 context switch.
-    // TODO: M4F requires floating point register save/restore
+    // Floating point context switch (lazy stacking)
+    asm volatile (
+        "mrs r0, psp\n\t"
+        "tst lr, #16\n\t"
+        "it eq\n\t"
+        "vstmdbeq r0!, {s16-s31}\n\t"
+        "stmdb r0!, {r4-r11, lr}\n\t"
+        "bl Scheduler\n\t"
+        "ldmfd r0!, {r4-r11, lr}\n\t"
+        "tst lr, #16\n\t"
+        "it eq\n\t"
+        "vldmiaeq r0!, {s16-s31}\n\t"
+        "msr psp, r0\n\t"
+        "bx lr\n\t"
+    );
+}
+
+#else
+
+void MOS_NAKED PendSV_Handler(void) {
+    // Vanilla context switch without floating point.
     asm volatile (
         "mrs r0, psp\n\t"
         "stmdb r0!, {r4-r11}\n\t"
         "bl Scheduler\n\t"
-        "mvn r14, #2\n\t"
+        "mvn lr, #2\n\t"
         "ldmfd r0!, {r4-r11}\n\t"
         "msr psp, r0\n\t"
         "bx lr\n\t"
     );
 }
+
+#endif
 
 // TODO: Limit stack dump to end of memory
 static void MOS_USED FaultHandler(u32 fault_no, u32 * sp, bool in_isr) {
@@ -682,6 +721,7 @@ void MosInit(void) {
     Params.int_pri_hi = 0;
     Params.int_pri_low = pri_low;
     Params.micro_sec_per_tick = MOS_MICRO_SEC_PER_TICK;
+    Params.fp_support_en = ENABLE_FP_CONTEXT_SAVE;
 }
 
 void MosRegisterRawPrintfHook(MosRawPrintfHook * hook) { PrintfHook = hook; }

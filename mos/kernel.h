@@ -17,7 +17,7 @@
 
 #include "mos_config.h"
 
-#define MOS_VERSION            0.1
+#define MOS_VERSION            0.2
 
 #ifndef count_of
 #define count_of(x)            (sizeof(x) / sizeof(x[0]))
@@ -71,6 +71,7 @@ typedef struct {
     u32 int_pri_hi;
     u32 int_pri_low;
     u32 micro_sec_per_tick;
+    bool fp_support_en;
 } MosParams;
 
 typedef enum {

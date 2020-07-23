@@ -31,6 +31,11 @@
 #define MOS_START_TICK_COUNT        0xFFFFFF00
 //#define MOS_START_TICK_COUNT        0x00000000
 
+// Enable floating point context switch support
+//  Note that if false, floating point might still work
+//  if confined to a single context.
+#define MOS_FP_CONTEXT_SWITCHING    true
+
 // Keep tick interrupt running at slowest rate to maintain
 // time even when there are no timer events scheduled.
 #define MOS_KEEP_TICKS_RUNNING      false

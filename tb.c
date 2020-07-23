@@ -106,8 +106,8 @@ static const u32 pri_test_delay = 50;
 
 static s32 PriTestThread(s32 arg) {
     for (;;) {
-        TestHisto[arg]++;
         if (MosIsStopRequested()) break;
+        TestHisto[arg]++;
         // NOTE: Non-blocking delay
         MosDelayMicroSec(pri_test_delay * 1000);
     }
@@ -162,6 +162,16 @@ static s32 AssertTestThread(s32 arg) {
     return TEST_FAIL;
 }
 
+static s32 FPTestThread(s32 arg) {
+    float x = 0.0;
+    for (;;) {
+        TestHisto[arg]++;
+        if (MosIsStopRequested()) break;
+        x = x + 1.0;
+    }
+    return TEST_PASS;
+}
+
 static bool ThreadTests(void) {
     const u32 test_time = 5000;
     u32 exp_iter = test_time / pri_test_delay;
@@ -177,17 +187,17 @@ static bool ThreadTests(void) {
     MosInitAndRunThread(2, 2, PriTestThread, 1, Stacks[2], DFT_STACK_SIZE);
     MosInitAndRunThread(3, 3, PriTestThread, 2, Stacks[3], DFT_STACK_SIZE);
     MosDelayThread(test_time);
-    DisplayHistogram(3);
-    if (TestHisto[0] < exp_iter || TestHisto[0] > exp_iter + 1)
-        test_pass = false;
-    if (TestHisto[1] != 0) test_pass = false;
-    if (TestHisto[2] != 0) test_pass = false;
     MosRequestThreadStop(1);
     MosRequestThreadStop(2);
     MosRequestThreadStop(3);
     if (MosWaitForThreadStop(1) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(2) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(3) != TEST_PASS) test_pass = false;
+    DisplayHistogram(3);
+    if (TestHisto[0] < exp_iter || TestHisto[0] > exp_iter + 1)
+        test_pass = false;
+    if (TestHisto[1] != 0) test_pass = false;
+    if (TestHisto[2] != 0) test_pass = false;
     if (test_pass) MosPrint(" Passed\n");
     else {
         MosPrint(" Failed\n");
@@ -206,18 +216,18 @@ static bool ThreadTests(void) {
     MosChangeThreadPriority(1, 2);
     MosChangeThreadPriority(2, 1);
     MosDelayThread(test_time);
-    DisplayHistogram(3);
-    if (TestHisto[0] < exp_iter || TestHisto[0] > exp_iter + 1)
-        test_pass = false;
-    if (TestHisto[1] < exp_iter || TestHisto[1] > exp_iter + 1)
-        test_pass = false;
-    if (TestHisto[2] != 0) test_pass = false;
     MosRequestThreadStop(1);
     MosRequestThreadStop(2);
     MosRequestThreadStop(3);
     if (MosWaitForThreadStop(1) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(2) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(3) != TEST_PASS) test_pass = false;
+    DisplayHistogram(3);
+    if (TestHisto[0] < exp_iter || TestHisto[0] > exp_iter + 1)
+        test_pass = false;
+    if (TestHisto[1] < exp_iter || TestHisto[1] > exp_iter + 1)
+        test_pass = false;
+    if (TestHisto[2] != 0) test_pass = false;
     if (test_pass) MosPrint(" Passed\n");
     else {
         MosPrint(" Failed\n");
@@ -310,6 +320,28 @@ static bool ThreadTests(void) {
     if (MosWaitForThreadStop(1) != TEST_PASS_HANDLER) test_pass = false;
     MosInitAndRunThread(1, 1, AssertTestThread, 0x1234, Stacks[1], DFT_STACK_SIZE);
     if (MosWaitForThreadStop(1) != TEST_FAIL) test_pass = false;
+    if (test_pass) MosPrint(" Passed\n");
+    else {
+        MosPrint(" Failed\n");
+        tests_all_pass = false;
+    }
+    //
+    // Try some floating point
+    //
+    test_pass = true;
+    MosPrint("FP Test\n");
+    ClearHistogram();
+    MosInitAndRunThread(1, 1, FPTestThread, 0, Stacks[1], DFT_STACK_SIZE);
+    MosInitAndRunThread(2, 1, FPTestThread, 1, Stacks[2], DFT_STACK_SIZE);
+    MosInitAndRunThread(3, 1, PriTestThread, 2, Stacks[3], DFT_STACK_SIZE);
+    MosDelayThread(test_time);
+    MosRequestThreadStop(1);
+    MosRequestThreadStop(2);
+    MosRequestThreadStop(3);
+    if (MosWaitForThreadStop(1) != TEST_PASS) test_pass = false;
+    if (MosWaitForThreadStop(2) != TEST_PASS) test_pass = false;
+    if (MosWaitForThreadStop(3) != TEST_PASS) test_pass = false;
+    DisplayHistogram(3);
     if (test_pass) MosPrint(" Passed\n");
     else {
         MosPrint(" Failed\n");
