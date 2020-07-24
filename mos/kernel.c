@@ -18,7 +18,7 @@
     #define ENABLE_FP_CONTEXT_SAVE    1
   #else
     #define ENABLE_FP_CONTEXT_SAVE    0
-    #error "Processor does not support floating point"
+    #error "Processor does not support hardware floating point"
   #endif
 #else
   #define ENABLE_FP_CONTEXT_SAVE    0
@@ -680,6 +680,12 @@ void MosInit(void) {
                    SCB_SHCSR_USGFAULTENA_Msk);
     // Trap Divide By 0 and "Unintentional" Unaligned Accesses
     SCB->CCR |= (SCB_CCR_DIV_0_TRP_Msk | SCB_CCR_UNALIGN_TRP_Msk);
+#if (ENABLE_FP_CONTEXT_SAVE == 1)
+    // Ensure lazy stacking is enabled (for floating point)
+    FPU->FPCCR |= (FPU_FPCCR_ASPEN_Msk | FPU_FPCCR_LSPEN_Msk);
+#else
+    FPU->FPCCR &= ~(FPU_FPCCR_ASPEN_Msk | FPU_FPCCR_LSPEN_Msk);
+#endif
     // Save errno pointer for use during context switch
     ErrNo = __errno();
     // Set up timers with tick-reduction

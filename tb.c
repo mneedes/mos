@@ -328,24 +328,26 @@ static bool ThreadTests(void) {
     //
     // Try some floating point
     //
-    test_pass = true;
-    MosPrint("FP Test\n");
-    ClearHistogram();
-    MosInitAndRunThread(1, 1, FPTestThread, 0, Stacks[1], DFT_STACK_SIZE);
-    MosInitAndRunThread(2, 1, FPTestThread, 1, Stacks[2], DFT_STACK_SIZE);
-    MosInitAndRunThread(3, 1, PriTestThread, 2, Stacks[3], DFT_STACK_SIZE);
-    MosDelayThread(test_time);
-    MosRequestThreadStop(1);
-    MosRequestThreadStop(2);
-    MosRequestThreadStop(3);
-    if (MosWaitForThreadStop(1) != TEST_PASS) test_pass = false;
-    if (MosWaitForThreadStop(2) != TEST_PASS) test_pass = false;
-    if (MosWaitForThreadStop(3) != TEST_PASS) test_pass = false;
-    DisplayHistogram(3);
-    if (test_pass) MosPrint(" Passed\n");
-    else {
-        MosPrint(" Failed\n");
-        tests_all_pass = false;
+    if (MosGetParams()->fp_support_en == true) {
+        test_pass = true;
+        MosPrint("FP Test\n");
+        ClearHistogram();
+        MosInitAndRunThread(1, 1, FPTestThread, 0, Stacks[1], DFT_STACK_SIZE);
+        MosInitAndRunThread(2, 1, FPTestThread, 1, Stacks[2], DFT_STACK_SIZE);
+        MosInitAndRunThread(3, 1, PriTestThread, 2, Stacks[3], DFT_STACK_SIZE);
+        MosDelayThread(test_time);
+        MosRequestThreadStop(1);
+        MosRequestThreadStop(2);
+        MosRequestThreadStop(3);
+        if (MosWaitForThreadStop(1) != TEST_PASS) test_pass = false;
+        if (MosWaitForThreadStop(2) != TEST_PASS) test_pass = false;
+        if (MosWaitForThreadStop(3) != TEST_PASS) test_pass = false;
+        DisplayHistogram(3);
+        if (test_pass) MosPrint(" Passed\n");
+        else {
+            MosPrint(" Failed\n");
+            tests_all_pass = false;
+        }
     }
     return tests_all_pass;
 }
@@ -397,10 +399,26 @@ static s32 ThreadTimerTestBusyThread(s32 arg) {
     return TEST_PASS;
 }
 
+static s32 MessageTimerTestThread(s32 arg) {
+    MosInitQueue(&TestQueue, queue, count_of(queue));
+    MosTimer self_timer;
+    MosInitTimer(&self_timer, &TestQueue);
+    u32 cnt = 0xdeadbeef;
+    for (;;) {
+        if (MosIsStopRequested()) break;
+        MosSetTimer(&self_timer, timer_test_delay, cnt);
+        u32 val = MosReceiveFromQueue(&TestQueue);
+        if (val != cnt) return TEST_FAIL;
+        cnt++;
+        TestHisto[arg]++;
+    }
+    return TEST_PASS;
+}
+
 //
-// Thread Timer Tests
+// Timer Tests
 //
-static bool ThreadTimerTests(void) {
+static bool TimerTests(void) {
     const u32 test_time = 5000;
     u32 exp_iter = test_time / timer_test_delay;
     bool tests_all_pass = true;
@@ -527,41 +545,13 @@ static bool ThreadTimerTests(void) {
         MosPrint(" Failed\n");
         tests_all_pass = false;
     }
-    return tests_all_pass;
-}
-
-//
-// Message Timer Tests
-//
-
-static s32 TimerTestThread(s32 arg) {
-    MosInitQueue(&TestQueue, queue, count_of(queue));
-    MosTimer self_timer;
-    MosInitTimer(&self_timer, &TestQueue);
-    u32 cnt = 0xdeadbeef;
-    for (;;) {
-        if (MosIsStopRequested()) break;
-        MosSetTimer(&self_timer, timer_test_delay, cnt);
-        u32 val = MosReceiveFromQueue(&TestQueue);
-        if (val != cnt) return TEST_FAIL;
-        cnt++;
-        TestHisto[arg]++;
-    }
-    return TEST_PASS;
-}
-
-static bool TimerTests(void) {
-    const u32 test_time = 5000;
-    u32 exp_iter = test_time / timer_test_delay;
-    bool tests_all_pass = true;
-    bool test_pass;
     //
-    // Run uniform timers
+    // Run message timers
     //
     test_pass = true;
     MosPrint("Message Timer Test 1\n");
     ClearHistogram();
-    MosInitAndRunThread(1, 1, TimerTestThread, 0, Stacks[1], DFT_STACK_SIZE);
+    MosInitAndRunThread(1, 1, MessageTimerTestThread, 0, Stacks[1], DFT_STACK_SIZE);
     MosDelayThread(test_time);
     MosRequestThreadStop(1);
     if (MosWaitForThreadStop(1) != TEST_PASS) test_pass = false;
@@ -1439,7 +1429,6 @@ static s32 CmdTest(s32 argc, char * argv[]) {
     if (argc == 2) {
         if (strcmp(argv[1], "main") == 0) {
             if (ThreadTests() == false) test_pass = false;
-            if (ThreadTimerTests() == false) test_pass = false;
             if (TimerTests() == false) test_pass = false;
             if (SemTests() == false) test_pass = false;
             if (QueueTests() == false) test_pass = false;
@@ -1450,8 +1439,6 @@ static s32 CmdTest(s32 argc, char * argv[]) {
             test_pass = HalTests(Stacks, DFT_STACK_SIZE);
         } else if (strcmp(argv[1], "thread") == 0) {
             test_pass = ThreadTests();
-        } else if (strcmp(argv[1], "thread_timer") == 0) {
-            test_pass = ThreadTimerTests();
         } else if (strcmp(argv[1], "timer") == 0) {
             test_pass = TimerTests();
         } else if (strcmp(argv[1], "sem") == 0) {
