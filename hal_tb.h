@@ -7,7 +7,7 @@
 #ifndef _HAL_TB_H_
 #define _HAL_TB_H_
 
-bool HalTests(u8 * stacks[], u32 stack_size);
+bool HalTests(MosThread * threads[], u32 max_threads, u8 * stacks[], u32 stack_size);
 void HalSetGpio(u32 num, bool value);
 
 #endif

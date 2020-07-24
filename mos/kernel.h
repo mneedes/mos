@@ -43,7 +43,6 @@
 #define MOS_OPT(x)             __attribute__((optimize(x)))
 #define MOS_ALIGNED(x)         __attribute__((aligned(x)))
 
-#define MOS_IDLE_THREAD_ID     0
 #define MOS_STACK_ALIGNMENT    8
 #define MOS_STACK_ALIGNED      MOS_ALIGNED(MOS_STACK_ALIGNMENT)
 
@@ -59,13 +58,13 @@ typedef int32_t     s32;
 typedef uint64_t    u64;
 typedef int64_t     s64;
 
-typedef s16 MosThreadID;
+typedef void MosThread;
 typedef u16 MosThreadPriority;
 
 // Microkernel Parameters
 typedef struct {
     char * version;
-    u32 max_app_threads;
+    u32 thread_handle_size;
     MosThreadPriority thread_pri_hi;
     MosThreadPriority thread_pri_low;
     u32 int_pri_hi;
@@ -96,7 +95,7 @@ typedef enum {
 
 // Blocking mutex supporting recursion
 typedef struct {
-    s32 owner;  // ThreadID stored in s32
+    MosThread * owner;
     s32 depth;
     bool to_yield;
 } MosMutex;
@@ -195,24 +194,24 @@ void MosResetTimer(MosTimer * timer);
 
 // Can use MosYieldThread() for cooperative multitasking
 void MosYieldThread(void); // IS
-MosThreadID MosGetThreadID(void);
-MosThreadState MosGetThreadState(MosThreadID id, s32 * rtn_val);
-s32 MosInitThread(MosThreadID id, MosThreadPriority pri, MosThreadEntry * entry,
-                  s32 arg, u8 * s_addr, u32 s_size);
-s32 MosRunThread(MosThreadID id);
-s32 MosInitAndRunThread(MosThreadID id, MosThreadPriority pri,
-                        MosThreadEntry * entry, s32 arg, u8 * s_addr,
-                        u32 s_size);
-void MosChangeThreadPriority(MosThreadID id, MosThreadPriority pri);
-void MosRequestThreadStop(MosThreadID id);
+MosThread * MosGetThreadPtr(void);
+MosThreadState MosGetThreadState(MosThread * thd, s32 * rtn_val);
+void MosInitThread(MosThread * thd, MosThreadPriority pri, MosThreadEntry * entry,
+                   s32 arg, u8 * s_addr, u32 s_size);
+bool MosRunThread(MosThread * thd);
+bool MosInitAndRunThread(MosThread * thd, MosThreadPriority pri,
+                         MosThreadEntry * entry, s32 arg, u8 * s_addr,
+                         u32 s_size);
+void MosChangeThreadPriority(MosThread * thd, MosThreadPriority pri);
+void MosRequestThreadStop(MosThread * thd);
 bool MosIsStopRequested(void);
-s32 MosWaitForThreadStop(MosThreadID id);
-bool MosWaitForThreadStopOrTO(MosThreadID id, s32 * rtn_val, u32 ticks);
+s32 MosWaitForThreadStop(MosThread * thd);
+bool MosWaitForThreadStopOrTO(MosThread * thd, s32 * rtn_val, u32 ticks);
 // Forcible stop, works on blocked threads.
-void MosKillThread(MosThreadID id);
+void MosKillThread(MosThread * thd);
 // Handler to run if thread is killed.  Thread can set own handler.
-void MosSetKillHandler(MosThreadID id, MosHandler * handler, s32 arg);
-void MosSetKillArg(MosThreadID id, s32 arg);
+void MosSetKillHandler(MosThread * thd, MosHandler * handler, s32 arg);
+void MosSetKillArg(MosThread * thd, s32 arg);
 
 // Doubly-Linked Lists
 

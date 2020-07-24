@@ -14,10 +14,6 @@
 #ifndef _MOS_CONFIG_H_
 #define _MOS_CONFIG_H_
 
-// Application threads IDs <=> [1 ... MOS_MAX_APP_THREADS].
-// Thread 0 is reserved for the idle thread.
-#define MOS_MAX_APP_THREADS         6
-
 // Thread priorities <=> [0 ... MOS_MAX_THREAD_PRIORITIES - 1].
 // The lower the number the higher the priority
 #define MOS_MAX_THREAD_PRIORITIES   4
