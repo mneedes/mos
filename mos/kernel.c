@@ -171,11 +171,12 @@ static void ThreadExit(s32 rtn_val) {
     SetBasePri(IntPriMaskLow);
     RunningThread->rtn_val = rtn_val;
     SetThreadState(RunningThread, THREAD_STOPPED);
+    asm volatile ( "dmb" );
     if (MosIsOnList(&RunningThread->tmr_q))
         MosRemoveFromList(&RunningThread->tmr_q);
     MosRemoveFromList(&RunningThread->run_q);
-    SetBasePri(0);
     YieldThread();
+    SetBasePri(0);
     // Not reachable
     while (1)
         ;
@@ -766,10 +767,10 @@ MosThread * MosGetThreadPtr(void) {
     return (MosThread *)RunningThread;
 }
 
-// TODO: Review locking
 MosThreadState MosGetThreadState(MosThread * _thd, s32 * rtn_val) {
     Thread * thd = (Thread *)_thd;
     MosThreadState state;
+    SetBasePri(IntPriMaskLow);
     switch (thd->state) {
     case THREAD_UNINIT:
     case THREAD_INIT:
@@ -787,6 +788,7 @@ MosThreadState MosGetThreadState(MosThread * _thd, s32 * rtn_val) {
         else state = MOS_THREAD_RUNNING;
         break;
     }
+    SetBasePri(0);
     return state;
 }
 
@@ -818,7 +820,6 @@ void MosInitThread(MosThread * _thd, MosThreadPriority pri,
     SetThreadState(thd, THREAD_INIT);
 }
 
-// TODO: Review locking
 bool MosRunThread(MosThread * _thd) {
     Thread * thd = (Thread *)_thd;
     if (thd->state == THREAD_INIT) {
@@ -826,9 +827,9 @@ bool MosRunThread(MosThread * _thd) {
         SetThreadState(thd, THREAD_RUNNABLE);
         if (thd != &IdleThread)
             MosAddToList(&PriQueues[thd->pri], &thd->run_q);
-        SetBasePri(0);
         if (RunningThread != NO_SUCH_THREAD && thd->pri < RunningThread->pri)
             YieldThread();
+        SetBasePri(0);
         return true;
     }
     return false;
@@ -849,9 +850,9 @@ void MosChangeThreadPriority(MosThread * _thd, MosThreadPriority pri) {
     thd->pri = pri;
     MosRemoveFromList(&thd->run_q);
     MosAddToList(&PriQueues[pri], &thd->run_q);
-    SetBasePri(0);
     if (RunningThread != NO_SUCH_THREAD && pri < thd->pri)
         YieldThread();
+    SetBasePri(0);
 }
 
 void MosRequestThreadStop(MosThread * _thd) {
@@ -1246,7 +1247,6 @@ void MosInitMux(MosMux * mux) {
 void MosSetActiveMux(MosMux * mux, MosMuxEntry * entries, u32 len) {
     mux->entries = entries;
     mux->num = len;
-    // TODO: Barrier?
     RunningThread->mux = mux;
 }
 
