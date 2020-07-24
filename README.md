@@ -31,11 +31,10 @@ Included Optional Modules:
 Supported toolchains / architectures:
 * GCC
 * ARM M3/M4/M7
-* M4F (future--M4 with hard floating point)
+* M4F (hardware floating point using lazy stacking)
 
 Future
 * C++ bindings
-* Hard floating point support
 * M0/M0+/M1
 
 Features it probably WILL NEVER have:
