@@ -24,7 +24,6 @@
   #define ENABLE_FP_CONTEXT_SAVE    0
 #endif
 
-#define MAX_THREADS          (MOS_MAX_APP_THREADS + 1)
 #define NO_SUCH_THREAD       NULL
 #define NO_SUCH_PRI          0xffff
 #define STACK_CANARY         0xba5eba11
@@ -82,7 +81,7 @@ typedef struct Thread {
     s32 mux_idx;
     MosHandler * kill_handler;
     s32 kill_arg;
-    u8 * stack_addr;
+    u8 * stack_bottom;
     u32 stack_size;
 } Thread;
 
@@ -96,6 +95,7 @@ static MosSleepHook * SleepHook = NULL;
 static MosWakeHook * WakeHook = NULL;
 static void DummyEventHook(MosEvent e, u32 v) { }
 static MosEventHook * EventHook = DummyEventHook;
+static MosThreadFreeHook * ThreadFreeHook = NULL;
 
 // Threads and Events
 static Thread * RunningThread = NO_SUCH_THREAD;
@@ -188,10 +188,10 @@ static s32 DefaultKillHandler(s32 arg) {
 
 static void InitThread(Thread * thd, MosThreadPriority pri,
                        MosThreadEntry * entry, s32 arg,
-                       u8 * s_addr, u32 s_size) {
+                       u8 * stack_bottom, u32 stack_size) {
     // Initialize Stack
-    *((u32 *) s_addr) = STACK_CANARY;
-    StackFrame * sf = (StackFrame *) (s_addr + s_size);
+    *((u32 *) stack_bottom) = STACK_CANARY;
+    StackFrame * sf = (StackFrame *) (stack_bottom + stack_size);
     sf--;
     // Set Thumb Mode
     sf->xPSR = 0x01000000;
@@ -205,13 +205,12 @@ static void InitThread(Thread * thd, MosThreadPriority pri,
     // Initialize context and state
     thd->sp = (u32)sf;
     thd->err_no = 0;
-    //thd->id = id;
     thd->pri = pri;
     thd->stop_request = false;
     thd->kill_handler = DefaultKillHandler;
     thd->kill_arg = 0;
-    thd->stack_addr = s_addr;
-    thd->stack_size = s_size;
+    thd->stack_bottom = stack_bottom;
+    thd->stack_size = stack_size;
 }
 
 void SysTick_Handler(void) {
@@ -352,7 +351,7 @@ static u32 MOS_USED Scheduler(u32 sp) {
             MosRemoveFromList(&RunningThread->tmr_q);
         InitThread(RunningThread, RunningThread->pri,
                    RunningThread->kill_handler, RunningThread->kill_arg,
-                   RunningThread->stack_addr, RunningThread->stack_size);
+                   RunningThread->stack_bottom, RunningThread->stack_size);
         SetThreadState(RunningThread, THREAD_RUNNABLE);
     } else if (RunningThread->state & THREAD_WAIT_FOR_TICK) {
         // Update running thread timer state
@@ -659,6 +658,7 @@ void MosResetTimer(MosTimer * timer) {
 
 static s32 IdleThreadEntry(s32 arg) {
     while (1) {
+        //if (ThreadFreeHook) (*ThreadFreeHook)(NULL);
         if (SleepHook) (*SleepHook)();
         asm volatile (
             "dsb\n\t"
@@ -729,6 +729,7 @@ void MosRegisterRawPrintfHook(MosRawPrintfHook * hook) { PrintfHook = hook; }
 void MosRegisterSleepHook(MosSleepHook * hook) { SleepHook = hook; }
 void MosRegisterWakeHook(MosWakeHook * hook) { WakeHook = hook; }
 void MosRegisterEventHook(MosEventHook * hook) { EventHook = hook; }
+void MosRegisterThreadFreeHook(MosThreadFreeHook * hook) { ThreadFreeHook = hook; };
 
 void MosRunScheduler(void) {
     // Start PSP in a safe place for first PendSV and then enable interrupts
@@ -763,8 +764,80 @@ void MosYieldThread(void) {
     asm volatile ( "isb" );
 }
 
-MosThread * MosGetThreadPtr(void) {
+MosThread * MosGetThread(void) {
     return (MosThread *)RunningThread;
+}
+
+u8 * MosGetStackBottom(MosThread * _thd) {
+    Thread * thd = (Thread *)_thd;
+    u8 * stack_bottom = NULL;
+    SetBasePri(IntPriMaskLow);
+    if (thd) stack_bottom = thd->stack_bottom;
+    else if (RunningThread) stack_bottom = RunningThread->stack_bottom;
+    SetBasePri(0);
+    return stack_bottom;
+}
+
+u32 MosGetStackSize(MosThread * _thd) {
+    Thread * thd = (Thread *)_thd;
+    return thd->stack_size;
+}
+
+// Might kick this to internal
+void MosSetStack(MosThread * _thd, u8 * stack_bottom, u32 stack_size) {
+    Thread * thd = (Thread *)_thd;
+    thd->stack_bottom = stack_bottom;
+    thd->stack_size = stack_size;
+}
+
+bool MosInitThread(MosThread * _thd, MosThreadPriority pri,
+                   MosThreadEntry * entry, s32 arg,
+                   u8 * stack_bottom, u32 stack_size) {
+    Thread * thd = (Thread *)_thd;
+    if (thd == RunningThread) return false;
+    // Stop thread if running
+    SetBasePri(IntPriMaskLow);
+    ThreadState state = thd->state;
+    switch (state) {
+    case THREAD_UNINIT:
+    case THREAD_INIT:
+    case THREAD_STOPPED:
+        MosInitList(&thd->run_q);
+        MosInitList(&thd->tmr_q);
+        break;
+    default:
+        if (MosIsOnList(&thd->tmr_q))
+            MosRemoveFromList(&thd->tmr_q);
+        MosRemoveFromList(&thd->run_q);
+        break;
+    }
+    SetThreadState(thd, THREAD_UNINIT);
+    SetBasePri(0);
+    InitThread(thd, pri, entry, arg, stack_bottom, stack_size);
+    SetThreadState(thd, THREAD_INIT);
+    return true;
+}
+
+bool MosRunThread(MosThread * _thd) {
+    Thread * thd = (Thread *)_thd;
+    if (thd->state == THREAD_INIT) {
+        SetBasePri(IntPriMaskLow);
+        SetThreadState(thd, THREAD_RUNNABLE);
+        if (thd != &IdleThread)
+            MosAddToList(&PriQueues[thd->pri], &thd->run_q);
+        if (RunningThread != NO_SUCH_THREAD && thd->pri < RunningThread->pri)
+            YieldThread();
+        SetBasePri(0);
+        return true;
+    }
+    return false;
+}
+
+bool MosInitAndRunThread(MosThread * _thd,  MosThreadPriority pri,
+                         MosThreadEntry * entry, s32 arg, u8 * stack_bottom,
+                         u32 stack_size) {
+    if (!MosInitThread(_thd, pri, entry, arg, stack_bottom, stack_size)) return false;
+    return MosRunThread(_thd);
 }
 
 MosThreadState MosGetThreadState(MosThread * _thd, s32 * rtn_val) {
@@ -792,61 +865,13 @@ MosThreadState MosGetThreadState(MosThread * _thd, s32 * rtn_val) {
     return state;
 }
 
-// TODO: Should this return bool ?
-void MosInitThread(MosThread * _thd, MosThreadPriority pri,
-                   MosThreadEntry * entry, s32 arg,
-                   u8 * s_addr, u32 s_size) {
-    Thread * thd = (Thread *)_thd;
-    if (thd == RunningThread) return;
-    // Stop thread if running
-    SetBasePri(IntPriMaskLow);
-    ThreadState state = thd->state;
-    switch (state) {
-    case THREAD_UNINIT:
-    case THREAD_INIT:
-    case THREAD_STOPPED:
-        MosInitList(&thd->run_q);
-        MosInitList(&thd->tmr_q);
-        break;
-    default:
-        if (MosIsOnList(&thd->tmr_q))
-            MosRemoveFromList(&thd->tmr_q);
-        MosRemoveFromList(&thd->run_q);
-        break;
-    }
-    SetThreadState(thd, THREAD_UNINIT);
-    SetBasePri(0);
-    InitThread(thd, pri, entry, arg, s_addr, s_size);
-    SetThreadState(thd, THREAD_INIT);
-}
-
-bool MosRunThread(MosThread * _thd) {
-    Thread * thd = (Thread *)_thd;
-    if (thd->state == THREAD_INIT) {
-        SetBasePri(IntPriMaskLow);
-        SetThreadState(thd, THREAD_RUNNABLE);
-        if (thd != &IdleThread)
-            MosAddToList(&PriQueues[thd->pri], &thd->run_q);
-        if (RunningThread != NO_SUCH_THREAD && thd->pri < RunningThread->pri)
-            YieldThread();
-        SetBasePri(0);
-        return true;
-    }
-    return false;
-}
-
-bool MosInitAndRunThread(MosThread * _thd,  MosThreadPriority pri,
-                         MosThreadEntry * entry, s32 arg, u8 * s_addr,
-                         u32 s_size) {
-    MosInitThread(_thd, pri, entry, arg, s_addr, s_size);
-    return MosRunThread(_thd);
-}
-
-// TODO: Review locking
 void MosChangeThreadPriority(MosThread * _thd, MosThreadPriority pri) {
     Thread * thd = (Thread *)_thd;
-    if (thd->pri == pri) return;
     SetBasePri(IntPriMaskLow);
+    if (thd->pri == pri) {
+        SetBasePri(0);
+        return;
+    }
     thd->pri = pri;
     MosRemoveFromList(&thd->run_q);
     MosAddToList(&PriQueues[pri], &thd->run_q);
@@ -890,7 +915,7 @@ void MosKillThread(MosThread * _thd) {
             ;
     }
     else MosInitAndRunThread(thd, thd->pri, thd->kill_handler,
-                             thd->kill_arg, thd->stack_addr,
+                             thd->kill_arg, thd->stack_bottom,
                              thd->stack_size);
 }
 

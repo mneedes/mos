@@ -149,6 +149,7 @@ typedef void (MosRawPrintfHook)(const char * fmt, ...);
 typedef void (MosSleepHook)(void);
 typedef void (MosWakeHook)(void);
 typedef void (MosEventHook)(MosEvent evt, u32 val);
+typedef void (MosThreadFreeHook)(MosThread *);
 
 // IS (Interrupt Safe) means the function can be called from ISRs.
 // It may make sense to disable interrupts when calling those functions.
@@ -163,6 +164,7 @@ void MosRegisterRawPrintfHook(MosRawPrintfHook * hook);
 void MosRegisterSleepHook(MosSleepHook * hook);
 void MosRegisterWakeHook(MosWakeHook * hook);
 void MosRegisterEventHook(MosEventHook * hook);
+void MosRegisterThreadFreeHook(MosThreadFreeHook * hook);
 
 // Obtain Microkernel parameters
 const MosParams * MosGetParams(void);
@@ -194,14 +196,17 @@ void MosResetTimer(MosTimer * timer);
 
 // Can use MosYieldThread() for cooperative multitasking
 void MosYieldThread(void); // IS
-MosThread * MosGetThreadPtr(void);
-MosThreadState MosGetThreadState(MosThread * thd, s32 * rtn_val);
-void MosInitThread(MosThread * thd, MosThreadPriority pri, MosThreadEntry * entry,
-                   s32 arg, u8 * s_addr, u32 s_size);
+MosThread * MosGetThread(void);
+u8 * MosGetStackBottom(MosThread * thd);
+u32 MosGetStackSize(MosThread * thd);
+void MosSetStack(MosThread * thd, u8 * stack_bottom, u32 stack_size);
+bool MosInitThread(MosThread * thd, MosThreadPriority pri, MosThreadEntry * entry,
+                   s32 arg, u8 * stack_bottom, u32 stack_size);
 bool MosRunThread(MosThread * thd);
 bool MosInitAndRunThread(MosThread * thd, MosThreadPriority pri,
-                         MosThreadEntry * entry, s32 arg, u8 * s_addr,
-                         u32 s_size);
+                         MosThreadEntry * entry, s32 arg, u8 * stack_bottom,
+                         u32 stack_size);
+MosThreadState MosGetThreadState(MosThread * thd, s32 * rtn_val);
 void MosChangeThreadPriority(MosThread * thd, MosThreadPriority pri);
 void MosRequestThreadStop(MosThread * thd);
 bool MosIsStopRequested(void);
@@ -209,7 +214,7 @@ s32 MosWaitForThreadStop(MosThread * thd);
 bool MosWaitForThreadStopOrTO(MosThread * thd, s32 * rtn_val, u32 ticks);
 // Forcible stop, works on blocked threads.
 void MosKillThread(MosThread * thd);
-// Handler to run if thread is killed.  Thread can set own handler.
+// Handler to run if thread is killed.  Thread can set own handler and argument.
 void MosSetKillHandler(MosThread * thd, MosHandler * handler, s32 arg);
 void MosSetKillArg(MosThread * thd, s32 arg);
 

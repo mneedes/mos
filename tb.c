@@ -14,9 +14,9 @@
 #include "hal.h"
 #include "mos/kernel.h"
 #include "mos/heap.h"
+#include "mos/thread_heap.h"
 #include "mos/trace.h"
 #include "mos/shell.h"
-
 #include "tb.h"
 #include "hal_tb.h"
 
@@ -124,11 +124,11 @@ static s32 KillTestHandler(s32 arg) {
 
 static s32 KillTestThread(s32 arg) {
     if (arg) {
-        MosSetKillHandler(MosGetThreadPtr(), KillTestHandler, TEST_PASS_HANDLER);
+        MosSetKillHandler(MosGetThread(), KillTestHandler, TEST_PASS_HANDLER);
         // Take mutex a couple times... need to release it in handler
         MosTakeMutex(&TestMutex);
         MosTakeMutex(&TestMutex);
-    } else MosSetKillArg(MosGetThreadPtr(), TEST_PASS_HANDLER);
+    } else MosSetKillArg(MosGetThread(), TEST_PASS_HANDLER);
     MosLogTrace(TRACE_INFO, "KillTestThread: Blocking\n");
     MosTakeSem(&TestSem);
     return TEST_FAIL;
@@ -136,19 +136,19 @@ static s32 KillTestThread(s32 arg) {
 
 static s32 KillSelfTestThread(s32 arg) {
     if (arg) {
-        MosSetKillHandler(MosGetThreadPtr(), KillTestHandler, TEST_PASS_HANDLER);
+        MosSetKillHandler(MosGetThread(), KillTestHandler, TEST_PASS_HANDLER);
         // Take mutex a couple times... need to release it in handler
         MosTakeMutex(&TestMutex);
         MosTakeMutex(&TestMutex);
-    } else MosSetKillArg(MosGetThreadPtr(), TEST_PASS_HANDLER);
+    } else MosSetKillArg(MosGetThread(), TEST_PASS_HANDLER);
     MosLogTrace(TRACE_INFO, "KillSelfTestThread: Killing Self\n");
-    MosKillThread(MosGetThreadPtr());
+    MosKillThread(MosGetThread());
     return TEST_FAIL;
 }
 
 static s32 ExcTestThread(s32 arg) {
     volatile u32 x;
-    MosSetKillArg(MosGetThreadPtr(), TEST_PASS_HANDLER + 1);
+    MosSetKillArg(MosGetThread(), TEST_PASS_HANDLER + 1);
     MosDelayThread(50);
     x = 30 / arg;
     (void)x;
@@ -156,7 +156,7 @@ static s32 ExcTestThread(s32 arg) {
 }
 
 static s32 AssertTestThread(s32 arg) {
-    MosSetKillArg(MosGetThreadPtr(), TEST_PASS_HANDLER);
+    MosSetKillArg(MosGetThread(), TEST_PASS_HANDLER);
     MosAssert(arg == 0x1234);
     return TEST_FAIL;
 }
@@ -1470,7 +1470,7 @@ static s32 PigeonThread(s32 arg) {
     while (1) {
         MosDelayThread(877);
         MosPrintf("Incoming ---- .. .. %u %08X.. ------\n", cnt,
-                       MosGetStackDepth(Stacks[PIGEON_THREAD_ID] + DFT_STACK_SIZE));
+                       MosGetStackDepth(MosGetStackBottom(MosGetThread()) + DFT_STACK_SIZE));
         cnt++;
     }
     return 0;
@@ -1478,8 +1478,9 @@ static s32 PigeonThread(s32 arg) {
 
 static s32 CmdPigeon(s32 argc, char * argv[]) {
     if (!PigeonFlag) {
-        MosInitAndRunThread(Threads[PIGEON_THREAD_ID], 0, PigeonThread, 0,
-                            Stacks[PIGEON_THREAD_ID], DFT_STACK_SIZE);
+        MosThread * thd = Threads[PIGEON_THREAD_ID];
+        MosInitAndRunThread(thd, 0, PigeonThread, 0, MosGetStackBottom(thd),
+                            MosGetStackSize(thd));
         PigeonFlag = 1;
     } else {
         MosKillThread(Threads[PIGEON_THREAD_ID]);
@@ -1640,33 +1641,34 @@ int InitTestBench() {
     MosReserveBlockSize(&TestThreadHeapDesc, 256);
     MosReserveBlockSize(&TestThreadHeapDesc, 128);
     MosReserveBlockSize(&TestThreadHeapDesc, 64);
-    Stacks[TEST_SHELL_THREAD_ID] = MosAlloc(&TestThreadHeapDesc, TEST_SHELL_STACK_SIZE);
-    if (Stacks[TEST_SHELL_THREAD_ID] == NULL) {
-        MosPrint("Stack allocation error\n");
+
+    MosSetThreadHeap(&TestThreadHeapDesc, false);
+
+    Threads[TEST_SHELL_THREAD_ID] = MosAllocAndRunThread(0, TestShell, 0, TEST_SHELL_STACK_SIZE);
+    if (Threads[TEST_SHELL_THREAD_ID] == NULL) {
+        MosPrint("Thread allocation error\n");
         return -1;
     }
-    Stacks[PIGEON_THREAD_ID] = MosAlloc(&TestThreadHeapDesc, DFT_STACK_SIZE);
-    if (Stacks[PIGEON_THREAD_ID] == NULL) {
-        MosPrint("Stack allocation error\n");
+
+    Threads[PIGEON_THREAD_ID] = MosAllocThread(DFT_STACK_SIZE);
+    if (Threads[PIGEON_THREAD_ID] == NULL) {
+        MosPrint("Thread allocation error\n");
         return -1;
     }
-    for (u32 id = 1; id < (count_of(Stacks) - 1); id++) {
+
+    u32 th_size = MosGetParams()->thread_handle_size;
+    for (u32 id = 1; id < (MAX_APP_THREADS - 1); id++) {
         Stacks[id] = MosAllocBlock(&TestThreadHeapDesc, DFT_STACK_SIZE);
         if (Stacks[id] == NULL) {
             MosPrint("Stack allocation error\n");
             return -1;
         }
-    }
-    u32 size = MosGetParams()->thread_handle_size;
-    for (u32 id = 0; id < count_of(Threads); id++) {
-        Threads[id] = MosAllocBlock(&TestThreadHeapDesc, size);
+        Threads[id] = MosAllocBlock(&TestThreadHeapDesc, th_size);
         if (Threads[id] == NULL) {
             MosPrint("Thread allocation error\n");
             return -1;
         }
     }
 
-    MosInitAndRunThread(Threads[TEST_SHELL_THREAD_ID], 0, TestShell, 0,
-                        Stacks[0], TEST_SHELL_STACK_SIZE);
     return 0;
 }
