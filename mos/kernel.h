@@ -149,7 +149,7 @@ typedef void (MosRawPrintfHook)(const char * fmt, ...);
 typedef void (MosSleepHook)(void);
 typedef void (MosWakeHook)(void);
 typedef void (MosEventHook)(MosEvent evt, u32 val);
-typedef void (MosThreadFreeHook)(MosThread *);
+typedef void (MosThreadFreeHook)(MosThread *); // TODO: Not implemented yet
 
 // IS (Interrupt Safe) means the function can be called from ISRs.
 // It may make sense to disable interrupts when calling those functions.

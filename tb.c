@@ -246,6 +246,44 @@ static bool ThreadTests(void) {
     //
 
     //
+    // Dynamic threads
+    //
+    test_pass = true;
+    MosPrint("Dynamic Threads\n");
+    ClearHistogram();
+    MosThread * thd[3];
+    thd[0] = MosAllocAndRunThread(1, PriTestThread, 0, DFT_STACK_SIZE);
+    thd[1] = MosAllocAndRunThread(1, PriTestThread, 1, DFT_STACK_SIZE);
+    thd[2] = MosAllocAndRunThread(1, PriTestThread, 2, DFT_STACK_SIZE);
+    if (thd[0] && thd[1] && thd[2]) {
+        MosDelayThread(3 * test_time);
+        MosRequestThreadStop(thd[0]);
+        MosRequestThreadStop(thd[1]);
+        MosRequestThreadStop(thd[2]);
+        if (MosWaitForThreadStop(thd[0]) != TEST_PASS) test_pass = false;
+        if (MosWaitForThreadStop(thd[1]) != TEST_PASS) test_pass = false;
+        if (MosWaitForThreadStop(thd[2]) != TEST_PASS) test_pass = false;
+        MosFreeThread(thd[0]);
+        MosFreeThread(thd[1]);
+        MosFreeThread(thd[2]);
+        DisplayHistogram(3);
+        if (TestHisto[0] < exp_iter || TestHisto[0] > exp_iter + 1)
+            test_pass = false;
+        if (TestHisto[1] < exp_iter || TestHisto[1] > exp_iter + 1)
+            test_pass = false;
+        if (TestHisto[2] < exp_iter || TestHisto[2] > exp_iter + 1)
+            test_pass = false;
+    }
+    else {
+        MosPrint("Cannot create threads!\n");
+        test_pass = false;
+    }
+    if (test_pass) MosPrint(" Passed\n");
+    else {
+        MosPrint(" Failed\n");
+        tests_all_pass = false;
+    }
+    //
     // Kill Thread using Default Handler
     //
     test_pass = true;
@@ -1642,7 +1680,7 @@ int InitTestBench() {
     MosReserveBlockSize(&TestThreadHeapDesc, 128);
     MosReserveBlockSize(&TestThreadHeapDesc, 64);
 
-    MosSetThreadHeap(&TestThreadHeapDesc, false);
+    MosSetThreadHeap(&TestThreadHeapDesc);
 
     Threads[TEST_SHELL_THREAD_ID] = MosAllocAndRunThread(0, TestShell, 0, TEST_SHELL_STACK_SIZE);
     if (Threads[TEST_SHELL_THREAD_ID] == NULL) {

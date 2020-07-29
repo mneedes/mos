@@ -16,7 +16,7 @@
 #include "mos/heap.h"
 
 // auto_free means thread resources are freed in the idle task after threads stop
-void MosSetThreadHeap(MosHeap * heap, bool auto_free);
+void MosSetThreadHeap(MosHeap * heap);
 MosThread * MosAllocThread(u32 stack_size);
 MosThread * MosAllocAndRunThread(MosThreadPriority pri, MosThreadEntry * entry,
                                  s32 arg, u32 stack_size);

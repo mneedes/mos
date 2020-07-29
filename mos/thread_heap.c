@@ -7,18 +7,14 @@
 #include "mos/thread_heap.h"
 
 static MosHeap * ThreadHeap = NULL;
-static bool AutoFree;
 
 static void FreeThread(MosThread * thd) {
-    /* TODO: Determine if pointer is in heap */
     MosFree(ThreadHeap, MosGetStackBottom(thd));
     MosFree(ThreadHeap, thd);
 }
 
-void MosSetThreadHeap(MosHeap * heap, bool auto_free) {
+void MosSetThreadHeap(MosHeap * heap) {
     ThreadHeap = heap;
-    AutoFree = auto_free;
-    if (AutoFree) MosRegisterThreadFreeHook(FreeThread);
 }
 
 MosThread *
@@ -47,7 +43,7 @@ MosAllocAndRunThread(MosThreadPriority pri, MosThreadEntry * entry, s32 arg, u32
     return thd;
 }
 
-void MosDestroyThread(MosThread * thd) {
+void MosFreeThread(MosThread * thd) {
     if (!ThreadHeap) return;
     FreeThread(thd);
 }

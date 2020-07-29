@@ -658,7 +658,7 @@ void MosResetTimer(MosTimer * timer) {
 
 static s32 IdleThreadEntry(s32 arg) {
     while (1) {
-        //if (ThreadFreeHook) (*ThreadFreeHook)(NULL);
+        //TODO:  ThreadFreeHook?  if (ThreadFreeHook) (*ThreadFreeHook)(NULL);
         if (SleepHook) (*SleepHook)();
         asm volatile (
             "dsb\n\t"
