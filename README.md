@@ -1,19 +1,16 @@
 # mos
-MOS, or Maintainable RTOS, is a simple and lightweight RTOS micro-kernel
-for ARM M series that supports basic threading and IPC primitives.
+MOS, or Maintainable RTOS, is a simple and lightweight RTOS micro-kernel for ARM M series that supports basic threading and IPC primitives.
 
-It is currently intended for low thread count applications, e.g.: "fun personal projects."
+It is a work in progress and is intended for "fun personal projects."
 
-MOS was originally developed on a SGS-Thomson STM32F4Discovery.  The provided
-HAL layer example should work immediately with the STM32F4Discovery or
-similar boards.  Otherwise you will need to create your own HAL to try it out.
+MOS was originally developed on a SGS-Thomson STM32F4Discovery and has also been tested on the STM32F767ZI Nucleo-144 board.  The HAL layer example should work immediately with the STM32F4Discovery or for similar boards with minimal modifications.
 
 Design Goals:
 * RTOS: Hard priorities and bounded execution
-* Short critical sections: Interrupts are only disabled for a few instructions, BASEPRI is used for scheduler locking-allowing higher priority interrupts to operate.
+* Short critical sections: Interrupts are only disabled for a few instructions, BASEPRI is used for scheduler locking-allowing higher priority interrupts to operate unimpeded.
 * Simple configuration with low use of conditional compilation.
 * Tick reduction (_i.e.:_ the so-called "tickless" operation)
-* Small code size (e.g.: mos.c microkernel compiled size is < ~5KB)
+* Small code size (_e.g.:_ mos/kernel.c compiled size is < 5KB)
 * Easily modifiable
 
 Included Primitives:
@@ -31,7 +28,7 @@ Included Optional Modules:
 Supported toolchains / architectures:
 * GCC
 * ARM M3/M4/M7
-* M4F (hardware floating point using lazy stacking)
+* M4F/M7 (hardware floating point using lazy stacking)
 
 Future
 * C++ bindings
