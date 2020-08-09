@@ -58,13 +58,11 @@ typedef int32_t     s32;
 typedef uint64_t    u64;
 typedef int64_t     s64;
 
-typedef void MosThread;
 typedef u16 MosThreadPriority;
 
 // Microkernel Parameters
 typedef struct {
     char * version;
-    u32 thread_handle_size;
     MosThreadPriority thread_pri_hi;
     MosThreadPriority thread_pri_low;
     u32 int_pri_hi;
@@ -72,6 +70,11 @@ typedef struct {
     u32 micro_sec_per_tick;
     bool fp_support_en;
 } MosParams;
+
+// Mos Thread (opaque container)
+typedef struct {
+    u32 rsvd[17];
+} MosThread;
 
 typedef enum {
     MOS_THREAD_NOT_STARTED,

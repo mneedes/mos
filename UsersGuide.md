@@ -3,13 +3,16 @@
 
 ..Intended for ARM M3/M4/M7 Series
 
-This so far has been an exercise to see how well a simple scheduler implementing tick reduction could perform assuming:
+This so far has been an exercise to see how well a simple scheduler implementing tick reduction can perform assuming:
 
-1. A fixed maximum number of threads.
-2. Scheduler polls state of blocked threads instead of being event driven.
-3. Yield flags are maintained instead of wait lists on the blocked resources such as semaphores and mutex.
+1. Scheduler polls state of blocked threads instead of being event driven.
+2. Yield flags are maintained instead of wait lists on the blocked resources such as semaphores and mutex.
+
+MOS has a modular construction, kernel can either stand alone or optionally use trace, shell, heap and dynamic thread modules. There are some dependencies: for example the shell module requires the trace module and the dynamic thread module requires heap.
 
 ## MOS configuration (mos_config.h)
+
+Edit configuration file to suit application requirements.
 
 ## Processor HAL (mos_phal.h)
 

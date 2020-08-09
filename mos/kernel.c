@@ -32,15 +32,15 @@
     { if (MOS_ENABLE_EVENTS) (*EventHook)((MOS_EVENT_ ## e), (v)); }
 
 typedef struct {
-    u32 SWSAVE[8];   // R11-R4
+    u32 SWSAVE[8];   // R4-R11
 #if (ENABLE_FP_CONTEXT_SAVE == 1)
     u32 LR_EXC;      // Exception LR
 #endif
-    u32 HWSAVE[4];   // R3-R0
+    u32 HWSAVE[4];   // R0-R3
     u32 R12;         // R12
     u32 LR;          // R14
     u32 PC;          // R15
-    u32 xPSR;
+    u32 xPSR;                                          // TODO: This probably should just be PSR?
 #if (ENABLE_FP_CONTEXT_SAVE == 1)
     u32 ALIGNMENT_PAD;  // Not sure this is needed
 #endif
@@ -87,7 +87,15 @@ typedef struct Thread {
 
 // Parameters
 static u8 IntPriMaskLow;
-static MosParams Params = { .version = MOS_TO_STR(MOS_VERSION) };
+static MosParams Params = {
+   .version = MOS_TO_STR(MOS_VERSION),
+   .thread_pri_hi = 0,
+   .thread_pri_low = MOS_MAX_THREAD_PRIORITIES - 1,
+   .int_pri_hi = 0,
+   .int_pri_low = 0,
+   .micro_sec_per_tick = MOS_MICRO_SEC_PER_TICK,
+   .fp_support_en = ENABLE_FP_CONTEXT_SAVE
+};
 
 // Hooks
 static MosRawPrintfHook * PrintfHook = NULL;
@@ -263,7 +271,7 @@ ProcessThread(Thread * thd, MosThreadPriority pri, bool first_scan) {
     case THREAD_WAIT_FOR_MUTEX:
         {
             // Check mutex (nested priority inheritance algorithm)
-            Thread * owner = thd->wait.mtx->owner;
+            Thread * owner = (Thread *) thd->wait.mtx->owner;
             if (owner == NO_SUCH_THREAD) {
                 if (first_scan) thd->wait.mtx->to_yield = false;
                 return thd;
@@ -501,14 +509,20 @@ void MOS_NAKED PendSV_Handler(void) {
 
 #endif
 
-// TODO: Limit stack dump to end of memory
-static void MOS_USED FaultHandler(u32 fault_no, u32 * sp, bool in_isr) {
+// TODO: Limit stack dump to top of stack / end of memory
+// TODO: Clear fault bits after thread exception ?
+static void MOS_USED FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 lr) {
     char * fault_type[] = {
-        "Hard", "MemManage", "Bus", "Usage"
+        "Hard", "Mem", "Bus", "Usage", "Imprecise Bus"
     };
+    bool in_isr = ((lr & 0x8) == 0x0);
     if (PrintfHook) {
-        (*PrintfHook)("*** %s Fault %s", fault_type[fault_no - 3],
-                      in_isr ? "IN ISR " : "");
+        u32 cfsr = SCB->CFSR;
+        u32 fault_no = (psr & 0xf) - 3;
+        (*PrintfHook)("%08X\n", psr);
+        if (fault_no == 2 && (cfsr & 0x400)) fault_no = 4;
+        (*PrintfHook)("\n*** %s Fault %s", fault_type[fault_no],
+                          in_isr ? "IN ISR " : "");
         if (RunningThread == NO_SUCH_THREAD) (*PrintfHook)("(Before MOS Run) ***\n");
         else {
             (*PrintfHook)("(Thread %08X) ***\n", RunningThread);
@@ -522,14 +536,21 @@ static void MOS_USED FaultHandler(u32 fault_no, u32 * sp, bool in_isr) {
             }
 #endif
         }
-        (*PrintfHook)(" HFSR: %08X  CFSR: %08X AFSR: %08X\n", SCB->HFSR,
-                      SCB->CFSR, SCB->AFSR);
-        (*PrintfHook)(" BFAR: %08X MMFAR: %08X\n", SCB->BFAR, SCB->MMFAR);
-        (*PrintfHook)("Stack @%08X:\n", (u32) sp);
-        for (u32 ix = 0; ix < 16; ix++) {
-            (*PrintfHook)(" %08X", sp[ix]);
-            if ((ix & 0x3) == 0x3) (*PrintfHook)("\n");
+
+        (*PrintfHook)(" HFSR: %08X  CFSR: %08X AFSR: %08X\n",
+                          SCB->HFSR, cfsr, SCB->AFSR);
+        (*PrintfHook)(" BFAR: %08X MMFAR: %08X\n\n", SCB->BFAR, SCB->MMFAR);
+
+        bool use_psp = ((lr & 0x4) == 0x4);
+        u32 * sp = use_psp ? psp : msp;
+        (*PrintfHook)("%s Stack @%08X:\n", use_psp ? "Process" : "Main", (u32) sp);
+        (*PrintfHook)(" %08X %08X %08X %08X  (R0 R1 R2 R3)\n",  sp[0], sp[1], sp[2], sp[3]);
+        (*PrintfHook)(" %08X %08X %08X %08X (R12 LR PC PSR)\n", sp[4], sp[5], sp[6], sp[7]);
+        sp += 8;
+        for (u32 ix = 0; ix < 4; ix++, sp += 4) {
+            (*PrintfHook)(" %08X %08X %08X %08X\n", sp[0], sp[1], sp[2], sp[3]);
         }
+        (*PrintfHook)("\n");
     }
     if (RunningThread == NO_SUCH_THREAD || in_isr) {
         // Hang if fault occurred anywhere but in thread context
@@ -544,16 +565,10 @@ static void MOS_USED FaultHandler(u32 fault_no, u32 * sp, bool in_isr) {
 
 void MOS_NAKED HardFault_Handler(void) {
     asm volatile (
-        "mrs r0, psr\n\t"
-        "and r0, #255\n\t"
-        "tst lr, #4\n\t"
-        "ite eq\n\t"
-        "mrseq r1, msp\n\t"
-        "mrsne r1, psp\n\t"
-        "tst lr, #8\n\t"
-        "ite eq\n\t"
-        "moveq r2, #1\n\t"
-        "movne r2, #0\n\t"
+        "mrs r0, msp\n\t"
+        "mrs r1, psp\n\t"
+        "mrs r2, psr\n\t"
+        "mov r3, lr\n\t"
         "b FaultHandler\n\t"
             : : : "r0", "r1", "r2", "r3"
     );
@@ -713,16 +728,10 @@ void MosInit(void) {
     MosInitList(&ThreadTimers);
     MosInitList(&MessageTimers);
     // Create idle thread
-    MosInitAndRunThread(&IdleThread, MOS_MAX_THREAD_PRIORITIES,
+    MosInitAndRunThread((MosThread *) &IdleThread, MOS_MAX_THREAD_PRIORITIES,
                         IdleThreadEntry, 0, IdleStack, sizeof(IdleStack));
-    // Fill out parameters
-    Params.thread_handle_size = sizeof(Thread);
-    Params.thread_pri_hi = 0;
-    Params.thread_pri_low = MOS_MAX_THREAD_PRIORITIES - 1;
-    Params.int_pri_hi = 0;
+    // Fill out remaining parameters
     Params.int_pri_low = pri_low;
-    Params.micro_sec_per_tick = MOS_MICRO_SEC_PER_TICK;
-    Params.fp_support_en = ENABLE_FP_CONTEXT_SAVE;
 }
 
 void MosRegisterRawPrintfHook(MosRawPrintfHook * hook) { PrintfHook = hook; }
@@ -732,6 +741,8 @@ void MosRegisterEventHook(MosEventHook * hook) { EventHook = hook; }
 void MosRegisterThreadFreeHook(MosThreadFreeHook * hook) { ThreadFreeHook = hook; };
 
 void MosRunScheduler(void) {
+    // Ensure opaque thread structure has same size as internal structure
+    MosAssert(sizeof(Thread) == sizeof(MosThread));
     // Start PSP in a safe place for first PendSV and then enable interrupts
     asm volatile (
         "ldr r0, psp_start\n\t"
@@ -914,7 +925,7 @@ void MosKillThread(MosThread * _thd) {
         while (1)
             ;
     }
-    else MosInitAndRunThread(thd, thd->pri, thd->kill_handler,
+    else MosInitAndRunThread((MosThread *) thd, thd->pri, thd->kill_handler,
                              thd->kill_arg, thd->stack_bottom,
                              thd->stack_size);
 }
@@ -1290,8 +1301,9 @@ bool MosWaitOnMuxOrTO(MosMux * mux, u32 * idx, u32 ticks) {
 
 void MosAssertAt(char * file, u32 line) {
     if (PrintfHook) (*PrintfHook)("Assertion failed in %s on line %u\n", file, line);
-    SetRunningThreadStateAndYield(THREAD_TIME_TO_DIE);
-    // not reachable
+    if (RunningThread != NO_SUCH_THREAD)
+        SetRunningThreadStateAndYield(THREAD_TIME_TO_DIE);
+    // not always reachable
     while (1)
         ;
 }

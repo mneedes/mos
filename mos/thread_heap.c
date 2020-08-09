@@ -20,9 +20,9 @@ void MosSetThreadHeap(MosHeap * heap) {
 MosThread *
 MosAllocThread(u32 stack_size) {
     if (!ThreadHeap) return NULL;
-    u8 * stack_bottom = (u8 *)MosAlloc(ThreadHeap, stack_size);
+    u8 * stack_bottom = (u8 *) MosAlloc(ThreadHeap, stack_size);
     if (stack_bottom == NULL) return NULL;
-    MosThread * thd = (MosThread *)MosAlloc(ThreadHeap, MosGetParams()->thread_handle_size);
+    MosThread * thd = (MosThread *) MosAlloc(ThreadHeap, sizeof(MosThread));
     if (thd == NULL) {
         MosFree(ThreadHeap, stack_bottom);
         return NULL;
@@ -36,8 +36,7 @@ MosAllocAndRunThread(MosThreadPriority pri, MosThreadEntry * entry, s32 arg, u32
     MosThread * thd = MosAllocThread(stack_size);
     if (thd == NULL) return NULL;
     if (!MosInitAndRunThread(thd, pri, entry, arg, MosGetStackBottom(thd), stack_size)) {
-        MosFree(ThreadHeap, MosGetStackBottom(thd));
-        MosFree(ThreadHeap, thd);
+        FreeThread(thd);
         return NULL;
     }
     return thd;

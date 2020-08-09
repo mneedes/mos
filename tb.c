@@ -34,6 +34,7 @@ typedef enum {
 } TestStatus;
 
 // Test thread stacks and heap
+static MosThread StaticThreads[MAX_APP_THREADS];
 static MosThread * Threads[MAX_APP_THREADS];
 static u8 * Stacks[MAX_APP_THREADS];
 
@@ -251,27 +252,21 @@ static bool ThreadTests(void) {
     test_pass = true;
     MosPrint("Dynamic Threads\n");
     ClearHistogram();
-    MosThread * thd[3];
+    MosThread * thd[2];
     thd[0] = MosAllocAndRunThread(1, PriTestThread, 0, DFT_STACK_SIZE);
     thd[1] = MosAllocAndRunThread(1, PriTestThread, 1, DFT_STACK_SIZE);
-    thd[2] = MosAllocAndRunThread(1, PriTestThread, 2, DFT_STACK_SIZE);
-    if (thd[0] && thd[1] && thd[2]) {
-        MosDelayThread(3 * test_time);
+    if (thd[0] && thd[1]) {
+        MosDelayThread(2 * test_time);
         MosRequestThreadStop(thd[0]);
         MosRequestThreadStop(thd[1]);
-        MosRequestThreadStop(thd[2]);
         if (MosWaitForThreadStop(thd[0]) != TEST_PASS) test_pass = false;
         if (MosWaitForThreadStop(thd[1]) != TEST_PASS) test_pass = false;
-        if (MosWaitForThreadStop(thd[2]) != TEST_PASS) test_pass = false;
         MosFreeThread(thd[0]);
         MosFreeThread(thd[1]);
-        MosFreeThread(thd[2]);
         DisplayHistogram(3);
         if (TestHisto[0] < exp_iter || TestHisto[0] > exp_iter + 1)
             test_pass = false;
         if (TestHisto[1] < exp_iter || TestHisto[1] > exp_iter + 1)
-            test_pass = false;
-        if (TestHisto[2] < exp_iter || TestHisto[2] > exp_iter + 1)
             test_pass = false;
     }
     else {
@@ -1694,16 +1689,12 @@ int InitTestBench() {
         return -1;
     }
 
-    u32 th_size = MosGetParams()->thread_handle_size;
+    // Static threads with stacks allocated from the heap
     for (u32 id = 1; id < (MAX_APP_THREADS - 1); id++) {
+        Threads[id] = &StaticThreads[id];
         Stacks[id] = MosAllocBlock(&TestThreadHeapDesc, DFT_STACK_SIZE);
         if (Stacks[id] == NULL) {
             MosPrint("Stack allocation error\n");
-            return -1;
-        }
-        Threads[id] = MosAllocBlock(&TestThreadHeapDesc, th_size);
-        if (Threads[id] == NULL) {
-            MosPrint("Thread allocation error\n");
             return -1;
         }
     }
