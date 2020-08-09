@@ -40,7 +40,7 @@ typedef struct {
     u32 R12;         // R12
     u32 LR;          // R14
     u32 PC;          // R15
-    u32 xPSR;                                          // TODO: This probably should just be PSR?
+    u32 PSR;
 #if (ENABLE_FP_CONTEXT_SAVE == 1)
     u32 ALIGNMENT_PAD;  // Not sure this is needed
 #endif
@@ -202,7 +202,7 @@ static void InitThread(Thread * thd, MosThreadPriority pri,
     StackFrame * sf = (StackFrame *) (stack_bottom + stack_size);
     sf--;
     // Set Thumb Mode
-    sf->xPSR = 0x01000000;
+    sf->PSR = 0x01000000;
     sf->PC = (u32)entry;
     sf->LR = (u32)ThreadExit;
     sf->R12 = 0;
@@ -511,6 +511,8 @@ void MOS_NAKED PendSV_Handler(void) {
 
 // TODO: Limit stack dump to top of stack / end of memory
 // TODO: Clear fault bits after thread exception ?
+// TODO: FPU stack? -- increase dump size
+// TODO: Print thread name
 static void MOS_USED FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 lr) {
     char * fault_type[] = {
         "Hard", "Mem", "Bus", "Usage", "Imprecise Bus"
@@ -519,7 +521,6 @@ static void MOS_USED FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 lr) {
     if (PrintfHook) {
         u32 cfsr = SCB->CFSR;
         u32 fault_no = (psr & 0xf) - 3;
-        (*PrintfHook)("%08X\n", psr);
         if (fault_no == 2 && (cfsr & 0x400)) fault_no = 4;
         (*PrintfHook)("\n*** %s Fault %s", fault_type[fault_no],
                           in_isr ? "IN ISR " : "");
@@ -624,7 +625,13 @@ void MOS_NAKED MosDelayMicroSec(u32 usec) {
         "mul r0, r0, r1\n\t"
         "sub r0, #13\n\t"  // Overhead calibration
         "delay:\n\t"
-        "subs r0, #3\n\t"  // Cycles per loop iteration
+#if (MOS_CYCLES_PER_INNER_LOOP == 3)
+        "subs r0, #3\n\t"
+#elif (MOS_CYCLES_PER_INNER_LOOP == 1)
+        "subs r0, #1\n\t"
+#else
+#error "Invalid selection for inner loop cycles"
+#endif
         "bgt delay\n\t"
         "bx lr\n\t"
         ".balign 4\n\t"

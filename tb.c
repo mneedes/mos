@@ -163,13 +163,13 @@ static s32 AssertTestThread(s32 arg) {
 }
 
 static s32 FPTestThread(s32 arg) {
-    float x = 0.0;
+    double x = 0.0;
     for (;;) {
         TestHisto[arg]++;
         x = x + 1.0;
         if (MosIsStopRequested()) break;
     }
-    if ((float)TestHisto[arg] != x) return TEST_FAIL;
+    if ((double)TestHisto[arg] != x) return TEST_FAIL;
     else return TEST_PASS;
 }
 
