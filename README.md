@@ -28,7 +28,7 @@ Included Optional Modules:
 Supported toolchains / architectures:
 * GCC
 * ARM M3/M4/M7
-* M4F/M7 (hardware floating point using lazy stacking)
+* M4F/M7F (hardware floating point using lazy stacking)
 
 Future
 * C++ bindings
