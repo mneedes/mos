@@ -13,11 +13,14 @@
 #define _HAL_H_
 
 #include "mos_phal.h"
+#include "mos/kernel.h"
 
 typedef void (HalRxUARTCallback)(char ch);
 
 void HalInit(void);
 void HalRegisterRxUARTCallback(HalRxUARTCallback * rx_callback);
 void HalSendToTxUART(char ch);
+
+u32 HalGetRandomU32(void);
 
 #endif

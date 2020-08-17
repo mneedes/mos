@@ -692,11 +692,11 @@ static s32 IdleThreadEntry(s32 arg) {
 }
 
 void MosInit(void) {
+    // Trap Divide By 0 and "Unintentional" Unaligned Accesses
+    SCB->CCR |= (SCB_CCR_DIV_0_TRP_Msk | SCB_CCR_UNALIGN_TRP_Msk);
     // Enable Bus, Memory and Usage Faults in general
     SCB->SHCSR |= (SCB_SHCSR_BUSFAULTENA_Msk | SCB_SHCSR_MEMFAULTENA_Msk |
                    SCB_SHCSR_USGFAULTENA_Msk);
-    // Trap Divide By 0 and "Unintentional" Unaligned Accesses
-    SCB->CCR |= (SCB_CCR_DIV_0_TRP_Msk | SCB_CCR_UNALIGN_TRP_Msk);
 #if (ENABLE_FP_CONTEXT_SAVE == 1)
     // Ensure lazy stacking is enabled (for floating point)
     FPU->FPCCR |= (FPU_FPCCR_ASPEN_Msk | FPU_FPCCR_LSPEN_Msk);

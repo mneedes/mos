@@ -124,6 +124,7 @@ typedef struct {
     u32 head;
 } MosQueue;
 
+// Timers
 typedef struct {
     u32 msg;
     u32 wake_tick;

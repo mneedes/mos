@@ -74,7 +74,21 @@ static s32 TimerTestBusyThread(s32 arg) {
     return TEST_PASS;
 }
 
-#define RUN_TEST    4
+static s32 HalRandomPulseThread(s32 arg) {
+    for (;;) {
+        u32 rn = HalGetRandomU32();
+        MosDisableInterrupts();
+        LED_ON(0);
+        MosDelayMicroSec(8 + (rn & 0x1F));
+        LED_OFF(0);
+        MosEnableInterrupts();
+        if (MosIsStopRequested()) break;
+        MosDelayMicroSec(800 + (rn >> 23));
+    }
+    return TEST_PASS;
+}
+
+#define RUN_TEST    5
 
 bool HalTests(MosThread * threads[], u32 max_threads, u8 * stacks[], u32 stack_size) {
     const u32 test_time = 5000;
@@ -148,6 +162,13 @@ bool HalTests(MosThread * threads[], u32 max_threads, u8 * stacks[], u32 stack_s
     }
     if (test_pass) MosPrint(" Passed\n");
     else MosPrint(" Failed\n");
+#elif RUN_TEST == 5
+    test_pass = true;
+    MosPrint("Hal RNG Test\n");
+    MosInitAndRunThread(threads[1], 1, HalRandomPulseThread, 0, stacks[1], stack_size);
+    MosDelayThread(test_time);
+    MosRequestThreadStop(threads[1]);
+    if (MosWaitForThreadStop(threads[1]) != TEST_PASS) test_pass = false;
 #endif
     return test_pass;
 }
