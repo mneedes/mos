@@ -11,13 +11,14 @@ Design Goals:
 * Simple configuration with low use of conditional compilation.
 * Tick reduction (_i.e.:_ the so-called "tickless" operation)
 * Small code size (_e.g.:_ mos/kernel.c compiled size is < 5KB)
+* Static kernel and (optionally) static application
 * Easily modifiable
 
 Included Primitives:
 * Recursive mutex with priority inheritance
 * Semaphores
 * Message queues
-* Thread timers based on SysTick
+* SysTick-based Timers
 
 Included Optional Modules:
 * Heap
