@@ -79,7 +79,7 @@ typedef struct {
     u32 wake_tick;
     u32 ticks;
     MosQueue * q;
-    MosListElm tmr_q;
+    MosListElm tmr_e;
 } MosTimer;
 
 // Allows blocking on multiple data structures simultaneously

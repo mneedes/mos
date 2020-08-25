@@ -74,8 +74,8 @@ typedef struct Thread {
     u32 sp;
     error_t err_no;
     ThreadState state;
-    MosList run_q;
-    MosListElm tmr_q;
+    MosList run_e;
+    MosListElm tmr_e;
     u32 wake_tick;
     MosThreadPriority pri;
     u16 stop_request;
@@ -117,11 +117,11 @@ static MosThreadFreeHook * ThreadFreeHook = NULL;
 static Thread * RunningThread = NO_SUCH_THREAD;
 static error_t * ErrNo;
 static Thread IdleThread;
-static MosList PriQueues[MOS_MAX_THREAD_PRIORITIES];
+static MosList RunQueues[MOS_MAX_THREAD_PRIORITIES];
 static u32 IntDisableCount = 0;
 
 // Timers and Ticks
-static MosList Timers;
+static MosList TimerQueue;
 static volatile u32 TickCount = MOS_START_TICK_COUNT;
 static volatile u32 TickInterval = 1;
 static u32 MaxTickInterval;
@@ -188,9 +188,9 @@ static void ThreadExit(s32 rtn_val) {
     RunningThread->rtn_val = rtn_val;
     SetThreadState(RunningThread, THREAD_STOPPED);
     asm volatile ( "dmb" );
-    if (MosIsOnList(&RunningThread->tmr_q.link))
-        MosRemoveFromList(&RunningThread->tmr_q.link);
-    MosRemoveFromList(&RunningThread->run_q);
+    if (MosIsOnList(&RunningThread->tmr_e.link))
+        MosRemoveFromList(&RunningThread->tmr_e.link);
+    MosRemoveFromList(&RunningThread->run_e);
     YieldThread();
     SetBasePri(0);
     // Not reachable
@@ -329,8 +329,8 @@ static Thread *
 ScanThreads(MosThreadPriority * pri, MosList ** thd_elm, bool first_scan) {
     MosList * elm = *thd_elm;
     for (; *pri < MOS_MAX_THREAD_PRIORITIES;) {
-        for (; elm != &PriQueues[*pri]; elm = elm->next) {
-            Thread * thd = container_of(elm, Thread, run_q);
+        for (; elm != &RunQueues[*pri]; elm = elm->next) {
+            Thread * thd = container_of(elm, Thread, run_e);
             Thread * run_thd = ProcessThread(thd, *pri, first_scan);
             if (run_thd) {
                 *thd_elm = elm;
@@ -339,7 +339,7 @@ ScanThreads(MosThreadPriority * pri, MosList ** thd_elm, bool first_scan) {
         }
         if (!first_scan) break;
         (*pri)++;
-        elm = PriQueues[*pri].next;
+        elm = RunQueues[*pri].next;
     }
     return NULL;
 }
@@ -363,8 +363,8 @@ static u32 MOS_USED Scheduler(u32 sp) {
     }
     if (RunningThread->state == THREAD_TIME_TO_DIE) {
         // Arrange death of running thread via kill handler
-        if (MosIsOnList(&RunningThread->tmr_q.link))
-            MosRemoveFromList(&RunningThread->tmr_q.link);
+        if (MosIsOnList(&RunningThread->tmr_e.link))
+            MosRemoveFromList(&RunningThread->tmr_e.link);
         InitThread(RunningThread, RunningThread->pri,
                    RunningThread->kill_handler, RunningThread->kill_arg,
                    RunningThread->stack_bottom, RunningThread->stack_size);
@@ -373,26 +373,26 @@ static u32 MOS_USED Scheduler(u32 sp) {
         // Update running thread timer state (insertion sort in timer queue)
         s32 rem_ticks = (s32)RunningThread->wake_tick - adj_tick_count;
         MosList * tmr;
-        for (tmr = Timers.next; tmr != &Timers; tmr = tmr->next) {
+        for (tmr = TimerQueue.next; tmr != &TimerQueue; tmr = tmr->next) {
             s32 wake_tick;
             if (((MosListElm *)tmr)->type == ELM_THREAD) {
-                Thread * thd = container_of(tmr, Thread, tmr_q);
+                Thread * thd = container_of(tmr, Thread, tmr_e);
                 wake_tick = (s32)thd->wake_tick;
             } else {
-                MosTimer * tmr_tmr = container_of(tmr, MosTimer, tmr_q);
+                MosTimer * tmr_tmr = container_of(tmr, MosTimer, tmr_e);
                 wake_tick = (s32)tmr_tmr->wake_tick;
             }
             s32 tmr_rem_ticks = wake_tick - adj_tick_count;
             if (rem_ticks <= tmr_rem_ticks) break;
         }
-        MosAddToListBefore(tmr, &RunningThread->tmr_q.link);
+        MosAddToListBefore(tmr, &RunningThread->tmr_e.link);
     }
     // Process timer queue
     MosList * tmr_save;
-    for (MosList * tmr = Timers.next; tmr != &Timers; tmr = tmr_save) {
+    for (MosList * tmr = TimerQueue.next; tmr != &TimerQueue; tmr = tmr_save) {
         tmr_save = tmr->next;
         if (((MosListElm *)tmr)->type == ELM_THREAD) {
-            Thread * thd = container_of(tmr, Thread, tmr_q);
+            Thread * thd = container_of(tmr, Thread, tmr_e);
             s32 rem_ticks = (s32)thd->wake_tick - adj_tick_count;
             if (rem_ticks <= 0) {
                 // Signal timeout
@@ -402,7 +402,7 @@ static u32 MOS_USED Scheduler(u32 sp) {
                 MosRemoveFromList(tmr);
             } else break;
         } else {
-            MosTimer * tmr_tmr = container_of(tmr, MosTimer, tmr_q);
+            MosTimer * tmr_tmr = container_of(tmr, MosTimer, tmr_e);
             s32 rem_ticks = (s32)tmr_tmr->wake_tick - adj_tick_count;
             if (rem_ticks <= 0) {
                 if (MosSendToQueue(tmr_tmr->q, tmr_tmr->msg)) MosRemoveFromList(tmr);
@@ -415,20 +415,20 @@ static u32 MOS_USED Scheduler(u32 sp) {
     //   schedule idle thread.
     bool tick_en = false;
     MosThreadPriority pri = 0;
-    MosList * thd_elm = PriQueues[pri].next;
+    MosList * thd_elm = RunQueues[pri].next;
     Thread * run_thd = ScanThreads(&pri, &thd_elm, true);
     if (run_thd) {
         // Remove from timer and set thread runnable
         if ((run_thd->state & THREAD_WAIT_FOR_TICK) == THREAD_WAIT_FOR_TICK) {
-            if (MosIsOnList(&run_thd->tmr_q.link))
-                MosRemoveFromList(&run_thd->tmr_q.link);
+            if (MosIsOnList(&run_thd->tmr_e.link))
+                MosRemoveFromList(&run_thd->tmr_e.link);
         }
         SetThreadState(run_thd, THREAD_RUNNABLE);
         // Look for second potentially runnable thread
         if (ScanThreads(&pri, &thd_elm, false)) tick_en = true;
         // Move thread to end of priority queue (round-robin)
-        if (!MosIsLastElement(&PriQueues[run_thd->pri], &run_thd->run_q))
-            MosMoveToEndOfList(&PriQueues[run_thd->pri], &run_thd->run_q);
+        if (!MosIsLastElement(&RunQueues[run_thd->pri], &run_thd->run_e))
+            MosMoveToEndOfList(&RunQueues[run_thd->pri], &run_thd->run_e);
     } else run_thd = &IdleThread;
     // Determine next timer interval
     //   If more than 1 active thread, enable tick to commutate threads
@@ -437,12 +437,12 @@ static u32 MOS_USED Scheduler(u32 sp) {
     if (tick_en == false) {
         // This ensures that the LOAD value will fit in SysTick counter...
         s32 tmr_ticks_rem = 0x7fffffff;
-        if (!MosIsListEmpty(&Timers)) {
-            if (((MosListElm *)Timers.next)->type == ELM_THREAD) {
-                Thread * thd = container_of(Timers.next, Thread, tmr_q);
+        if (!MosIsListEmpty(&TimerQueue)) {
+            if (((MosListElm *)TimerQueue.next)->type == ELM_THREAD) {
+                Thread * thd = container_of(TimerQueue.next, Thread, tmr_e);
                 tmr_ticks_rem = (s32)thd->wake_tick - adj_tick_count;
             } else {
-                MosTimer * tmr_tmr = container_of(Timers.next, MosTimer, tmr_q);
+                MosTimer * tmr_tmr = container_of(TimerQueue.next, MosTimer, tmr_e);
                 tmr_ticks_rem = (s32)tmr_tmr->wake_tick - adj_tick_count;
             }
         }
@@ -652,10 +652,10 @@ void MOS_NAKED MosDelayMicroSec(u32 usec) {
     );
 }
 
-// Timers (work in progress, needs locks etc etc etc)
+// TimerQueue (work in progress, needs locks etc etc etc)
 
 void MosInitTimer(MosTimer * timer, MosQueue * q) {
-    MosInitListElm(&timer->tmr_q, ELM_TIMER);
+    MosInitListElm(&timer->tmr_e, ELM_TIMER);
     timer->q = q;
 }
 
@@ -664,18 +664,18 @@ static void AddMessageTimer(MosTimer * timer) {
     SetBasePri(IntPriMaskLow);
     u32 tick_count = MosGetTickCount();
     timer->wake_tick = tick_count + timer->ticks;
-    for (tmr = Timers.next; tmr != &Timers; tmr = tmr->next) {
+    for (tmr = TimerQueue.next; tmr != &TimerQueue; tmr = tmr->next) {
         if (((MosListElm *)tmr)->type == ELM_THREAD) {
-            Thread * thd = container_of(tmr, Thread, tmr_q);
+            Thread * thd = container_of(tmr, Thread, tmr_e);
             s32 tmr_rem_ticks = (s32)thd->wake_tick - tick_count;
             if (timer->ticks <= tmr_rem_ticks) break;
         } else {
-            MosTimer * tmr_tmr = container_of(tmr, MosTimer, tmr_q);
+            MosTimer * tmr_tmr = container_of(tmr, MosTimer, tmr_e);
             s32 tmr_rem_ticks = (s32)tmr_tmr->wake_tick - tick_count;
             if (timer->ticks <= tmr_rem_ticks) break;
         }
     }
-    MosAddToListBefore(tmr, &timer->tmr_q.link);
+    MosAddToListBefore(tmr, &timer->tmr_e.link);
     SetBasePri(0);
 }
 
@@ -687,7 +687,7 @@ void MosSetTimer(MosTimer * timer, u32 ticks, u32 msg) {
 
 void MosCancelTimer(MosTimer * timer) {
     SetBasePri(IntPriMaskLow);
-    MosRemoveFromList(&timer->tmr_q.link);
+    MosRemoveFromList(&timer->tmr_e.link);
     SetBasePri(0);
 }
 
@@ -747,10 +747,10 @@ void MosInit(void) {
         NVIC_SetPriority(SysTick_IRQn, pri);
         NVIC_SetPriority(PendSV_IRQn, NVIC_EncodePriority(pri_grp, pri_low, subpri + 1));
     }
-    // Initialize empty priority, event and timer queues
+    // Initialize empty queues
     for (MosThreadPriority pri = 0; pri < MOS_MAX_THREAD_PRIORITIES; pri++)
-        MosInitList(&PriQueues[pri]);
-    MosInitList(&Timers);
+        MosInitList(&RunQueues[pri]);
+    MosInitList(&TimerQueue);
     // Create idle thread
     MosInitAndRunThread((MosThread *) &IdleThread, MOS_MAX_THREAD_PRIORITIES,
                         IdleThreadEntry, 0, IdleStack, sizeof(IdleStack));
@@ -837,13 +837,13 @@ bool MosInitThread(MosThread * _thd, MosThreadPriority pri,
     case THREAD_UNINIT:
     case THREAD_INIT:
     case THREAD_STOPPED:
-        MosInitList(&thd->run_q);
-        MosInitListElm(&thd->tmr_q, ELM_THREAD);
+        MosInitList(&thd->run_e);
+        MosInitListElm(&thd->tmr_e, ELM_THREAD);
         break;
     default:
-        if (MosIsOnList(&thd->tmr_q.link))
-            MosRemoveFromList(&thd->tmr_q.link);
-        MosRemoveFromList(&thd->run_q);
+        if (MosIsOnList(&thd->tmr_e.link))
+            MosRemoveFromList(&thd->tmr_e.link);
+        MosRemoveFromList(&thd->run_e);
         break;
     }
     SetThreadState(thd, THREAD_UNINIT);
@@ -859,7 +859,7 @@ bool MosRunThread(MosThread * _thd) {
         SetBasePri(IntPriMaskLow);
         SetThreadState(thd, THREAD_RUNNABLE);
         if (thd != &IdleThread)
-            MosAddToList(&PriQueues[thd->pri], &thd->run_q);
+            MosAddToList(&RunQueues[thd->pri], &thd->run_e);
         if (RunningThread != NO_SUCH_THREAD && thd->pri < RunningThread->pri)
             YieldThread();
         SetBasePri(0);
@@ -908,8 +908,8 @@ void MosChangeThreadPriority(MosThread * _thd, MosThreadPriority pri) {
         return;
     }
     thd->pri = pri;
-    MosRemoveFromList(&thd->run_q);
-    MosAddToList(&PriQueues[pri], &thd->run_q);
+    MosRemoveFromList(&thd->run_e);
+    MosAddToList(&RunQueues[pri], &thd->run_e);
     if (RunningThread != NO_SUCH_THREAD && pri < thd->pri)
         YieldThread();
     SetBasePri(0);
