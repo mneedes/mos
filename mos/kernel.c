@@ -31,6 +31,14 @@
 #define EVENT(e, v) \
     { if (MOS_ENABLE_EVENTS) (*EventHook)((MOS_EVENT_ ## e), (v)); }
 
+typedef enum {
+    ELM_THREAD,
+    ELM_TIMER,
+    ELM_MUTEX,
+    ELM_SEM,
+    ELM_MUX,
+} ElmType;
+
 typedef struct {
     u32 SWSAVE[8];   // R4-R11
 #if (ENABLE_FP_CONTEXT_SAVE == 1)
@@ -67,7 +75,7 @@ typedef struct Thread {
     error_t err_no;
     ThreadState state;
     MosList run_q;
-    MosList tmr_q;
+    MosListElm tmr_q;
     u32 wake_tick;
     MosThreadPriority pri;
     u16 stop_request;
@@ -122,6 +130,7 @@ static u32 CyclesPerTick;
 static u32 MOS_USED CyclesPerMicroSec;
 
 // Idle thread stack and initial PSP safe storage
+//  TODO: Might want to make this big enough to handle a FP stack frame in case FP used in init?
 static u8 MOS_STACK_ALIGNED IdleStack[2 * sizeof(StackFrame)];
 
 // Mask interrupts by priority, primarily for temporarily
@@ -180,8 +189,8 @@ static void ThreadExit(s32 rtn_val) {
     RunningThread->rtn_val = rtn_val;
     SetThreadState(RunningThread, THREAD_STOPPED);
     asm volatile ( "dmb" );
-    if (MosIsOnList(&RunningThread->tmr_q))
-        MosRemoveFromList(&RunningThread->tmr_q);
+    if (MosIsOnList(&RunningThread->tmr_q.link))
+        MosRemoveFromList(&RunningThread->tmr_q.link);
     MosRemoveFromList(&RunningThread->run_q);
     YieldThread();
     SetBasePri(0);
@@ -355,8 +364,8 @@ static u32 MOS_USED Scheduler(u32 sp) {
     }
     if (RunningThread->state == THREAD_TIME_TO_DIE) {
         // Arrange death of running thread via kill handler
-        if (MosIsOnList(&RunningThread->tmr_q))
-            MosRemoveFromList(&RunningThread->tmr_q);
+        if (MosIsOnList(&RunningThread->tmr_q.link))
+            MosRemoveFromList(&RunningThread->tmr_q.link);
         InitThread(RunningThread, RunningThread->pri,
                    RunningThread->kill_handler, RunningThread->kill_arg,
                    RunningThread->stack_bottom, RunningThread->stack_size);
@@ -371,7 +380,7 @@ static u32 MOS_USED Scheduler(u32 sp) {
             s32 tmr_rem_ticks = (s32)tmr_thd->wake_tick - adj_tick_count;
             if (rem_ticks <= tmr_rem_ticks) break;
         }
-        MosAddToListBefore(tmr, &RunningThread->tmr_q);
+        MosAddToListBefore(tmr, &RunningThread->tmr_q.link);
     }
     // Process thread timer queue
     MosList * tmr_save;
@@ -407,8 +416,8 @@ static u32 MOS_USED Scheduler(u32 sp) {
     if (run_thd) {
         // Remove from timer and set thread runnable
         if ((run_thd->state & THREAD_WAIT_FOR_TICK) == THREAD_WAIT_FOR_TICK) {
-            if (MosIsOnList(&run_thd->tmr_q))
-                MosRemoveFromList(&run_thd->tmr_q);
+            if (MosIsOnList(&run_thd->tmr_q.link))
+                MosRemoveFromList(&run_thd->tmr_q.link);
         }
         SetThreadState(run_thd, THREAD_RUNNABLE);
         // Look for second potentially runnable thread
@@ -643,7 +652,7 @@ void MOS_NAKED MosDelayMicroSec(u32 usec) {
 // Timers (work in progress, needs locks etc etc etc)
 
 void MosInitTimer(MosTimer * timer, MosQueue * q) {
-    MosInitList(&timer->tmr_q);
+    MosInitList(&timer->tmr_q.link);
     timer->q = q;
 }
 
@@ -657,7 +666,7 @@ static void AddMessageTimer(MosTimer * timer) {
         s32 tmr_rem_ticks = (s32)tmr_msg->wake_tick - tick_count;
         if (timer->ticks <= tmr_rem_ticks) break;
     }
-    MosAddToListBefore(tmr, &timer->tmr_q);
+    MosAddToListBefore(tmr, &timer->tmr_q.link);
     SetBasePri(0);
 }
 
@@ -669,7 +678,7 @@ void MosSetTimer(MosTimer * timer, u32 ticks, u32 msg) {
 
 void MosCancelTimer(MosTimer * timer) {
     SetBasePri(IntPriMaskLow);
-    MosRemoveFromList(&timer->tmr_q);
+    MosRemoveFromList(&timer->tmr_q.link);
     SetBasePri(0);
 }
 
@@ -821,11 +830,11 @@ bool MosInitThread(MosThread * _thd, MosThreadPriority pri,
     case THREAD_INIT:
     case THREAD_STOPPED:
         MosInitList(&thd->run_q);
-        MosInitList(&thd->tmr_q);
+        MosInitList(&thd->tmr_q.link);
         break;
     default:
-        if (MosIsOnList(&thd->tmr_q))
-            MosRemoveFromList(&thd->tmr_q);
+        if (MosIsOnList(&thd->tmr_q.link))
+            MosRemoveFromList(&thd->tmr_q.link);
         MosRemoveFromList(&thd->run_q);
         break;
     }
@@ -949,44 +958,6 @@ void MosSetKillHandler(MosThread * _thd, MosHandler * handler, s32 arg) {
 void MosSetKillArg(MosThread * _thd, s32 arg) {
     Thread * thd = (Thread *)_thd;
     thd->kill_arg = arg;
-}
-
-void MosInitList(MosList * list) {
-    list->prev = list;
-    list->next = list;
-}
-
-void MosAddToList(MosList * list, MosList * elm_add) {
-    elm_add->prev = list->prev;
-    elm_add->next = list;
-    list->prev->next = elm_add;
-    list->prev = elm_add;
-}
-
-void MosAddToListAfter(MosList * list, MosList * elm_add) {
-    elm_add->prev = list;
-    elm_add->next = list->next;
-    list->next->prev = elm_add;
-    list->next = elm_add;
-}
-
-void MosRemoveFromList(MosList * elm_rem) {
-    elm_rem->next->prev = elm_rem->prev;
-    elm_rem->prev->next = elm_rem->next;
-    // For MosIsElementOnList() and safety
-    elm_rem->prev = elm_rem;
-    elm_rem->next = elm_rem;
-}
-
-void MosMoveToEndOfList(MosList * elm_exist, MosList * elm_move) {
-    // Remove element
-    elm_move->next->prev = elm_move->prev;
-    elm_move->prev->next = elm_move->next;
-    // Add to end of list
-    elm_move->prev = elm_exist->prev;
-    elm_move->next = elm_exist;
-    elm_exist->prev->next = elm_move;
-    elm_exist->prev = elm_move;
 }
 
 void MosInitMutex(MosMutex * mtx) {

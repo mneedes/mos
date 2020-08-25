@@ -11,54 +11,9 @@
 #ifndef _MOS_KERNEL_H_
 #define _MOS_KERNEL_H_
 
-#include <stddef.h>
-#include <stdbool.h>
-#include <stdint.h>
-
 #include "mos_config.h"
-
-#define MOS_VERSION            0.2
-
-#ifndef count_of
-#define count_of(x)            (sizeof(x) / sizeof(x[0]))
-#endif
-#ifndef offset_of
-#define offset_of(t, m)        ((u32)&((t *)0)->m)
-#endif
-#ifndef container_of
-#define container_of(p, t, m)  ((t *)((u8 *)(p) - offset_of(t, m)))
-#endif
-#ifndef NULL
-#define NULL                   ((void *)0)
-#endif
-
-// Symbol / line number to string conversion
-#define MOS_TO_STR_(x)         #x
-#define MOS_TO_STR(x)          MOS_TO_STR_(x)
-#define MOS__LINE__            MOS_TO_STR(__LINE__)
-
-#define MOS_NAKED              __attribute__((naked))
-#define MOS_INLINE             __attribute__((always_inline)) inline
-#define MOS_USED               __attribute__((used))
-#define MOS_OPT(x)             __attribute__((optimize(x)))
-#define MOS_ALIGNED(x)         __attribute__((aligned(x)))
-
-#define MOS_STACK_ALIGNMENT    8
-#define MOS_STACK_ALIGNED      MOS_ALIGNED(MOS_STACK_ALIGNMENT)
-
-// Can be used for U32 register reads and writes
-#define MOS_VOL_U32(addr)      (*((volatile u32 *)(addr)))
-
-typedef uint8_t     u8;
-typedef int8_t      s8;
-typedef uint16_t    u16;
-typedef int16_t     s16;
-typedef uint32_t    u32;
-typedef int32_t     s32;
-typedef uint64_t    u64;
-typedef int64_t     s64;
-
-typedef u16 MosThreadPriority;
+#include "mos/defs.h"
+#include "mos/list.h"
 
 // Microkernel Parameters
 typedef struct {
@@ -73,7 +28,7 @@ typedef struct {
 
 // Mos Thread (opaque container)
 typedef struct {
-    u32 rsvd[17];
+    u32 rsvd[18];
 } MosThread;
 
 typedef enum {
@@ -108,12 +63,6 @@ typedef struct {
     MosThreadPriority block_pri;
 } MosSem;
 
-// Doubly-linked lists (idea borrowed from famous OS)
-typedef struct MosList {
-    struct MosList * prev;
-    struct MosList * next;
-} MosList;
-
 // Multi-writer / multi-reader blocking FIFO
 typedef struct {
     MosSem sem_tail;
@@ -130,7 +79,7 @@ typedef struct {
     u32 wake_tick;
     u32 ticks;
     MosQueue * q;
-    MosList tmr_q;
+    MosListElm tmr_q;
 } MosTimer;
 
 // Allows blocking on multiple data structures simultaneously
@@ -221,33 +170,6 @@ void MosKillThread(MosThread * thd);
 // Handler to run if thread is killed.  Thread can set own handler and argument.
 void MosSetKillHandler(MosThread * thd, MosHandler * handler, s32 arg);
 void MosSetKillArg(MosThread * thd, s32 arg);
-
-// Doubly-Linked Lists
-
-void MosInitList(MosList * list); // IS
-void MosAddToList(MosList * list, MosList * elm_add); // IS
-static void MOS_INLINE
-MosAddToListBefore(MosList * elm_exist, MosList * elm_add) { // IS
-    // AddToList <=> AddToListBefore if used on element rather than list
-    MosAddToList(elm_exist, elm_add);
-}
-void MosAddToListAfter(MosList * elm_exist, MosList * elm_add); // IS
-static void MOS_INLINE
-MosAddToFrontOfList(MosList * list, MosList * elm_add) { // IS
-    // AddToListAfter <=> AddToFrontOfList if used on list rather than element
-    MosAddToListAfter(list, elm_add);
-}
-void MosRemoveFromList(MosList * elm_rem); // IS
-void MosMoveToEndOfList(MosList * elm_exist, MosList * elm_move); // IS
-static bool MOS_INLINE MosIsLastElement(MosList * list, MosList * elm) { // IS
-    return (list->prev == elm);
-}
-static bool MOS_INLINE MosIsListEmpty(MosList * list) { // IS
-    return (list->prev == list);
-}
-static bool MOS_INLINE MosIsOnList(MosList * elm) { // IS
-    return (elm->prev != elm);
-}
 
 // Blocking Recursive Mutex with priority inheritance
 
