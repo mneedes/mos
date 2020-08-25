@@ -11,6 +11,12 @@ void MosInitList(MosList * list) {
     list->next = list;
 }
 
+void MosInitListElm(MosListElm * list, u32 type) {
+    list->link.prev = &list->link;
+    list->link.next = &list->link;
+    list->type = type;
+}
+
 void MosAddToList(MosList * list, MosList * elm_add) {
     elm_add->prev = list->prev;
     elm_add->next = list;

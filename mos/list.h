@@ -18,13 +18,14 @@ typedef struct MosList {
     struct MosList * next;
 } MosList;
 
-// List link for heterogeneous* lists
+// List link for heterogeneous lists
 typedef struct {
     MosList link;
     u32 type;
 } MosListElm;
 
 void MosInitList(MosList * list); // IS
+void MosInitListElm(MosListElm * elm, u32 type); // IS
 void MosAddToList(MosList * list, MosList * elm_add); // IS
 static void MOS_INLINE
 MosAddToListBefore(MosList * elm_exist, MosList * elm_add) { // IS
