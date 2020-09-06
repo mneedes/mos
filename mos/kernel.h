@@ -60,7 +60,7 @@ typedef struct {
 
 typedef struct {
     u32 count;
-    MosThreadPriority block_pri;
+    MosList pend_q;
 } MosSem;
 
 // Multi-writer / multi-reader blocking FIFO
@@ -201,6 +201,8 @@ bool MosTryReceiveFromQueue(MosQueue * queue, u32 * data);
 // Returns false on timeout, true if received
 bool MosReceiveFromQueueOrTO(MosQueue * queue, u32 * data, u32 ticks);
 
+#if 0
+
 // Mux (Block on multiple "selected" queues and/or semaphores)
 // NOTE: An active Mux should only be changed by the thread using it
 
@@ -209,6 +211,8 @@ void MosSetActiveMux(MosMux * mux, MosMuxEntry * entries, u32 len);
 u32 MosWaitOnMux(MosMux * mux);
 // Returns false on timeout, true if pending
 bool MosWaitOnMuxOrTO(MosMux * mux, u32 * idx, u32 ticks);
+
+#endif
 
 #define MosAssert(c) { if (!(c)) MosAssertAt(__FILE__, __LINE__); }
 void MosAssertAt(char * file, u32 line);

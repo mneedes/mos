@@ -31,13 +31,14 @@
 #define EVENT(e, v) \
     { if (MOS_ENABLE_EVENTS) (*EventHook)((MOS_EVENT_ ## e), (v)); }
 
-typedef enum {
+// Element types for lists
+enum {
     ELM_THREAD,
     ELM_TIMER,
     ELM_MUTEX,
     ELM_SEM,
-    ELM_MUX,
-} ElmType;
+    ELM_MUX
+};
 
 typedef struct {
     u32 SWSAVE[8];   // R4-R11
@@ -236,6 +237,7 @@ void SysTick_Handler(void) {
     EVENT(TICK, TickCount);
 }
 
+#if 0
 static bool CheckMux(Thread * thd, MosThreadPriority pri, bool first_scan) {
     bool found = false;
     MosMux * mux = thd->mux;
@@ -270,6 +272,7 @@ static bool CheckMux(Thread * thd, MosThreadPriority pri, bool first_scan) {
     }
     return found;
 }
+#endif
 
 static Thread *
 ProcessThread(Thread * thd, MosThreadPriority pri, bool first_scan) {
@@ -296,6 +299,11 @@ ProcessThread(Thread * thd, MosThreadPriority pri, bool first_scan) {
             }
         }
         break;
+#if 1
+    case THREAD_WAIT_FOR_SEM:
+        while(1) ;
+        break;
+#else
     case THREAD_WAIT_FOR_SEM:
         {
             // Another thread of equal priority is waiting on a sem,
@@ -313,9 +321,17 @@ ProcessThread(Thread * thd, MosThreadPriority pri, bool first_scan) {
             }
         }
         break;
+#endif
+#if 1
     case THREAD_WAIT_ON_MUX:
+        while(1) ;
+        break;
+#else
+    case THREAD_WAIT_ON_MUX:
+
         if (CheckMux(thd, pri, first_scan)) return thd;
         break;
+#endif
     case THREAD_WAIT_FOR_STOP:
         if (thd->wait.thd->state == THREAD_STOPPED) return thd;
         break;
@@ -398,6 +414,13 @@ static u32 MOS_USED Scheduler(u32 sp) {
                 // Signal timeout
                 thd->wait.sem = NULL;
                 thd->mux_idx = -1;
+                // TODO: lots to do
+                asm volatile ( "cpsid if" );
+                if (thd->state == THREAD_WAIT_FOR_SEM_OR_TICK) {
+                    MosRemoveFromList(&thd->run_e);
+                    asm volatile ( "cpsie if" );
+                    MosAddToList(&RunQueues[thd->pri], &thd->run_e);
+                } else asm volatile ( "cpsie if" );
                 SetThreadState(thd, THREAD_RUNNABLE);
                 MosRemoveFromList(tmr);
             } else break;
@@ -1078,12 +1101,26 @@ bool MosIsMutexOwner(MosMutex * mtx) {
 
 void MosInitSem(MosSem * sem, u32 start_count) {
     sem->count = start_count;
-    sem->block_pri = NO_SUCH_PRI;
+    //sem->block_pri = NO_SUCH_PRI;
+    MosInitList(&sem->pend_q);
 }
 
+// TODO: Couldn't some of this be done on pend ?
 static void MOS_USED BlockOnSem(MosSem * sem) {
-    RunningThread->wait.sem = sem;
-    SetRunningThreadStateAndYield(THREAD_WAIT_FOR_SEM);
+    asm volatile ( "cpsid if" );
+    // Immediately retry (don't block) if count has since incremented
+    if (sem->count == 0) {
+        RunningThread->wait.sem = sem;
+        MosList * elm = sem->pend_q.next;
+        for (elm = sem->pend_q.next; elm != &sem->pend_q; elm = elm->next) {
+            Thread * thd = container_of(elm, Thread, run_e);
+            if (thd->pri > RunningThread->pri) break;
+        }
+        MosRemoveFromList(&RunningThread->run_e);
+        MosAddToListBefore(elm, &RunningThread->run_e);
+        SetRunningThreadStateAndYield(THREAD_WAIT_FOR_SEM);
+        asm volatile ( "cpsie if" );
+    } else asm volatile ( "cpsie if" );
 }
 
 void MOS_NAKED MosTakeSem(MosSem * sem) {
@@ -1107,10 +1144,23 @@ void MOS_NAKED MosTakeSem(MosSem * sem) {
 }
 
 static bool MOS_USED BlockOnSemOrTO(MosSem * sem) {
-    RunningThread->wait.sem = sem;
-    SetRunningThreadStateAndYield(THREAD_WAIT_FOR_SEM_OR_TICK);
-    if (!RunningThread->wait.sem) return true;
-    return false;
+    bool timeout = false;
+    asm volatile ( "cpsid if" );
+    // Immediately retry (don't block) if count has since incremented
+    if (sem->count == 0) {
+        RunningThread->wait.sem = sem;
+        MosList * elm = sem->pend_q.next;
+        for (elm = sem->pend_q.next; elm != &sem->pend_q; elm = elm->next) {
+            Thread * thd = container_of(elm, Thread, run_e);
+            if (thd->pri > RunningThread->pri) break;
+        }
+        MosRemoveFromList(&RunningThread->run_e);
+        MosAddToListBefore(elm, &RunningThread->run_e);
+        SetRunningThreadStateAndYield(THREAD_WAIT_FOR_SEM_OR_TICK);
+        asm volatile ( "cpsie if" );
+        if (!RunningThread->wait.sem) timeout = true;
+    } else asm volatile ( "cpsie if" );
+    return timeout;
 }
 
 bool MOS_NAKED MosTakeSemOrTO(MosSem * sem, u32 ticks) {
@@ -1161,9 +1211,22 @@ bool MOS_NAKED MosTrySem(MosSem * sem) {
 }
 
 static void MOS_USED YieldOnSem(MosSem * sem) {
-    SetBasePri(IntPriMaskLow);
-    if (sem->block_pri < RunningThread->pri) YieldThread();
-    SetBasePri(0);
+    asm volatile ( "cpsid if" );
+    if (!MosIsListEmpty(&sem->pend_q)) {
+        MosList * elm = sem->pend_q.next;
+        Thread * thd = container_of(elm, Thread, run_e);
+        MosRemoveFromList(elm);
+        // Release interrupts but prevent thread from running for now
+        SetBasePri(IntPriMaskLow);
+        asm volatile ( "cpsie if" );
+        MosAddToList(&RunQueues[thd->pri], elm);
+        if (MosIsOnList(&thd->tmr_e.link))
+            MosRemoveFromList(&thd->tmr_e.link);
+        SetThreadState(thd, THREAD_RUNNABLE);
+        if (thd->pri < RunningThread->pri) YieldThread();
+        // Let thread run
+        SetBasePri(0);
+    } else asm volatile ( "cpsie if" );
 }
 
 void MOS_NAKED MosGiveSem(MosSem * sem) {

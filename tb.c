@@ -59,7 +59,9 @@ static volatile u32 SchedCount;
 // Test Sem / Mutex / Mux
 static MosSem TestSem;
 static MosMutex TestMutex;
+#if 0
 static MosMux TestMux;
+#endif
 
 // Test Message Queue
 static u32 queue[4];
@@ -751,7 +753,7 @@ static bool SemTests(void) {
         tests_all_pass = false;
     }
     //
-    //
+    //  Take lots of semaphores
     //
     test_pass = true;
     test_pass = true;
@@ -1010,6 +1012,8 @@ static bool QueueTests(void) {
     return tests_all_pass;
 }
 
+#if 0
+
 //
 // Mux Testing
 //
@@ -1141,6 +1145,8 @@ static bool MuxTests(void) {
     }
     return tests_all_pass;
 }
+
+#endif
 
 //
 // Mutex Tests
@@ -1465,7 +1471,9 @@ static s32 CmdTest(s32 argc, char * argv[]) {
             if (TimerTests() == false) test_pass = false;
             if (SemTests() == false) test_pass = false;
             if (QueueTests() == false) test_pass = false;
+#if 0
             if (MuxTests() == false) test_pass = false;
+#endif
             if (MutexTests() == false) test_pass = false;
             if (HeapTests() == false) test_pass = false;
         } else if (strcmp(argv[1], "hal") == 0) {
@@ -1478,8 +1486,10 @@ static s32 CmdTest(s32 argc, char * argv[]) {
             test_pass = SemTests();
         } else if (strcmp(argv[1], "queue") == 0) {
             test_pass = QueueTests();
+#if 0
         } else if (strcmp(argv[1], "mux") == 0) {
             test_pass = MuxTests();
+#endif
         } else if (strcmp(argv[1], "mutex") == 0) {
             test_pass = MutexTests();
         } else if (strcmp(argv[1], "heap") == 0) {
