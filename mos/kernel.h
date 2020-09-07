@@ -55,7 +55,7 @@ typedef enum {
 typedef struct {
     MosThread * owner;
     s32 depth;
-    bool to_yield;
+    MosList pend_q;
 } MosMutex;
 
 typedef struct {

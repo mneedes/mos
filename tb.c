@@ -1173,7 +1173,7 @@ static s32 MutexTestThread(s32 arg) {
     for (;;) {
         if (arg == MUTEX_TEST_PRIO_INHER) {
             static u32 count = 0;
-            if ((++count & 0xFFF) == 0) {
+            if ((count++ & 0xFFF) == 0) {
                 // Give low priority thread chance to acquire mutex
                 MosSendToQueue(&TestQueue, 0);
                 MosDelayThread(5);
@@ -1289,6 +1289,7 @@ static bool MutexTests(void) {
         MosPrint(" Failed\n");
         tests_all_pass = false;
     }
+#if 1
     //
     // Priority Inheritance
     //
@@ -1309,11 +1310,14 @@ static bool MutexTests(void) {
     if (MosWaitForThreadStop(Threads[3]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
     DisplayHistogram(6);
+    // It's possible scheduler wakes threads when lowest priority one doesn't hold mutex
+    if (TestHisto[MUTEX_TEST_PRIO_INHER] < 4096) test_pass = false;
     if (test_pass) MosPrint(" Passed\n");
     else {
         MosPrint(" Failed\n");
         tests_all_pass = false;
     }
+#endif
     //
     // Try Mutex (NOTE: may exhibit some non-deterministic behavior)
     //

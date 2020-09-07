@@ -25,19 +25,18 @@
 #endif
 
 #define NO_SUCH_THREAD       NULL
-#define NO_SUCH_PRI          0xffff
 #define STACK_CANARY         0xba5eba11
 
 #define EVENT(e, v) \
     { if (MOS_ENABLE_EVENTS) (*EventHook)((MOS_EVENT_ ## e), (v)); }
 
-// Element types for lists
+// Element types for heterogeneous lists
 enum {
     ELM_THREAD,
     ELM_TIMER,
-    ELM_MUTEX,
-    ELM_SEM,
-    ELM_MUX
+    //ELM_MUTEX,
+    //ELM_SEM,
+    //ELM_MUX
 };
 
 typedef struct {
@@ -279,6 +278,11 @@ ProcessThread(Thread * thd, MosThreadPriority pri, bool first_scan) {
     switch (thd->state & 0xF) {
     case THREAD_RUNNABLE:
         return thd;
+#if 1
+    case THREAD_WAIT_FOR_MUTEX:
+        while(1) ;
+        break;
+#else
     case THREAD_WAIT_FOR_MUTEX:
         {
             // Check mutex (nested priority inheritance algorithm)
@@ -299,6 +303,8 @@ ProcessThread(Thread * thd, MosThreadPriority pri, bool first_scan) {
             }
         }
         break;
+#endif
+
 #if 1
     case THREAD_WAIT_FOR_SEM:
         while(1) ;
@@ -328,7 +334,6 @@ ProcessThread(Thread * thd, MosThreadPriority pri, bool first_scan) {
         break;
 #else
     case THREAD_WAIT_ON_MUX:
-
         if (CheckMux(thd, pri, first_scan)) return thd;
         break;
 #endif
@@ -994,12 +999,27 @@ void MosSetKillArg(MosThread * _thd, s32 arg) {
 void MosInitMutex(MosMutex * mtx) {
     mtx->owner = NO_SUCH_THREAD;
     mtx->depth = 0;
-    mtx->to_yield = false;
+    MosInitList(&mtx->pend_q);
 }
 
+// TODO: Is it possible to encounter a higher priority thread waiting on the mutex?
+// TODO: priority inheritance.  Do I use the current priority or the original priority?
 static void MOS_USED BlockOnMutex(MosMutex * mtx) {
-    RunningThread->wait.mtx = mtx;
-    SetRunningThreadStateAndYield(THREAD_WAIT_FOR_MUTEX);
+    SetBasePri(IntPriMaskLow);
+    // Immediately retry (don't block) if mutex has since been given?
+    if (mtx->owner != NO_SUCH_THREAD) {
+        RunningThread->wait.mtx = mtx;
+        MosList * elm = mtx->pend_q.next;
+        for (; elm != &mtx->pend_q; elm = elm->next) {
+            Thread * thd = container_of(elm, Thread, run_e);
+            if (thd->pri > RunningThread->pri) break;
+        }
+        MosRemoveFromList(&RunningThread->run_e);
+        MosAddToListBefore(elm, &RunningThread->run_e);
+        SetThreadState(RunningThread, THREAD_WAIT_FOR_MUTEX);
+        YieldThread();
+    }
+    SetBasePri(0);
 }
 
 void MOS_NAKED MosTakeMutex(MosMutex * mtx) {
@@ -1065,6 +1085,22 @@ bool MOS_NAKED MosTryMutex(MosMutex * mtx) {
     );
 }
 
+// TODO: event queue -> scheduler might make sense to keep hogging lower ?
+static void MOS_USED YieldOnMutex(MosMutex * mtx) {
+    SetBasePri(IntPriMaskLow);
+    if (!MosIsListEmpty(&mtx->pend_q)) {
+        MosList * elm = mtx->pend_q.next;
+        Thread * thd = container_of(elm, Thread, run_e);
+        MosRemoveFromList(elm);
+        MosAddToFrontOfList(&RunQueues[thd->pri], elm);
+        if (MosIsOnList(&thd->tmr_e.link))
+            MosRemoveFromList(&thd->tmr_e.link);
+        SetThreadState(thd, THREAD_RUNNABLE);
+        if (thd->pri < RunningThread->pri) YieldThread();
+    }
+    SetBasePri(0);
+}
+
 void MOS_NAKED MosGiveMutex(MosMutex * mtx) {
     asm volatile (
         "ldr r1, [r0, #4]\n\t"
@@ -1077,10 +1113,8 @@ void MOS_NAKED MosGiveMutex(MosMutex * mtx) {
         "strex r2, r1, [r0]\n\t" //  ... just store 0 ?
         "cmp r2, #0\n\t"
         "bne RetryGM\n\t"
-        "ldr r1, [r0, #8]\n\t"
-        "cbz r1, SkipGM\n\t"
         "push { lr }\n\t"
-        "bl MosYieldThread\n\t"
+        "bl YieldOnMutex\n\t"
         "pop { lr }\n\t"
         "SkipGM:\n\t"
         "bx lr\n\t"
@@ -1101,7 +1135,6 @@ bool MosIsMutexOwner(MosMutex * mtx) {
 
 void MosInitSem(MosSem * sem, u32 start_count) {
     sem->count = start_count;
-    //sem->block_pri = NO_SUCH_PRI;
     MosInitList(&sem->pend_q);
 }
 
@@ -1112,7 +1145,7 @@ static void MOS_USED BlockOnSem(MosSem * sem) {
     if (sem->count == 0) {
         RunningThread->wait.sem = sem;
         MosList * elm = sem->pend_q.next;
-        for (elm = sem->pend_q.next; elm != &sem->pend_q; elm = elm->next) {
+        for (; elm != &sem->pend_q; elm = elm->next) {
             Thread * thd = container_of(elm, Thread, run_e);
             if (thd->pri > RunningThread->pri) break;
         }
@@ -1150,7 +1183,7 @@ static bool MOS_USED BlockOnSemOrTO(MosSem * sem) {
     if (sem->count == 0) {
         RunningThread->wait.sem = sem;
         MosList * elm = sem->pend_q.next;
-        for (elm = sem->pend_q.next; elm != &sem->pend_q; elm = elm->next) {
+        for (; elm != &sem->pend_q; elm = elm->next) {
             Thread * thd = container_of(elm, Thread, run_e);
             if (thd->pri > RunningThread->pri) break;
         }
@@ -1219,7 +1252,7 @@ static void MOS_USED YieldOnSem(MosSem * sem) {
         // Release interrupts but prevent thread from running for now
         SetBasePri(IntPriMaskLow);
         asm volatile ( "cpsie if" );
-        MosAddToList(&RunQueues[thd->pri], elm);
+        MosAddToFrontOfList(&RunQueues[thd->pri], elm);
         if (MosIsOnList(&thd->tmr_e.link))
             MosRemoveFromList(&thd->tmr_e.link);
         SetThreadState(thd, THREAD_RUNNABLE);
