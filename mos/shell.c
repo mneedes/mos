@@ -20,7 +20,7 @@ static u32 RxQueueBuf[16];
 
 // Callback must be ISR safe
 static void MosRxCallback(char ch) {
-    MosSendToQueue(&RxQueue, (u32)ch);
+    MosTrySendToQueue(&RxQueue, (u32)ch);
 }
 
 void MosInitShell() {

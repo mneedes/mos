@@ -160,6 +160,7 @@ bool MosInitAndRunThread(MosThread * thd, MosThreadPriority pri,
                          MosThreadEntry * entry, s32 arg, u8 * stack_bottom,
                          u32 stack_size);
 MosThreadState MosGetThreadState(MosThread * thd, s32 * rtn_val);
+MosThreadPriority MosGetThreadPriority(MosThread * thd);
 void MosChangeThreadPriority(MosThread * thd, MosThreadPriority pri);
 void MosRequestThreadStop(MosThread * thd);
 bool MosIsStopRequested(void);
@@ -193,7 +194,8 @@ void MosGiveSem(MosSem * sem); // IS
 // Blocking Queue
 
 void MosInitQueue(MosQueue * queue, u32 * buf, u32 len);
-bool MosSendToQueue(MosQueue * queue, u32 data); // IS
+void MosSendToQueue(MosQueue * queue, u32 data);
+bool MosTrySendToQueue(MosQueue * queue, u32 data); // IS
 // Returns false on timeout, true if sent
 bool MosSendToQueueOrTO(MosQueue * queue, u32 data, u32 ticks);
 u32 MosReceiveFromQueue(MosQueue * queue);

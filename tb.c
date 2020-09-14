@@ -83,7 +83,7 @@ void EXTI0_IRQHandler(void) {
 }
 
 void EXTI1_IRQHandler(void) {
-    if (MosSendToQueue(&TestQueue, 1)) TestHisto[0]++;
+    if (MosTrySendToQueue(&TestQueue, 1)) TestHisto[0]++;
 }
 
 void EventCallback(MosEvent evt, u32 val) {
@@ -1175,7 +1175,7 @@ static s32 MutexTestThread(s32 arg) {
             static u32 count = 0;
             if ((count++ & 0xFFF) == 0) {
                 // Give low priority thread chance to acquire mutex
-                MosSendToQueue(&TestQueue, 0);
+                MosTrySendToQueue(&TestQueue, 0);
                 MosDelayThread(5);
             }
         }
@@ -1289,7 +1289,6 @@ static bool MutexTests(void) {
         MosPrint(" Failed\n");
         tests_all_pass = false;
     }
-#if 1
     //
     // Priority Inheritance
     //
@@ -1311,13 +1310,16 @@ static bool MutexTests(void) {
     if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
     DisplayHistogram(6);
     // It's possible scheduler wakes threads when lowest priority one doesn't hold mutex
-    if (TestHisto[MUTEX_TEST_PRIO_INHER] < 4096) test_pass = false;
+    if (TestHisto[MUTEX_TEST_PRIO_INHER] <= 4096) test_pass = false;
+    // Make sure thread priorities are restored
+    if (MosGetThreadPriority(Threads[1]) != 1) test_pass = false;
+    if (MosGetThreadPriority(Threads[2]) != 2) test_pass = false;
+    if (MosGetThreadPriority(Threads[3]) != 3) test_pass = false;
     if (test_pass) MosPrint(" Passed\n");
     else {
         MosPrint(" Failed\n");
         tests_all_pass = false;
     }
-#endif
     //
     // Try Mutex (NOTE: may exhibit some non-deterministic behavior)
     //

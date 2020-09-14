@@ -78,7 +78,9 @@ typedef struct Thread {
     MosListElm tmr_e;
     u32 wake_tick;
     MosThreadPriority pri;
-    u16 stop_request;
+    MosThreadPriority orig_pri;
+    u8 stop_request;
+    u8 pad;
     union {
         MosMutex * mtx;
         MosSem * sem;
@@ -222,6 +224,7 @@ static void InitThread(Thread * thd, MosThreadPriority pri,
     thd->sp = (u32)sf;
     thd->err_no = 0;
     thd->pri = pri;
+    thd->orig_pri = pri;
     thd->stop_request = false;
     thd->kill_handler = DefaultKillHandler;
     thd->kill_arg = 0;
@@ -433,7 +436,7 @@ static u32 MOS_USED Scheduler(u32 sp) {
             MosTimer * tmr_tmr = container_of(tmr, MosTimer, tmr_e);
             s32 rem_ticks = (s32)tmr_tmr->wake_tick - adj_tick_count;
             if (rem_ticks <= 0) {
-                if (MosSendToQueue(tmr_tmr->q, tmr_tmr->msg)) MosRemoveFromList(tmr);
+                if (MosTrySendToQueue(tmr_tmr->q, tmr_tmr->msg)) MosRemoveFromList(tmr);
             } else break;
         }
     }
@@ -928,6 +931,11 @@ MosThreadState MosGetThreadState(MosThread * _thd, s32 * rtn_val) {
     return state;
 }
 
+MosThreadPriority MosGetThreadPriority(MosThread * _thd) {
+    Thread * thd = (Thread *)_thd;
+    return thd->pri;
+}
+
 void MosChangeThreadPriority(MosThread * _thd, MosThreadPriority pri) {
     Thread * thd = (Thread *)_thd;
     SetBasePri(IntPriMaskLow);
@@ -1003,11 +1011,13 @@ void MosInitMutex(MosMutex * mtx) {
 }
 
 // TODO: Is it possible to encounter a higher priority thread waiting on the mutex?
-// TODO: priority inheritance.  Do I use the current priority or the original priority?
+// TODO: Multi-level priority inheritance.
 static void MOS_USED BlockOnMutex(MosMutex * mtx) {
     SetBasePri(IntPriMaskLow);
-    // Immediately retry (don't block) if mutex has since been given?
+    asm volatile ( "dsb" );
+    // Retry (don't block) if mutex has since been given
     if (mtx->owner != NO_SUCH_THREAD) {
+        // Add thread to pend queue
         RunningThread->wait.mtx = mtx;
         MosList * elm = mtx->pend_q.next;
         for (; elm != &mtx->pend_q; elm = elm->next) {
@@ -1016,6 +1026,15 @@ static void MOS_USED BlockOnMutex(MosMutex * mtx) {
         }
         MosRemoveFromList(&RunningThread->run_e);
         MosAddToListBefore(elm, &RunningThread->run_e);
+        // Priority inheritance logic
+        Thread * thd = (Thread *) mtx->owner;
+        if (RunningThread->pri < thd->pri) {
+            thd->pri = RunningThread->pri;
+            if (thd->state == THREAD_RUNNABLE) {
+                MosRemoveFromList(&thd->run_e);
+                MosAddToFrontOfList(&RunQueues[thd->pri], &thd->run_e);
+            }
+        }
         SetThreadState(RunningThread, THREAD_WAIT_FOR_MUTEX);
         YieldThread();
     }
@@ -1086,8 +1105,10 @@ bool MOS_NAKED MosTryMutex(MosMutex * mtx) {
 }
 
 // TODO: event queue -> scheduler might make sense to keep hogging lower ?
+// TODO: multi-level priority inheritance
 static void MOS_USED YieldOnMutex(MosMutex * mtx) {
     SetBasePri(IntPriMaskLow);
+    asm volatile ( "dsb" );
     if (!MosIsListEmpty(&mtx->pend_q)) {
         MosList * elm = mtx->pend_q.next;
         Thread * thd = container_of(elm, Thread, run_e);
@@ -1096,6 +1117,12 @@ static void MOS_USED YieldOnMutex(MosMutex * mtx) {
         if (MosIsOnList(&thd->tmr_e.link))
             MosRemoveFromList(&thd->tmr_e.link);
         SetThreadState(thd, THREAD_RUNNABLE);
+        // Reset priority inheritance
+        if (RunningThread->pri != RunningThread->orig_pri) {
+            RunningThread->pri = RunningThread->orig_pri;
+            MosRemoveFromList(&RunningThread->run_e);
+            MosAddToFrontOfList(&RunQueues[RunningThread->pri], &RunningThread->run_e);
+        }
         if (thd->pri < RunningThread->pri) YieldThread();
     }
     SetBasePri(0);
@@ -1141,7 +1168,7 @@ void MosInitSem(MosSem * sem, u32 start_count) {
 // TODO: Couldn't some of this be done on pend ?
 static void MOS_USED BlockOnSem(MosSem * sem) {
     asm volatile ( "cpsid if" );
-    // Immediately retry (don't block) if count has since incremented
+    // Retry (don't block) if count has since incremented
     if (sem->count == 0) {
         RunningThread->wait.sem = sem;
         MosList * elm = sem->pend_q.next;
@@ -1278,6 +1305,8 @@ void MOS_NAKED MosGiveSem(MosSem * sem) {
     );
 }
 
+// TODO: Review this for ISR safety, maybe have TryReceiveFromQueue be interrupt safe
+
 void MosInitQueue(MosQueue * queue, u32 * buf, u32 len) {
     queue->buf = buf;
     queue->len = len;
@@ -1291,13 +1320,26 @@ void MosInitQueue(MosQueue * queue, u32 * buf, u32 len) {
 // to queue methods.  Receive methods are not ISR safe and can instead use
 // PRIMASK since only context switch should be disabled.
 
-bool MosSendToQueue(MosQueue * queue, u32 data) {
+void MosSendToQueue(MosQueue * queue, u32 data) {
+    // After taking semaphore context has a "license to write one entry,"
+    // but it still must wait if another context is trying to do the same
+    // thing in a thread.
+    MosTakeSem(&queue->sem_tail);
+    asm volatile ( "cpsid if" );
+    queue->buf[queue->tail] = data;
+    if (++queue->tail >= queue->len) queue->tail = 0;
+    asm volatile (
+        "dmb\n\t"
+        "cpsie if\n\t"
+    );
+    MosGiveSem(&queue->sem_head);
+}
+
+bool MosTrySendToQueue(MosQueue * queue, u32 data) {
     // After taking semaphore context has a "license to write one entry,"
     // but it still must wait if another context is trying to do the same
     // thing in a thread or ISR.
-    u32 irq = MosGetIRQNumber();
-    if (!irq) MosTakeSem(&queue->sem_tail);
-    else if (!MosTrySem(&queue->sem_tail)) return false;
+    if (!MosTrySem(&queue->sem_tail)) return false;
     asm volatile ( "cpsid if" );
     queue->buf[queue->tail] = data;
     if (++queue->tail >= queue->len) queue->tail = 0;
