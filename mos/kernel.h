@@ -165,7 +165,9 @@ void MosChangeThreadPriority(MosThread * thd, MosThreadPriority pri);
 void MosRequestThreadStop(MosThread * thd);
 bool MosIsStopRequested(void);
 s32 MosWaitForThreadStop(MosThread * thd);
+#if 0
 bool MosWaitForThreadStopOrTO(MosThread * thd, s32 * rtn_val, u32 ticks);
+#endif
 // Forcible stop, works on blocked threads.
 void MosKillThread(MosThread * thd);
 // Handler to run if thread is killed.  Thread can set own handler and argument.

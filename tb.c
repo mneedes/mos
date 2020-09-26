@@ -1290,7 +1290,7 @@ static bool MutexTests(void) {
         tests_all_pass = false;
     }
     //
-    // Priority Inheritance
+    // Priority Inheritance (1 level)
     //
     test_pass = true;
     MosPrint("Mutex Test 3\n");

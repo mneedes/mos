@@ -80,10 +80,8 @@ typedef struct Thread {
     MosThreadPriority pri;
     MosThreadPriority orig_pri;
     u8 stop_request;
-    u8 pad;
+    u8 timeout;
     union {
-        MosMutex * mtx;
-        MosSem * sem;
         struct Thread * thd;
     } wait;
     MosMux * mux;
@@ -410,6 +408,8 @@ static u32 MOS_USED Scheduler(u32 sp) {
             if (rem_ticks <= tmr_rem_ticks) break;
         }
         MosAddToListBefore(tmr, &RunningThread->tmr_e.link);
+        if (RunningThread->state == THREAD_WAIT_FOR_TICK)
+            MosRemoveFromList(&RunningThread->run_e);
     }
     // Process timer queue
     MosList * tmr_save;
@@ -420,7 +420,8 @@ static u32 MOS_USED Scheduler(u32 sp) {
             s32 rem_ticks = (s32)thd->wake_tick - adj_tick_count;
             if (rem_ticks <= 0) {
                 // Signal timeout
-                thd->wait.sem = NULL;
+                thd->timeout = 1;
+                thd->wait.thd = NULL;
                 thd->mux_idx = -1;
                 // TODO: lots to do
                 asm volatile ( "cpsid if" );
@@ -429,6 +430,8 @@ static u32 MOS_USED Scheduler(u32 sp) {
                     asm volatile ( "cpsie if" );
                     MosAddToList(&RunQueues[thd->pri], &thd->run_e);
                 } else asm volatile ( "cpsie if" );
+                if (thd->state == THREAD_WAIT_FOR_TICK)
+                    MosAddToList(&RunQueues[thd->pri], &thd->run_e);
                 SetThreadState(thd, THREAD_RUNNABLE);
                 MosRemoveFromList(tmr);
             } else break;
@@ -849,7 +852,7 @@ u32 MosGetStackSize(MosThread * _thd) {
     return thd->stack_size;
 }
 
-// Might kick this to internal
+// TODO: Might kick this to internal
 void MosSetStack(MosThread * _thd, u8 * stack_bottom, u32 stack_size) {
     Thread * thd = (Thread *)_thd;
     thd->stack_bottom = stack_bottom;
@@ -970,9 +973,10 @@ s32 MosWaitForThreadStop(MosThread * _thd) {
 bool MosWaitForThreadStopOrTO(MosThread * _thd, s32 * rtn_val, u32 ticks) {
     Thread * thd = (Thread *)_thd;
     SetTimeout(ticks);
+    RunningThread->timeout = 0;
     RunningThread->wait.thd = thd;
     SetRunningThreadStateAndYield(THREAD_WAIT_FOR_STOP_OR_TICK);
-    if (thd->wait.thd == NULL) return false;
+    if (RunningThread->timeout) return false;
     *rtn_val = thd->rtn_val;
     return true;
 }
@@ -1018,7 +1022,6 @@ static void MOS_USED BlockOnMutex(MosMutex * mtx) {
     // Retry (don't block) if mutex has since been given
     if (mtx->owner != NO_SUCH_THREAD) {
         // Add thread to pend queue
-        RunningThread->wait.mtx = mtx;
         MosList * elm = mtx->pend_q.next;
         for (; elm != &mtx->pend_q; elm = elm->next) {
             Thread * thd = container_of(elm, Thread, run_e);
@@ -1170,7 +1173,6 @@ static void MOS_USED BlockOnSem(MosSem * sem) {
     asm volatile ( "cpsid if" );
     // Retry (don't block) if count has since incremented
     if (sem->count == 0) {
-        RunningThread->wait.sem = sem;
         MosList * elm = sem->pend_q.next;
         for (; elm != &sem->pend_q; elm = elm->next) {
             Thread * thd = container_of(elm, Thread, run_e);
@@ -1208,7 +1210,7 @@ static bool MOS_USED BlockOnSemOrTO(MosSem * sem) {
     asm volatile ( "cpsid if" );
     // Immediately retry (don't block) if count has since incremented
     if (sem->count == 0) {
-        RunningThread->wait.sem = sem;
+        RunningThread->timeout = 0;
         MosList * elm = sem->pend_q.next;
         for (; elm != &sem->pend_q; elm = elm->next) {
             Thread * thd = container_of(elm, Thread, run_e);
@@ -1218,7 +1220,7 @@ static bool MOS_USED BlockOnSemOrTO(MosSem * sem) {
         MosAddToListBefore(elm, &RunningThread->run_e);
         SetRunningThreadStateAndYield(THREAD_WAIT_FOR_SEM_OR_TICK);
         asm volatile ( "cpsie if" );
-        if (!RunningThread->wait.sem) timeout = true;
+        if (RunningThread->timeout) timeout = true;
     } else asm volatile ( "cpsie if" );
     return timeout;
 }
