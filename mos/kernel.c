@@ -76,6 +76,7 @@ typedef struct Thread {
     ThreadState state;
     MosList run_e;
     MosListElm tmr_e;
+    MosList stop_q;
     u32 wake_tick;
     MosThreadPriority pri;
     MosThreadPriority orig_pri;
@@ -189,10 +190,18 @@ static void ThreadExit(s32 rtn_val) {
     SetBasePri(IntPriMaskLow);
     RunningThread->rtn_val = rtn_val;
     SetThreadState(RunningThread, THREAD_STOPPED);
-    asm volatile ( "dmb" );
+    MosRemoveFromList(&RunningThread->run_e);
     if (MosIsOnList(&RunningThread->tmr_e.link))
         MosRemoveFromList(&RunningThread->tmr_e.link);
-    MosRemoveFromList(&RunningThread->run_e);
+    MosList * elm_save;
+    for (MosList * elm = RunningThread->stop_q.next; elm != &RunningThread->stop_q; elm = elm_save) {
+        elm_save = elm->next;
+        Thread * thd = container_of(elm, Thread, run_e);
+        MosAddToList(&RunQueues[thd->pri], &thd->run_e);
+        if (MosIsOnList(&thd->tmr_e.link))
+            MosRemoveFromList(&thd->tmr_e.link);
+        SetThreadState(thd, THREAD_RUNNABLE);
+    }
     YieldThread();
     SetBasePri(0);
     // Not reachable
@@ -277,89 +286,15 @@ static bool CheckMux(Thread * thd, MosThreadPriority pri, bool first_scan) {
 #endif
 
 static Thread *
-ProcessThread(Thread * thd, MosThreadPriority pri, bool first_scan) {
-    switch (thd->state & 0xF) {
-    case THREAD_RUNNABLE:
-        return thd;
-#if 1
-    case THREAD_WAIT_FOR_MUTEX:
-        while(1) ;
-        break;
-#else
-    case THREAD_WAIT_FOR_MUTEX:
-        {
-            // Check mutex (nested priority inheritance algorithm)
-            Thread * owner = (Thread *) thd->wait.mtx->owner;
-            if (owner == NO_SUCH_THREAD) {
-                if (first_scan) thd->wait.mtx->to_yield = false;
-                return thd;
-            } else {
-                if (owner->pri > pri) {
-                    // Owner thread is lower priority
-                    if (owner->state == THREAD_RUNNABLE) {
-                        if (first_scan) thd->wait.mtx->to_yield = true;
-                        return owner;
-                    } else return ProcessThread(owner, pri, first_scan);
-                // Owner thread is equal priority, return non-NULL on 2nd scan
-                //   to keep tick running
-                } else if (!first_scan) return thd;
-            }
-        }
-        break;
-#endif
-
-#if 1
-    case THREAD_WAIT_FOR_SEM:
-        while(1) ;
-        break;
-#else
-    case THREAD_WAIT_FOR_SEM:
-        {
-            // Another thread of equal priority is waiting on a sem,
-            //   keep tick running
-            if (!first_scan) return thd;
-            // Lock interrupts since semaphore may be given from ISR
-            asm volatile ( "cpsid if" );
-            if (thd->wait.sem->count != 0) {
-                thd->wait.sem->block_pri = NO_SUCH_PRI;
-                asm volatile ( "cpsie if" );
-                return thd;
-            } else {
-                if (thd->wait.sem->block_pri > pri) thd->wait.sem->block_pri = pri;
-                asm volatile ( "cpsie if" );
-            }
-        }
-        break;
-#endif
-#if 1
-    case THREAD_WAIT_ON_MUX:
-        while(1) ;
-        break;
-#else
-    case THREAD_WAIT_ON_MUX:
-        if (CheckMux(thd, pri, first_scan)) return thd;
-        break;
-#endif
-    case THREAD_WAIT_FOR_STOP:
-        if (thd->wait.thd->state == THREAD_STOPPED) return thd;
-        break;
-    default:
-        break;
-    }
-    return NULL;
-}
-
-static Thread *
 ScanThreads(MosThreadPriority * pri, MosList ** thd_elm, bool first_scan) {
     MosList * elm = *thd_elm;
     for (; *pri < MOS_MAX_THREAD_PRIORITIES;) {
         for (; elm != &RunQueues[*pri]; elm = elm->next) {
             Thread * thd = container_of(elm, Thread, run_e);
-            Thread * run_thd = ProcessThread(thd, *pri, first_scan);
-            if (run_thd) {
-                *thd_elm = elm;
-                return run_thd;
-            }
+            if (thd->state != THREAD_RUNNABLE)
+                while (1) ;
+            *thd_elm = elm;
+            return thd;
         }
         if (!first_scan) break;
         (*pri)++;
@@ -435,9 +370,9 @@ static u32 MOS_USED Scheduler(u32 sp) {
         } else {
             MosTimer * tmr_tmr = container_of(tmr, MosTimer, tmr_e);
             s32 rem_ticks = (s32)tmr_tmr->wake_tick - adj_tick_count;
-            if (rem_ticks <= 0) {
-                if (MosTrySendToQueue(tmr_tmr->q, tmr_tmr->msg)) MosRemoveFromList(tmr);
-            } else break;
+            if (rem_ticks <= 0 && MosTrySendToQueue(tmr_tmr->q, tmr_tmr->msg))
+                MosRemoveFromList(tmr);
+            else break;
         }
     }
     // Process Priority Queues
@@ -869,12 +804,16 @@ bool MosInitThread(MosThread * _thd, MosThreadPriority pri,
     case THREAD_INIT:
     case THREAD_STOPPED:
         MosInitList(&thd->run_e);
+        MosInitList(&thd->stop_q);
         MosInitListElm(&thd->tmr_e, ELM_THREAD);
         break;
     default:
+        MosRemoveFromList(&thd->run_e);
         if (MosIsOnList(&thd->tmr_e.link))
             MosRemoveFromList(&thd->tmr_e.link);
-        MosRemoveFromList(&thd->run_e);
+        // TODO: Flush stop_q ?  Or do not, since only flush on thread exit ?
+        if (!MosIsListEmpty(&thd->stop_q))
+            while (1);
         break;
     }
     SetThreadState(thd, THREAD_UNINIT);
@@ -962,17 +901,32 @@ bool MosIsStopRequested(void) {
 
 s32 MosWaitForThreadStop(MosThread * _thd) {
     Thread * thd = (Thread *)_thd;
-    RunningThread->wait.thd = thd;
-    SetRunningThreadStateAndYield(THREAD_WAIT_FOR_STOP);
+    SetBasePri(IntPriMaskLow);
+    if (thd->state > THREAD_STOPPED) {
+        RunningThread->wait.thd = thd;
+        MosRemoveFromList(&RunningThread->run_e);
+        MosAddToList(&thd->stop_q, &RunningThread->run_e);
+        SetThreadState(RunningThread, THREAD_WAIT_FOR_STOP);
+        YieldThread();
+    }
+    SetBasePri(0);
+    // TODO: Return value --> Might need to store aside
     return thd->rtn_val;
 }
 
 bool MosWaitForThreadStopOrTO(MosThread * _thd, s32 * rtn_val, u32 ticks) {
     Thread * thd = (Thread *)_thd;
     SetTimeout(ticks);
-    RunningThread->wait.thd = thd;
-    SetRunningThreadStateAndYield(THREAD_WAIT_FOR_STOP_OR_TICK);
-    if (thd->wait.thd == NULL) return false;
+    SetBasePri(IntPriMaskLow);
+    if (thd->state > THREAD_STOPPED) {
+        RunningThread->wait.thd = thd;
+        MosRemoveFromList(&RunningThread->run_e);
+        MosAddToList(&thd->stop_q, &RunningThread->run_e);
+        SetThreadState(RunningThread, THREAD_WAIT_FOR_STOP_OR_TICK);
+        YieldThread();
+    }
+    SetBasePri(0);
+    if (RunningThread->wait.thd == NULL) return false;
     *rtn_val = thd->rtn_val;
     return true;
 }
@@ -1014,7 +968,7 @@ void MosInitMutex(MosMutex * mtx) {
 // TODO: Multi-level priority inheritance.
 static void MOS_USED BlockOnMutex(MosMutex * mtx) {
     SetBasePri(IntPriMaskLow);
-    asm volatile ( "dsb" );
+    asm volatile ( "dmb" );
     // Retry (don't block) if mutex has since been given
     if (mtx->owner != NO_SUCH_THREAD) {
         // Add thread to pend queue
@@ -1108,7 +1062,7 @@ bool MOS_NAKED MosTryMutex(MosMutex * mtx) {
 // TODO: multi-level priority inheritance
 static void MOS_USED YieldOnMutex(MosMutex * mtx) {
     SetBasePri(IntPriMaskLow);
-    asm volatile ( "dsb" );
+    asm volatile ( "dmb" );
     if (!MosIsListEmpty(&mtx->pend_q)) {
         MosList * elm = mtx->pend_q.next;
         Thread * thd = container_of(elm, Thread, run_e);
@@ -1169,6 +1123,7 @@ void MosInitSem(MosSem * sem, u32 start_count) {
 static void MOS_USED BlockOnSem(MosSem * sem) {
     asm volatile ( "cpsid if" );
     // Retry (don't block) if count has since incremented
+    asm volatile ( "dmb" );
     if (sem->count == 0) {
         RunningThread->wait.sem = sem;
         MosList * elm = sem->pend_q.next;
@@ -1207,6 +1162,7 @@ static bool MOS_USED BlockOnSemOrTO(MosSem * sem) {
     bool timeout = false;
     asm volatile ( "cpsid if" );
     // Immediately retry (don't block) if count has since incremented
+    asm volatile ( "dmb" );
     if (sem->count == 0) {
         RunningThread->wait.sem = sem;
         MosList * elm = sem->pend_q.next;
@@ -1272,6 +1228,7 @@ bool MOS_NAKED MosTrySem(MosSem * sem) {
 
 static void MOS_USED YieldOnSem(MosSem * sem) {
     asm volatile ( "cpsid if" );
+    asm volatile ( "dmb" );
     if (!MosIsListEmpty(&sem->pend_q)) {
         MosList * elm = sem->pend_q.next;
         Thread * thd = container_of(elm, Thread, run_e);
