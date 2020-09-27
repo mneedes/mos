@@ -192,6 +192,7 @@ static void ThreadExit(s32 rtn_val) {
     for (MosList * elm = RunningThread->stp_q.next; elm != &RunningThread->stp_q; elm = elm_save) {
         elm_save = elm->next;
         Thread * thd = container_of(elm, Thread, run_e);
+        MosRemoveFromList(elm);
         MosAddToList(&RunQueues[thd->pri], &thd->run_e);
         if (MosIsOnList(&thd->tmr_e.link))
             MosRemoveFromList(&thd->tmr_e.link);
@@ -201,8 +202,7 @@ static void ThreadExit(s32 rtn_val) {
     YieldThread();
     SetBasePri(0);
     // Not reachable
-    while (1)
-        ;
+    MosAssert(0);
 }
 
 static s32 DefaultKillHandler(s32 arg) {
@@ -733,8 +733,7 @@ void MosRunScheduler(void) {
     SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
     asm volatile ( "isb" );
     // Not reachable
-    while (1)
-        ;
+    MosAssert(0);
 }
 
 const MosParams * MosGetParams(void) {
@@ -785,15 +784,16 @@ bool MosInitThread(MosThread * _thd, MosThreadPriority pri,
     switch (state) {
     case THREAD_UNINIT:
     case THREAD_INIT:
+        MosInitList(&thd->stp_q);
+        // fall through
     case THREAD_STOPPED:
         MosInitList(&thd->run_e);
-        MosInitList(&thd->stp_q); // TODO: Move this to UNINIT only ?
         MosInitListElm(&thd->tmr_e, ELM_THREAD);
         break;
     default:
         if (MosIsOnList(&thd->tmr_e.link))
             MosRemoveFromList(&thd->tmr_e.link);
-        //TODO: Should this go through stop queue ?
+        // TODO: Should this process stop queue ?
         MosRemoveFromList(&thd->run_e);
         break;
     }
@@ -914,9 +914,8 @@ void MosKillThread(MosThread * _thd) {
     Thread * thd = (Thread *)_thd;
     if (thd == RunningThread) {
         SetRunningThreadStateAndYield(THREAD_TIME_TO_DIE);
-        // not reachable
-        while (1)
-            ;
+        // Not reachable
+        MosAssert(0);
     }
     else MosInitAndRunThread((MosThread *) thd, thd->pri, thd->kill_handler,
                              thd->kill_arg, thd->stack_bottom,
