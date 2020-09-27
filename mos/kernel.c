@@ -13,6 +13,9 @@
 
 #include <errno.h>
 
+// TODO: Anything depending on thread state when thread is waiting on sem must lock out interrupts.
+// TODO: Cure semaphore locking using dedicated event queue ... simplifies everything else
+
 #if (MOS_FP_CONTEXT_SWITCHING == true)
   #if (__FPU_USED == 1U)
     #define ENABLE_FP_CONTEXT_SAVE    1
@@ -82,9 +85,7 @@ typedef struct Thread {
     MosThreadPriority orig_pri;
     u8 stop_request;
     u8 timeout;
-    MosMux * mux;
     s32 rtn_val;
-    s32 mux_idx;
     MosHandler * kill_handler;
     s32 kill_arg;
     u8 * stack_bottom;
@@ -244,43 +245,6 @@ void SysTick_Handler(void) {
     EVENT(TICK, TickCount);
 }
 
-#if 0
-static bool CheckMux(Thread * thd, MosThreadPriority pri, bool first_scan) {
-    bool found = false;
-    MosMux * mux = thd->mux;
-    for (u32 idx = 0; idx < mux->num; idx++) {
-        MosSem * sem;
-        switch (mux->entries[idx].type) {
-        case MOS_WAIT_SEM:
-            sem = mux->entries[idx].ptr.sem;
-            break;
-        case MOS_WAIT_RECV_QUEUE:
-            sem = &mux->entries[idx].ptr.q->sem_head;
-            break;
-        case MOS_WAIT_SEND_QUEUE:
-            sem = &mux->entries[idx].ptr.q->sem_tail;
-            break;
-        default:
-            continue;
-        }
-        // Another thread of equal priority is waiting on a sem,
-        //   keep tick running
-        if (!first_scan) return true;
-        // Lock interrupts since semaphore may be given from ISR
-        asm volatile ( "cpsid if" );
-        if (sem->count != 0) {
-            if (first_scan) {
-                sem->block_pri = NO_SUCH_PRI;
-                if (!found) thd->mux_idx = idx;
-            }
-            found = true;
-        } else if (sem->block_pri > pri) sem->block_pri = pri;
-        asm volatile ( "cpsie if" );
-    }
-    return found;
-}
-#endif
-
 static u32 MOS_USED Scheduler(u32 sp) {
     EVENT(SCHEDULER_ENTRY, 0);
     // Save SP and ErrNo context
@@ -334,20 +298,13 @@ static u32 MOS_USED Scheduler(u32 sp) {
             Thread * thd = container_of(elm, Thread, tmr_e);
             s32 rem_ticks = (s32)thd->wake_tick - adj_tick_count;
             if (rem_ticks <= 0) {
-                // Signal timeout
-                thd->timeout = 1;
-                thd->mux_idx = -1;
-                // TODO: lots to do
-                asm volatile ( "cpsid if" );
-                if (thd->state == THREAD_WAIT_FOR_SEM_OR_TICK) {
-                    MosRemoveFromList(&thd->run_e);
-                    asm volatile ( "cpsie if" );
-                    MosAddToList(&RunQueues[thd->pri], &thd->run_e);
-                } else asm volatile ( "cpsie if" );
-                if (thd->state == THREAD_WAIT_FOR_TICK)
-                    MosAddToList(&RunQueues[thd->pri], &thd->run_e);
-                SetThreadState(thd, THREAD_RUNNABLE);
                 MosRemoveFromList(elm);
+                asm volatile ( "cpsid if" );
+                MosRemoveFromList(&thd->run_e);
+                asm volatile ( "cpsie if" );
+                MosAddToList(&RunQueues[thd->pri], &thd->run_e);
+                thd->timeout = 1;
+                SetThreadState(thd, THREAD_RUNNABLE);
             } else break;
         } else {
             MosTimer * tmr = container_of(elm, MosTimer, tmr_e);
@@ -376,6 +333,7 @@ static u32 MOS_USED Scheduler(u32 sp) {
         if (run_thd) break;
     }
     if (run_thd) {
+        // Round-robin
         if (!MosIsLastElement(&RunQueues[run_thd->pri], &run_thd->run_e))
             MosMoveToEndOfList(&RunQueues[run_thd->pri], &run_thd->run_e);
     } else run_thd = &IdleThread;
@@ -859,15 +817,22 @@ MosThreadPriority MosGetThreadPriority(MosThread * _thd) {
 void MosChangeThreadPriority(MosThread * _thd, MosThreadPriority pri) {
     Thread * thd = (Thread *)_thd;
     SetBasePri(IntPriMaskLow);
-    if (thd->pri == pri) {
+    if (thd->orig_pri == pri) {
         SetBasePri(0);
         return;
     }
-    thd->pri = pri;
-    MosRemoveFromList(&thd->run_e);
-    MosAddToList(&RunQueues[pri], &thd->run_e);
-    if (RunningThread != NO_SUCH_THREAD && pri < thd->pri)
-        YieldThread();
+    // Set thread priority without disturbing ongoing priority inheritance
+    if (thd->pri == thd->orig_pri) {
+        thd->pri = pri;
+        // This check is ISR safe since barriers are used before setting thread state in ISR
+        if (thd->state == THREAD_RUNNABLE) {
+            MosRemoveFromList(&thd->run_e);
+            MosAddToList(&RunQueues[pri], &thd->run_e);
+            if (RunningThread != NO_SUCH_THREAD && (thd->pri < RunningThread->pri))
+                YieldThread();
+        }
+    }
+    thd->orig_pri = pri;
     SetBasePri(0);
 }
 
@@ -957,7 +922,7 @@ static void MOS_USED BlockOnMutex(MosMutex * mtx) {
         }
         MosRemoveFromList(&RunningThread->run_e);
         MosAddToListBefore(elm, &RunningThread->run_e);
-        // Priority inheritance logic
+        // Priority inheritance
         Thread * thd = (Thread *) mtx->owner;
         if (RunningThread->pri < thd->pri) {
             thd->pri = RunningThread->pri;
@@ -1035,7 +1000,6 @@ bool MOS_NAKED MosTryMutex(MosMutex * mtx) {
     );
 }
 
-// TODO: event queue -> scheduler might make sense to keep hogging lower ?
 // TODO: multi-level priority inheritance
 static void MOS_USED YieldOnMutex(MosMutex * mtx) {
     SetBasePri(IntPriMaskLow);
@@ -1200,13 +1164,14 @@ bool MOS_NAKED MosTrySem(MosSem * sem) {
     );
 }
 
+// TODO: Event-based logic
 static void MOS_USED YieldOnSem(MosSem * sem) {
     asm volatile ( "cpsid if" );
     if (!MosIsListEmpty(&sem->pend_q)) {
         MosList * elm = sem->pend_q.next;
         Thread * thd = container_of(elm, Thread, run_e);
         MosRemoveFromList(elm);
-        // Release interrupts but prevent thread from running for now
+        // Release most interrupts but prevent threads from running for now
         SetBasePri(IntPriMaskLow);
         asm volatile ( "cpsie if" );
         MosAddToFrontOfList(&RunQueues[thd->pri], elm);
@@ -1214,7 +1179,6 @@ static void MOS_USED YieldOnSem(MosSem * sem) {
             MosRemoveFromList(&thd->tmr_e.link);
         SetThreadState(thd, THREAD_RUNNABLE);
         if (thd->pri < RunningThread->pri) YieldThread();
-        // Let thread run
         SetBasePri(0);
     } else asm volatile ( "cpsie if" );
 }
@@ -1328,29 +1292,6 @@ bool MosReceiveFromQueueOrTO(MosQueue * queue, u32 * data, u32 ticks) {
         return true;
     }
     return false;
-}
-
-void MosInitMux(MosMux * mux) {
-    mux->num = 0;
-}
-
-void MosSetActiveMux(MosMux * mux, MosMuxEntry * entries, u32 len) {
-    mux->entries = entries;
-    mux->num = len;
-    RunningThread->mux = mux;
-}
-
-u32 MosWaitOnMux(MosMux * mux) {
-    SetRunningThreadStateAndYield(THREAD_WAIT_ON_MUX);
-    return (u32)RunningThread->mux_idx;
-}
-
-bool MosWaitOnMuxOrTO(MosMux * mux, u32 * idx, u32 ticks) {
-    SetTimeout(ticks);
-    SetRunningThreadStateAndYield(THREAD_WAIT_ON_MUX_OR_TICK);
-    if (RunningThread->mux_idx < 0) return false;
-    *idx = (u32)RunningThread->mux_idx;
-    return true;
 }
 
 void MosAssertAt(char * file, u32 line) {

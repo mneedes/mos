@@ -239,7 +239,23 @@ static bool ThreadTests(void) {
     //
     // Timeout on wait for thread
     //
-
+    test_pass = true;
+    MosPrint("Wait For Thread Stop with Timeout\n");
+    ClearHistogram();
+    MosInitAndRunThread(Threads[1], 1, PriTestThread, 0, Stacks[1], DFT_STACK_SIZE);
+    s32 rtn_val;
+    if (MosWaitForThreadStopOrTO(Threads[1], &rtn_val, test_time) != false) test_pass = false;
+    MosRequestThreadStop(Threads[1]);
+    if (MosWaitForThreadStopOrTO(Threads[1], &rtn_val, test_time) != true) test_pass = false;
+    if (rtn_val != TEST_PASS) test_pass = false;
+    DisplayHistogram(1);
+    if (TestHisto[0] < exp_iter || TestHisto[0] > exp_iter + 1)
+        test_pass = false;
+    if (test_pass) MosPrint(" Passed\n");
+    else {
+        MosPrint(" Failed\n");
+        tests_all_pass = false;
+    }
     //
     // InitThread / RunThread
     //

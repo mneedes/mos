@@ -28,7 +28,7 @@ typedef struct {
 
 // Mos Thread (opaque container)
 typedef struct {
-    u32 rsvd[19];
+    u32 rsvd[17];
 } MosThread;
 
 typedef enum {
@@ -81,20 +81,6 @@ typedef struct {
     MosQueue * q;
     MosListElm tmr_e;
 } MosTimer;
-
-// Allows blocking on multiple data structures simultaneously
-typedef struct {
-    MosWaitType type;
-    union {
-        MosSem * sem;
-        MosQueue * q;
-    } ptr;
-} MosMuxEntry;
-
-typedef struct {
-    u32 num;
-    MosMuxEntry * entries;
-} MosMux;
 
 typedef s32 (MosThreadEntry)(s32 arg);
 typedef s32 (MosHandler)(s32 arg);
@@ -165,9 +151,7 @@ void MosChangeThreadPriority(MosThread * thd, MosThreadPriority pri);
 void MosRequestThreadStop(MosThread * thd);
 bool MosIsStopRequested(void);
 s32 MosWaitForThreadStop(MosThread * thd);
-#if 0
 bool MosWaitForThreadStopOrTO(MosThread * thd, s32 * rtn_val, u32 ticks);
-#endif
 // Forcible stop, works on blocked threads.
 void MosKillThread(MosThread * thd);
 // Handler to run if thread is killed.  Thread can set own handler and argument.
@@ -204,19 +188,6 @@ u32 MosReceiveFromQueue(MosQueue * queue);
 bool MosTryReceiveFromQueue(MosQueue * queue, u32 * data);
 // Returns false on timeout, true if received
 bool MosReceiveFromQueueOrTO(MosQueue * queue, u32 * data, u32 ticks);
-
-#if 0
-
-// Mux (Block on multiple "selected" queues and/or semaphores)
-// NOTE: An active Mux should only be changed by the thread using it
-
-void MosInitMux(MosMux * mux);
-void MosSetActiveMux(MosMux * mux, MosMuxEntry * entries, u32 len);
-u32 MosWaitOnMux(MosMux * mux);
-// Returns false on timeout, true if pending
-bool MosWaitOnMuxOrTO(MosMux * mux, u32 * idx, u32 ticks);
-
-#endif
 
 #define MosAssert(c) { if (!(c)) MosAssertAt(__FILE__, __LINE__); }
 void MosAssertAt(char * file, u32 line);
