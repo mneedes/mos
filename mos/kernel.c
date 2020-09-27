@@ -309,29 +309,29 @@ static u32 MOS_USED Scheduler(u32 sp) {
     } else if (RunningThread->state & THREAD_WAIT_FOR_TICK) {
         // Update running thread timer state (insertion sort in timer queue)
         s32 rem_ticks = (s32)RunningThread->wake_tick - adj_tick_count;
-        MosList * tmr;
-        for (tmr = TimerQueue.next; tmr != &TimerQueue; tmr = tmr->next) {
+        MosList * elm;
+        for (elm = TimerQueue.next; elm != &TimerQueue; elm = elm->next) {
             s32 wake_tick;
-            if (((MosListElm *)tmr)->type == ELM_THREAD) {
-                Thread * thd = container_of(tmr, Thread, tmr_e);
+            if (((MosListElm *)elm)->type == ELM_THREAD) {
+                Thread * thd = container_of(elm, Thread, tmr_e);
                 wake_tick = (s32)thd->wake_tick;
             } else {
-                MosTimer * tmr_tmr = container_of(tmr, MosTimer, tmr_e);
-                wake_tick = (s32)tmr_tmr->wake_tick;
+                MosTimer * tmr = container_of(elm, MosTimer, tmr_e);
+                wake_tick = (s32)tmr->wake_tick;
             }
             s32 tmr_rem_ticks = wake_tick - adj_tick_count;
             if (rem_ticks <= tmr_rem_ticks) break;
         }
-        MosAddToListBefore(tmr, &RunningThread->tmr_e.link);
+        MosAddToListBefore(elm, &RunningThread->tmr_e.link);
         if (RunningThread->state == THREAD_WAIT_FOR_TICK)
             MosRemoveFromList(&RunningThread->run_e);
     }
     // Process timer queue
-    MosList * tmr_save;
-    for (MosList * tmr = TimerQueue.next; tmr != &TimerQueue; tmr = tmr_save) {
-        tmr_save = tmr->next;
-        if (((MosListElm *)tmr)->type == ELM_THREAD) {
-            Thread * thd = container_of(tmr, Thread, tmr_e);
+    MosList * elm_save;
+    for (MosList * elm = TimerQueue.next; elm != &TimerQueue; elm = elm_save) {
+        elm_save = elm->next;
+        if (((MosListElm *)elm)->type == ELM_THREAD) {
+            Thread * thd = container_of(elm, Thread, tmr_e);
             s32 rem_ticks = (s32)thd->wake_tick - adj_tick_count;
             if (rem_ticks <= 0) {
                 // Signal timeout
@@ -347,13 +347,13 @@ static u32 MOS_USED Scheduler(u32 sp) {
                 if (thd->state == THREAD_WAIT_FOR_TICK)
                     MosAddToList(&RunQueues[thd->pri], &thd->run_e);
                 SetThreadState(thd, THREAD_RUNNABLE);
-                MosRemoveFromList(tmr);
+                MosRemoveFromList(elm);
             } else break;
         } else {
-            MosTimer * tmr_tmr = container_of(tmr, MosTimer, tmr_e);
-            s32 rem_ticks = (s32)tmr_tmr->wake_tick - adj_tick_count;
+            MosTimer * tmr = container_of(elm, MosTimer, tmr_e);
+            s32 rem_ticks = (s32)tmr->wake_tick - adj_tick_count;
             if (rem_ticks <= 0) {
-                if (MosTrySendToQueue(tmr_tmr->q, tmr_tmr->msg)) MosRemoveFromList(tmr);
+                if (MosTrySendToQueue(tmr->q, tmr->msg)) MosRemoveFromList(elm);
             } else break;
         }
     }
@@ -391,8 +391,8 @@ static u32 MOS_USED Scheduler(u32 sp) {
                 Thread * thd = container_of(TimerQueue.next, Thread, tmr_e);
                 tmr_ticks_rem = (s32)thd->wake_tick - adj_tick_count;
             } else {
-                MosTimer * tmr_tmr = container_of(TimerQueue.next, MosTimer, tmr_e);
-                tmr_ticks_rem = (s32)tmr_tmr->wake_tick - adj_tick_count;
+                MosTimer * tmr = container_of(TimerQueue.next, MosTimer, tmr_e);
+                tmr_ticks_rem = (s32)tmr->wake_tick - adj_tick_count;
             }
         }
         if (tmr_ticks_rem != 0x7fffffff) {
