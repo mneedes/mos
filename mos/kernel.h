@@ -28,7 +28,7 @@ typedef struct {
 
 // Mos Thread (opaque container)
 typedef struct {
-    u32 rsvd[18];
+    u32 rsvd[19];
 } MosThread;
 
 typedef enum {

@@ -75,15 +75,13 @@ typedef struct Thread {
     error_t err_no;
     ThreadState state;
     MosList run_e;
+    MosList stp_q;
     MosListElm tmr_e;
     u32 wake_tick;
     MosThreadPriority pri;
     MosThreadPriority orig_pri;
     u8 stop_request;
     u8 timeout;
-    union {
-        struct Thread * thd;
-    } wait;
     MosMux * mux;
     s32 rtn_val;
     s32 mux_idx;
@@ -190,6 +188,15 @@ static void ThreadExit(s32 rtn_val) {
     asm volatile ( "dmb" );
     if (MosIsOnList(&RunningThread->tmr_e.link))
         MosRemoveFromList(&RunningThread->tmr_e.link);
+    MosList * elm_save;
+    for (MosList * elm = RunningThread->stp_q.next; elm != &RunningThread->stp_q; elm = elm_save) {
+        elm_save = elm->next;
+        Thread * thd = container_of(elm, Thread, run_e);
+        MosAddToList(&RunQueues[thd->pri], &thd->run_e);
+        if (MosIsOnList(&thd->tmr_e.link))
+            MosRemoveFromList(&thd->tmr_e.link);
+        SetThreadState(thd, THREAD_RUNNABLE);
+    }
     MosRemoveFromList(&RunningThread->run_e);
     YieldThread();
     SetBasePri(0);
@@ -274,98 +281,6 @@ static bool CheckMux(Thread * thd, MosThreadPriority pri, bool first_scan) {
 }
 #endif
 
-static Thread *
-ProcessThread(Thread * thd, MosThreadPriority pri, bool first_scan) {
-    switch (thd->state & 0xF) {
-    case THREAD_RUNNABLE:
-        return thd;
-#if 1
-    case THREAD_WAIT_FOR_MUTEX:
-        while(1) ;
-        break;
-#else
-    case THREAD_WAIT_FOR_MUTEX:
-        {
-            // Check mutex (nested priority inheritance algorithm)
-            Thread * owner = (Thread *) thd->wait.mtx->owner;
-            if (owner == NO_SUCH_THREAD) {
-                if (first_scan) thd->wait.mtx->to_yield = false;
-                return thd;
-            } else {
-                if (owner->pri > pri) {
-                    // Owner thread is lower priority
-                    if (owner->state == THREAD_RUNNABLE) {
-                        if (first_scan) thd->wait.mtx->to_yield = true;
-                        return owner;
-                    } else return ProcessThread(owner, pri, first_scan);
-                // Owner thread is equal priority, return non-NULL on 2nd scan
-                //   to keep tick running
-                } else if (!first_scan) return thd;
-            }
-        }
-        break;
-#endif
-
-#if 1
-    case THREAD_WAIT_FOR_SEM:
-        while(1) ;
-        break;
-#else
-    case THREAD_WAIT_FOR_SEM:
-        {
-            // Another thread of equal priority is waiting on a sem,
-            //   keep tick running
-            if (!first_scan) return thd;
-            // Lock interrupts since semaphore may be given from ISR
-            asm volatile ( "cpsid if" );
-            if (thd->wait.sem->count != 0) {
-                thd->wait.sem->block_pri = NO_SUCH_PRI;
-                asm volatile ( "cpsie if" );
-                return thd;
-            } else {
-                if (thd->wait.sem->block_pri > pri) thd->wait.sem->block_pri = pri;
-                asm volatile ( "cpsie if" );
-            }
-        }
-        break;
-#endif
-#if 1
-    case THREAD_WAIT_ON_MUX:
-        while(1) ;
-        break;
-#else
-    case THREAD_WAIT_ON_MUX:
-        if (CheckMux(thd, pri, first_scan)) return thd;
-        break;
-#endif
-    case THREAD_WAIT_FOR_STOP:
-        if (thd->wait.thd->state == THREAD_STOPPED) return thd;
-        break;
-    default:
-        break;
-    }
-    return NULL;
-}
-
-static Thread *
-ScanThreads(MosThreadPriority * pri, MosList ** thd_elm, bool first_scan) {
-    MosList * elm = *thd_elm;
-    for (; *pri < MOS_MAX_THREAD_PRIORITIES;) {
-        for (; elm != &RunQueues[*pri]; elm = elm->next) {
-            Thread * thd = container_of(elm, Thread, run_e);
-            Thread * run_thd = ProcessThread(thd, *pri, first_scan);
-            if (run_thd) {
-                *thd_elm = elm;
-                return run_thd;
-            }
-        }
-        if (!first_scan) break;
-        (*pri)++;
-        elm = RunQueues[*pri].next;
-    }
-    return NULL;
-}
-
 static u32 MOS_USED Scheduler(u32 sp) {
     EVENT(SCHEDULER_ENTRY, 0);
     // Save SP and ErrNo context
@@ -421,7 +336,6 @@ static u32 MOS_USED Scheduler(u32 sp) {
             if (rem_ticks <= 0) {
                 // Signal timeout
                 thd->timeout = 1;
-                thd->wait.thd = NULL;
                 thd->mux_idx = -1;
                 // TODO: lots to do
                 asm volatile ( "cpsid if" );
@@ -448,19 +362,20 @@ static u32 MOS_USED Scheduler(u32 sp) {
     //   runnable threads (for tick enable), and if no threads are runnable
     //   schedule idle thread.
     bool tick_en = false;
-    MosThreadPriority pri = 0;
-    MosList * thd_elm = RunQueues[pri].next;
-    Thread * run_thd = ScanThreads(&pri, &thd_elm, true);
-    if (run_thd) {
-        // Remove from timer and set thread runnable
-        if ((run_thd->state & THREAD_WAIT_FOR_TICK) == THREAD_WAIT_FOR_TICK) {
-            if (MosIsOnList(&run_thd->tmr_e.link))
-                MosRemoveFromList(&run_thd->tmr_e.link);
+    Thread * run_thd = NULL;
+    for (MosThreadPriority pri = 0; pri < MOS_MAX_THREAD_PRIORITIES; pri++) {
+        MosList * elm;
+        for (elm = RunQueues[pri].next; elm != &RunQueues[pri]; elm = elm->next) {
+            if (run_thd == NULL) {
+                run_thd = container_of(elm, Thread, run_e);
+            } else {
+                tick_en = true;
+                break;
+            }
         }
-        SetThreadState(run_thd, THREAD_RUNNABLE);
-        // Look for second potentially runnable thread
-        if (ScanThreads(&pri, &thd_elm, false)) tick_en = true;
-        // Move thread to end of priority queue (round-robin)
+        if (run_thd) break;
+    }
+    if (run_thd) {
         if (!MosIsLastElement(&RunQueues[run_thd->pri], &run_thd->run_e))
             MosMoveToEndOfList(&RunQueues[run_thd->pri], &run_thd->run_e);
     } else run_thd = &IdleThread;
@@ -872,11 +787,13 @@ bool MosInitThread(MosThread * _thd, MosThreadPriority pri,
     case THREAD_INIT:
     case THREAD_STOPPED:
         MosInitList(&thd->run_e);
+        MosInitList(&thd->stp_q); // TODO: Move this to UNINIT only ?
         MosInitListElm(&thd->tmr_e, ELM_THREAD);
         break;
     default:
         if (MosIsOnList(&thd->tmr_e.link))
             MosRemoveFromList(&thd->tmr_e.link);
+        //TODO: Should this go through stop queue ?
         MosRemoveFromList(&thd->run_e);
         break;
     }
@@ -965,8 +882,14 @@ bool MosIsStopRequested(void) {
 
 s32 MosWaitForThreadStop(MosThread * _thd) {
     Thread * thd = (Thread *)_thd;
-    RunningThread->wait.thd = thd;
-    SetRunningThreadStateAndYield(THREAD_WAIT_FOR_STOP);
+    SetBasePri(IntPriMaskLow);
+    if (thd->state > THREAD_STOPPED) {
+        MosRemoveFromList(&RunningThread->run_e);
+        MosAddToList(&thd->stp_q, &RunningThread->run_e);
+        SetThreadState(RunningThread, THREAD_WAIT_FOR_STOP);
+        YieldThread();
+    }
+    SetBasePri(0);
     return thd->rtn_val;
 }
 
@@ -974,8 +897,14 @@ bool MosWaitForThreadStopOrTO(MosThread * _thd, s32 * rtn_val, u32 ticks) {
     Thread * thd = (Thread *)_thd;
     SetTimeout(ticks);
     RunningThread->timeout = 0;
-    RunningThread->wait.thd = thd;
-    SetRunningThreadStateAndYield(THREAD_WAIT_FOR_STOP_OR_TICK);
+    SetBasePri(IntPriMaskLow);
+    if (thd->state > THREAD_STOPPED) {
+        MosRemoveFromList(&RunningThread->run_e);
+        MosAddToList(&thd->stp_q, &RunningThread->run_e);
+        SetThreadState(RunningThread, THREAD_WAIT_FOR_STOP_OR_TICK);
+        YieldThread();
+    }
+    SetBasePri(0);
     if (RunningThread->timeout) return false;
     *rtn_val = thd->rtn_val;
     return true;
