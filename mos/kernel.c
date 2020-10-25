@@ -53,7 +53,7 @@ typedef struct {
     u32 PC;          // R15
     u32 PSR;
 #if (ENABLE_FP_CONTEXT_SAVE == 1)
-    u32 ALIGNMENT_PAD;  // Not sure this is needed
+    //u32 ALIGNMENT_PAD;  // Not sure this is needed
 #endif
 } StackFrame;
 
@@ -61,7 +61,7 @@ typedef enum {
     THREAD_UNINIT = 0,
     THREAD_INIT,
     THREAD_STOPPED,
-    THREAD_TIME_TO_DIE,
+    THREAD_TIME_TO_STOP,
     THREAD_RUNNABLE,
     THREAD_WAIT_FOR_MUTEX,
     THREAD_WAIT_FOR_SEM,
@@ -78,7 +78,7 @@ typedef struct Thread {
     error_t err_no;
     ThreadState state;
     MosList run_e;
-    MosList stp_q;
+    MosList stop_q;
     MosListElm tmr_e;
     u32 wake_tick;
     MosThreadPriority pri;
@@ -86,8 +86,8 @@ typedef struct Thread {
     u8 stop_request;
     u8 timeout;
     s32 rtn_val;
-    MosHandler * kill_handler;
-    s32 kill_arg;
+    MosHandler * stop_handler;
+    s32 stop_arg;
     u8 * stack_bottom;
     u32 stack_size;
 } Thread;
@@ -190,7 +190,8 @@ static void ThreadExit(s32 rtn_val) {
     if (MosIsOnList(&RunningThread->tmr_e.link))
         MosRemoveFromList(&RunningThread->tmr_e.link);
     MosList * elm_save;
-    for (MosList * elm = RunningThread->stp_q.next; elm != &RunningThread->stp_q; elm = elm_save) {
+    for (MosList * elm = RunningThread->stop_q.next;
+             elm != &RunningThread->stop_q; elm = elm_save) {
         elm_save = elm->next;
         Thread * thd = container_of(elm, Thread, run_e);
         MosRemoveFromList(elm);
@@ -206,7 +207,7 @@ static void ThreadExit(s32 rtn_val) {
     MosAssert(0);
 }
 
-static s32 DefaultKillHandler(s32 arg) {
+static s32 DefaultStopHandler(s32 arg) {
     return arg;
 }
 
@@ -232,8 +233,8 @@ static void InitThread(Thread * thd, MosThreadPriority pri,
     thd->pri = pri;
     thd->orig_pri = pri;
     thd->stop_request = false;
-    thd->kill_handler = DefaultKillHandler;
-    thd->kill_arg = 0;
+    thd->stop_handler = DefaultStopHandler;
+    thd->stop_arg = 0;
     thd->stack_bottom = stack_bottom;
     thd->stack_size = stack_size;
 }
@@ -262,12 +263,12 @@ static u32 MOS_USED Scheduler(u32 sp) {
         asm volatile ( "cpsie if" );
         adj_tick_count = TickCount + (load - val) / CyclesPerTick;
     }
-    if (RunningThread->state == THREAD_TIME_TO_DIE) {
+    if (RunningThread->state == THREAD_TIME_TO_STOP) {
         // Arrange death of running thread via kill handler
         if (MosIsOnList(&RunningThread->tmr_e.link))
             MosRemoveFromList(&RunningThread->tmr_e.link);
         InitThread(RunningThread, RunningThread->pri,
-                   RunningThread->kill_handler, RunningThread->kill_arg,
+                   RunningThread->stop_handler, RunningThread->stop_arg,
                    RunningThread->stack_bottom, RunningThread->stack_size);
         SetThreadState(RunningThread, THREAD_RUNNABLE);
     } else if (RunningThread->state & THREAD_WAIT_FOR_TICK) {
@@ -478,7 +479,7 @@ static void MOS_USED FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 lr) {
           ;
     } else {
         // Stop thread if fault occurred in thread context
-        SetThreadState(RunningThread, THREAD_TIME_TO_DIE);
+        SetThreadState(RunningThread, THREAD_TIME_TO_STOP);
         YieldThread();
     }
 }
@@ -742,16 +743,17 @@ bool MosInitThread(MosThread * _thd, MosThreadPriority pri,
     switch (state) {
     case THREAD_UNINIT:
     case THREAD_INIT:
-        MosInitList(&thd->stp_q);
+        MosInitList(&thd->stop_q);
         // fall through
     case THREAD_STOPPED:
         MosInitList(&thd->run_e);
         MosInitListElm(&thd->tmr_e, ELM_THREAD);
         break;
     default:
+        // This will run if thread is killed, stop queue
+        //   processed only after kill handler returns.
         if (MosIsOnList(&thd->tmr_e.link))
             MosRemoveFromList(&thd->tmr_e.link);
-        // TODO: Should this process stop queue ?
         MosRemoveFromList(&thd->run_e);
         break;
     }
@@ -797,7 +799,7 @@ MosThreadState MosGetThreadState(MosThread * _thd, s32 * rtn_val) {
         state = MOS_THREAD_STOPPED;
         if (rtn_val != NULL) *rtn_val = thd->rtn_val;
         break;
-    case THREAD_TIME_TO_DIE:
+    case THREAD_TIME_TO_STOP:
         state = MOS_THREAD_STOP_REQUEST;
         break;
     default:
@@ -824,7 +826,7 @@ void MosChangeThreadPriority(MosThread * _thd, MosThreadPriority pri) {
     // Set thread priority without disturbing ongoing priority inheritance
     if (thd->pri == thd->orig_pri) {
         thd->pri = pri;
-        // This check is ISR safe since barriers are used before setting thread state in ISR
+        // TODO: This check is ISR safe since barriers are used before setting thread state in ISR
         if (thd->state == THREAD_RUNNABLE) {
             MosRemoveFromList(&thd->run_e);
             MosAddToList(&RunQueues[pri], &thd->run_e);
@@ -850,7 +852,7 @@ s32 MosWaitForThreadStop(MosThread * _thd) {
     SetBasePri(IntPriMaskLow);
     if (thd->state > THREAD_STOPPED) {
         MosRemoveFromList(&RunningThread->run_e);
-        MosAddToList(&thd->stp_q, &RunningThread->run_e);
+        MosAddToList(&thd->stop_q, &RunningThread->run_e);
         SetThreadState(RunningThread, THREAD_WAIT_FOR_STOP);
         YieldThread();
     }
@@ -865,7 +867,7 @@ bool MosWaitForThreadStopOrTO(MosThread * _thd, s32 * rtn_val, u32 ticks) {
     SetBasePri(IntPriMaskLow);
     if (thd->state > THREAD_STOPPED) {
         MosRemoveFromList(&RunningThread->run_e);
-        MosAddToList(&thd->stp_q, &RunningThread->run_e);
+        MosAddToList(&thd->stop_q, &RunningThread->run_e);
         SetThreadState(RunningThread, THREAD_WAIT_FOR_STOP_OR_TICK);
         YieldThread();
     }
@@ -878,27 +880,36 @@ bool MosWaitForThreadStopOrTO(MosThread * _thd, s32 * rtn_val, u32 ticks) {
 void MosKillThread(MosThread * _thd) {
     Thread * thd = (Thread *)_thd;
     if (thd == RunningThread) {
-        SetRunningThreadStateAndYield(THREAD_TIME_TO_DIE);
+        SetRunningThreadStateAndYield(THREAD_TIME_TO_STOP);
         // Not reachable
         MosAssert(0);
+    } else {
+        // Snapshot the arguments, run thread stop handler, allowing thread to stop at
+        //   its original run priority.
+        SetBasePri(IntPriMaskLow);
+        MosThreadPriority pri = thd->pri;
+        MosHandler * stop_handler = thd->stop_handler;
+        s32 stop_arg = thd->stop_arg;
+        u8 * stack_bottom = thd->stack_bottom;
+        u32 stack_size = thd->stack_size;
+        SetBasePri(0);
+        MosInitAndRunThread((MosThread *) thd, pri, stop_handler, stop_arg,
+                                stack_bottom, stack_size);
     }
-    else MosInitAndRunThread((MosThread *) thd, thd->pri, thd->kill_handler,
-                             thd->kill_arg, thd->stack_bottom,
-                             thd->stack_size);
 }
 
-void MosSetKillHandler(MosThread * _thd, MosHandler * handler, s32 arg) {
+void MosSetStopHandler(MosThread * _thd, MosHandler * handler, s32 arg) {
     Thread * thd = (Thread *)_thd;
     SetBasePri(IntPriMaskLow);
-    if (handler) thd->kill_handler = handler;
-    else thd->kill_handler = DefaultKillHandler;
-    thd->kill_arg = arg;
+    if (handler) thd->stop_handler = handler;
+    else thd->stop_handler = DefaultStopHandler;
+    thd->stop_arg = arg;
     SetBasePri(0);
 }
 
-void MosSetKillArg(MosThread * _thd, s32 arg) {
+void MosSetStopArg(MosThread * _thd, s32 arg) {
     Thread * thd = (Thread *)_thd;
-    thd->kill_arg = arg;
+    thd->stop_arg = arg;
 }
 
 void MosInitMutex(MosMutex * mtx) {
@@ -922,7 +933,7 @@ static void MOS_USED BlockOnMutex(MosMutex * mtx) {
         }
         MosRemoveFromList(&RunningThread->run_e);
         MosAddToListBefore(elm, &RunningThread->run_e);
-        // Priority inheritance
+        // Basic priority inheritance
         Thread * thd = (Thread *) mtx->owner;
         if (RunningThread->pri < thd->pri) {
             thd->pri = RunningThread->pri;
@@ -1297,7 +1308,7 @@ bool MosReceiveFromQueueOrTO(MosQueue * queue, u32 * data, u32 ticks) {
 void MosAssertAt(char * file, u32 line) {
     if (PrintfHook) (*PrintfHook)("Assertion failed in %s on line %u\n", file, line);
     if (RunningThread != NO_SUCH_THREAD)
-        SetRunningThreadStateAndYield(THREAD_TIME_TO_DIE);
+        SetRunningThreadStateAndYield(THREAD_TIME_TO_STOP);
     // not always reachable
     while (1)
         ;

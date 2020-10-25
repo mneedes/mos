@@ -27,6 +27,10 @@ int main() {
     MosInitTrace(TRACE_INFO | TRACE_ERROR | TRACE_FATAL, true);
     MosPrintf("\nMaintainable OS (Version %s)\n", MosGetParams()->version);
 
+    if (CoreDebug->DHCSR & CoreDebug_DHCSR_C_DEBUGEN_Msk) {
+        MosPrint("Debug Enabled\n");
+    }
+
     // Initialize and Run test bench example Application.
     if (InitTestBench() == 0) {
         // Start multitasking, running App threads.

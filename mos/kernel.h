@@ -155,8 +155,8 @@ bool MosWaitForThreadStopOrTO(MosThread * thd, s32 * rtn_val, u32 ticks);
 // Forcible stop, works on blocked threads.
 void MosKillThread(MosThread * thd);
 // Handler to run if thread is killed.  Thread can set own handler and argument.
-void MosSetKillHandler(MosThread * thd, MosHandler * handler, s32 arg);
-void MosSetKillArg(MosThread * thd, s32 arg);
+void MosSetStopHandler(MosThread * thd, MosHandler * handler, s32 arg);
+void MosSetStopArg(MosThread * thd, s32 arg);
 
 // Blocking Recursive Mutex with priority inheritance
 

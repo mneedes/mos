@@ -127,11 +127,11 @@ static s32 KillTestHandler(s32 arg) {
 
 static s32 KillTestThread(s32 arg) {
     if (arg) {
-        MosSetKillHandler(MosGetThread(), KillTestHandler, TEST_PASS_HANDLER);
+        MosSetStopHandler(MosGetThread(), KillTestHandler, TEST_PASS_HANDLER);
         // Take mutex a couple times... need to release it in handler
         MosTakeMutex(&TestMutex);
         MosTakeMutex(&TestMutex);
-    } else MosSetKillArg(MosGetThread(), TEST_PASS_HANDLER);
+    } else MosSetStopArg(MosGetThread(), TEST_PASS_HANDLER);
     MosLogTrace(TRACE_INFO, "KillTestThread: Blocking\n");
     MosTakeSem(&TestSem);
     return TEST_FAIL;
@@ -139,11 +139,11 @@ static s32 KillTestThread(s32 arg) {
 
 static s32 KillSelfTestThread(s32 arg) {
     if (arg) {
-        MosSetKillHandler(MosGetThread(), KillTestHandler, TEST_PASS_HANDLER);
+        MosSetStopHandler(MosGetThread(), KillTestHandler, TEST_PASS_HANDLER);
         // Take mutex a couple times... need to release it in handler
         MosTakeMutex(&TestMutex);
         MosTakeMutex(&TestMutex);
-    } else MosSetKillArg(MosGetThread(), TEST_PASS_HANDLER);
+    } else MosSetStopArg(MosGetThread(), TEST_PASS_HANDLER);
     MosLogTrace(TRACE_INFO, "KillSelfTestThread: Killing Self\n");
     MosKillThread(MosGetThread());
     return TEST_FAIL;
@@ -151,7 +151,7 @@ static s32 KillSelfTestThread(s32 arg) {
 
 static s32 ExcTestThread(s32 arg) {
     volatile u32 x;
-    MosSetKillArg(MosGetThread(), TEST_PASS_HANDLER + 1);
+    MosSetStopArg(MosGetThread(), TEST_PASS_HANDLER + 1);
     MosDelayThread(50);
     x = 30 / arg;
     (void)x;
@@ -159,7 +159,7 @@ static s32 ExcTestThread(s32 arg) {
 }
 
 static s32 AssertTestThread(s32 arg) {
-    MosSetKillArg(MosGetThread(), TEST_PASS_HANDLER);
+    MosSetStopArg(MosGetThread(), TEST_PASS_HANDLER);
     MosAssert(arg == 0x1234);
     return TEST_FAIL;
 }
