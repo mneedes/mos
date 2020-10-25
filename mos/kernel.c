@@ -128,8 +128,8 @@ static u32 CyclesPerTick;
 static u32 MOS_USED CyclesPerMicroSec;
 
 // Idle thread stack and initial PSP safe storage
-//  TODO: Might want to make this big enough to handle a FP stack frame in case FP used in init?
-static u8 MOS_STACK_ALIGNED IdleStack[2 * sizeof(StackFrame)];
+//  28 words holds FP stack frame plus enough to initialize Idle thread stack
+static u8 MOS_STACK_ALIGNED IdleStack[28*sizeof(u32) + sizeof(StackFrame)];
 
 // Mask interrupts by priority, primarily for temporarily
 //   disabling context switches.
@@ -429,15 +429,16 @@ void MOS_NAKED PendSV_Handler(void) {
 
 #endif
 
-// TODO: Limit stack dump to top of stack / end of memory
+// TODO: Limit MSP stack dump to end of MSP stack
 // TODO: Clear fault bits after thread exception ?
-// TODO: FPU stack? -- increase dump size
+// TODO: Dump more registers in general including FP registers ?
 // TODO: Print thread name
 static void MOS_USED FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 lr) {
     char * fault_type[] = {
         "Hard", "Mem", "Bus", "Usage", "Imprecise Bus"
     };
     bool in_isr = ((lr & 0x8) == 0x0);
+    bool fp_en = ((lr & 0x10) == 0x0);
     if (PrintfHook) {
         u32 cfsr = SCB->CFSR;
         u32 fault_no = (psr & 0xf) - 3;
@@ -445,18 +446,9 @@ static void MOS_USED FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 lr) {
         (*PrintfHook)("\n*** %s Fault %s", fault_type[fault_no],
                           in_isr ? "IN ISR " : "");
         if (RunningThread == NO_SUCH_THREAD) (*PrintfHook)("(Before MOS Run) ***\n");
-        else {
-            (*PrintfHook)("(Thread %08X) ***\n", RunningThread);
-#if 0
-            // Check for stack overflow
-            for (u32 ix = 0; ix < MAX_THREADS; ix++) {
-                if (Threads[ix].state != THREAD_UNINIT) {
-                    if (*((u32 *)ThreadData[ix].stack_addr) != STACK_CANARY)
-                        (*PrintfHook)("!!! ThreadID %u Stack overflow !!!\n", ix);
-                }
-            }
-#endif
-        }
+        else (*PrintfHook)("(Thread @%08X) ***\n", RunningThread);
+
+        if (fp_en) (*PrintfHook)("*** Lazy Floating Point Enabled ***\n");
 
         (*PrintfHook)(" HFSR: %08X  CFSR: %08X AFSR: %08X\n",
                           SCB->HFSR, cfsr, SCB->AFSR);
@@ -464,14 +456,23 @@ static void MOS_USED FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 lr) {
 
         bool use_psp = ((lr & 0x4) == 0x4);
         u32 * sp = use_psp ? psp : msp;
+        s32 num_words = 16;
+        if (use_psp && RunningThread != NO_SUCH_THREAD) {
+            if (*((u32 *)RunningThread->stack_bottom) != STACK_CANARY)
+                (*PrintfHook)("!!! Stack corruption !!!\n");
+            s32 rem_words = (u32 *)(RunningThread->stack_bottom + RunningThread->stack_size) - sp;
+            if (rem_words < 64) num_words = rem_words;
+            else num_words = 64;
+        }
         (*PrintfHook)("%s Stack @%08X:\n", use_psp ? "Process" : "Main", (u32) sp);
         (*PrintfHook)(" %08X %08X %08X %08X  (R0 R1 R2 R3)\n",  sp[0], sp[1], sp[2], sp[3]);
         (*PrintfHook)(" %08X %08X %08X %08X (R12 LR PC PSR)\n", sp[4], sp[5], sp[6], sp[7]);
         sp += 8;
-        for (u32 ix = 0; ix < 4; ix++, sp += 4) {
-            (*PrintfHook)(" %08X %08X %08X %08X\n", sp[0], sp[1], sp[2], sp[3]);
+        for (s32 ix = 0; ix < (num_words - 8); ix++) {
+            (*PrintfHook)(" %08X", sp[ix]);
+            if ((ix & 0x3) == 0x3) (*PrintfHook)("\n");
         }
-        (*PrintfHook)("\n");
+        (*PrintfHook)("\n\n");
     }
     if (RunningThread == NO_SUCH_THREAD || in_isr) {
         // Hang if fault occurred anywhere but in thread context
@@ -684,7 +685,8 @@ void MosRunScheduler(void) {
         "cpsie if\n\t"
         "b SkipRS\n\t"
         ".balign 4\n\t"
-        "psp_start: .word IdleStack + 64\n\t"
+        // 112 (28 words) is enough to store a FP stack frame
+        "psp_start: .word IdleStack + 112\n\t"
         "SkipRS:\n\t"
             : : : "r0"
     );

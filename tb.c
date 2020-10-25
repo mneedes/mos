@@ -165,13 +165,20 @@ static s32 AssertTestThread(s32 arg) {
 }
 
 static s32 FPTestThread(s32 arg) {
-    double x = 0.0;
+    float x = 0.0;
     for (;;) {
         TestHisto[arg]++;
         x = x + 1.0;
+        if (arg > 1 && (TestHisto[arg] == 1000)) {
+            // Create an integer div-by-0 exception in FP thread
+            MosSetStopArg(MosGetThread(), TEST_PASS_HANDLER + 1);
+            volatile u32 y = (20 / (arg - 2));
+            (void)y;
+            return TEST_FAIL;
+        }
         if (MosIsStopRequested()) break;
     }
-    if ((double)TestHisto[arg] != x) return TEST_FAIL;
+    if ((float)TestHisto[arg] != x) return TEST_FAIL;
     else return TEST_PASS;
 }
 
@@ -386,7 +393,7 @@ static bool ThreadTests(void) {
         MosInitAndRunThread(Threads[1], 1, FPTestThread, 0, Stacks[1], DFT_STACK_SIZE);
         MosInitAndRunThread(Threads[2], 1, FPTestThread, 1, Stacks[2], DFT_STACK_SIZE);
         MosInitAndRunThread(Threads[3], 1, PriTestThread, 2, Stacks[3], DFT_STACK_SIZE);
-        MosDelayThread(test_time);
+        MosDelayThread(test_time / 2);
         MosRequestThreadStop(Threads[1]);
         MosRequestThreadStop(Threads[2]);
         MosRequestThreadStop(Threads[3]);
@@ -394,6 +401,16 @@ static bool ThreadTests(void) {
         if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
         if (MosWaitForThreadStop(Threads[3]) != TEST_PASS) test_pass = false;
         DisplayHistogram(3);
+        if (test_pass) MosPrint(" Passed\n");
+        else {
+            MosPrint(" Failed\n");
+            tests_all_pass = false;
+        }
+        test_pass = true;
+        MosPrint("Exception in FP thread\n");
+        ClearHistogram();
+        MosInitAndRunThread(Threads[1], 1, FPTestThread, 2, Stacks[1], DFT_STACK_SIZE);
+        if (MosWaitForThreadStop(Threads[1]) != TEST_PASS_HANDLER + 1) test_pass = false;
         if (test_pass) MosPrint(" Passed\n");
         else {
             MosPrint(" Failed\n");
