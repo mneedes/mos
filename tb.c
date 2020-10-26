@@ -1552,7 +1552,7 @@ static s32 PigeonThread(s32 arg) {
     while (1) {
         MosDelayThread(877);
         MosPrintf("Incoming ---- .. .. %u %08X.. ------\n", cnt,
-                       MosGetStackDepth(MosGetStackBottom(MosGetThread()) + DFT_STACK_SIZE));
+                       MosGetStackDepth(MosGetStackBottom(NULL) + DFT_STACK_SIZE));
         cnt++;
     }
     return 0;

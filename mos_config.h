@@ -42,4 +42,7 @@
 // Enable events (required for MOS profiling)
 #define MOS_ENABLE_EVENTS           false
 
+// Enable breakpoint in exceptions if debugger detected
+#define MOS_BKPT_IN_EXCEPTIONS      false
+
 #endif

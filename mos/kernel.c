@@ -28,7 +28,7 @@
 #endif
 
 #define NO_SUCH_THREAD       NULL
-#define STACK_CANARY         0xba5eba11
+#define STACK_CANARY         0xca5eca11
 
 #define EVENT(e, v) \
     { if (MOS_ENABLE_EVENTS) (*EventHook)((MOS_EVENT_ ## e), (v)); }
@@ -127,9 +127,10 @@ static u32 MaxTickInterval;
 static u32 CyclesPerTick;
 static u32 MOS_USED CyclesPerMicroSec;
 
-// Idle thread stack and initial PSP safe storage
-//  28 words holds FP stack frame plus enough to initialize Idle thread stack
-static u8 MOS_STACK_ALIGNED IdleStack[28*sizeof(u32) + sizeof(StackFrame)];
+// Idle thread stack and initial dummy PSP stack frame storage
+//  28 words is enough for a FP stack frame,
+//     add a stack frame for idle thread stack initialization.
+static u8 MOS_STACK_ALIGNED IdleStack[112 + sizeof(StackFrame)];
 
 // Mask interrupts by priority, primarily for temporarily
 //   disabling context switches.
@@ -396,6 +397,7 @@ static u32 MOS_USED Scheduler(u32 sp) {
 
 void MOS_NAKED PendSV_Handler(void) {
     // Floating point context switch (lazy stacking)
+
     asm volatile (
         "mrs r0, psp\n\t"
         "tst lr, #16\n\t"
@@ -430,17 +432,17 @@ void MOS_NAKED PendSV_Handler(void) {
 #endif
 
 // TODO: Limit MSP stack dump to end of MSP stack
-// TODO: Clear fault bits after thread exception ?
 // TODO: Dump more registers in general including FP registers ?
 // TODO: Print thread name
 static void MOS_USED FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 lr) {
+    if (MOS_BKPT_IN_EXCEPTIONS) MosHaltIfDebugging();
     char * fault_type[] = {
         "Hard", "Mem", "Bus", "Usage", "Imprecise Bus"
     };
     bool in_isr = ((lr & 0x8) == 0x0);
     bool fp_en = ((lr & 0x10) == 0x0);
+    u32 cfsr = SCB->CFSR;
     if (PrintfHook) {
-        u32 cfsr = SCB->CFSR;
         u32 fault_no = (psr & 0xf) - 3;
         if (fault_no == 2 && (cfsr & 0x400)) fault_no = 4;
         (*PrintfHook)("\n*** %s Fault %s", fault_type[fault_no],
@@ -479,6 +481,8 @@ static void MOS_USED FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 lr) {
         while (1)
           ;
     } else {
+        // Clear CFSR bits
+        SCB->CFSR = cfsr;
         // Stop thread if fault occurred in thread context
         SetThreadState(RunningThread, THREAD_TIME_TO_STOP);
         YieldThread();
@@ -607,7 +611,6 @@ void MosResetTimer(MosTimer * timer) {
 
 static s32 IdleThreadEntry(s32 arg) {
     while (1) {
-        //TODO:  ThreadFreeHook?  if (ThreadFreeHook) (*ThreadFreeHook)(NULL);
         if (SleepHook) (*SleepHook)();
         asm volatile (
             "dsb\n\t"
@@ -685,7 +688,7 @@ void MosRunScheduler(void) {
         "cpsie if\n\t"
         "b SkipRS\n\t"
         ".balign 4\n\t"
-        // 112 (28 words) is enough to store a FP stack frame
+        // 112 (28 words) is enough to store a dummy FP stack frame
         "psp_start: .word IdleStack + 112\n\t"
         "SkipRS:\n\t"
             : : : "r0"
@@ -753,7 +756,7 @@ bool MosInitThread(MosThread * _thd, MosThreadPriority pri,
         break;
     default:
         // This will run if thread is killed, stop queue
-        //   processed only after kill handler returns.
+        //   is processed only after kill handler returns.
         if (MosIsOnList(&thd->tmr_e.link))
             MosRemoveFromList(&thd->tmr_e.link);
         MosRemoveFromList(&thd->run_e);

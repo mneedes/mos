@@ -201,4 +201,9 @@ static u32 MOS_INLINE MosGetStackDepth(u8 * top) {
     return ((u32) top) - sp;
 }
 
+#define MosHaltIfDebugging() \
+  if (CoreDebug->DHCSR & CoreDebug_DHCSR_C_DEBUGEN_Msk) { \
+      asm volatile ( "bkpt 1" ); \
+  } \
+
 #endif
