@@ -15,6 +15,7 @@
 
 // TODO: Anything depending on thread state when thread is waiting on sem must lock out interrupts.
 // TODO: Cure semaphore locking using dedicated event queue ... simplifies everything else
+// TODO: Named threads
 
 #if (MOS_FP_CONTEXT_SWITCHING == true)
   #if (__FPU_USED == 1U)
@@ -44,17 +45,12 @@ enum {
 
 typedef struct {
     u32 SWSAVE[8];   // R4-R11
-#if (ENABLE_FP_CONTEXT_SAVE == 1)
     u32 LR_EXC;      // Exception LR
-#endif
     u32 HWSAVE[4];   // R0-R3
     u32 R12;         // R12
     u32 LR;          // R14
     u32 PC;          // R15
     u32 PSR;
-#if (ENABLE_FP_CONTEXT_SAVE == 1)
-    //u32 ALIGNMENT_PAD;  // Not sure this is needed
-#endif
 } StackFrame;
 
 typedef enum {
@@ -225,9 +221,7 @@ static void InitThread(Thread * thd, MosThreadPriority pri,
     sf->LR = (u32)ThreadExit;
     sf->R12 = 0;
     sf->HWSAVE[0] = arg;
-#if (ENABLE_FP_CONTEXT_SAVE == 1)
     sf->LR_EXC = 0xfffffffd;
-#endif
     // Initialize context and state
     thd->sp = (u32)sf;
     thd->err_no = 0;
@@ -420,10 +414,9 @@ void MOS_NAKED PendSV_Handler(void) {
     // Vanilla context switch without floating point.
     asm volatile (
         "mrs r0, psp\n\t"
-        "stmdb r0!, {r4-r11}\n\t"
+        "stmdb r0!, {r4-r11, lr}\n\t"
         "bl Scheduler\n\t"
-        "mvn lr, #2\n\t"
-        "ldmfd r0!, {r4-r11}\n\t"
+        "ldmfd r0!, {r4-r11, lr}\n\t"
         "msr psp, r0\n\t"
         "bx lr\n\t"
     );
@@ -433,7 +426,6 @@ void MOS_NAKED PendSV_Handler(void) {
 
 // TODO: Limit MSP stack dump to end of MSP stack
 // TODO: Dump more registers in general including FP registers ?
-// TODO: Print thread name
 static void MOS_USED FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 lr) {
     if (MOS_BKPT_IN_EXCEPTIONS) MosHaltIfDebugging();
     char * fault_type[] = {
