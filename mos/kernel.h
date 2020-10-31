@@ -61,6 +61,7 @@ typedef struct {
 typedef struct {
     u32 value;
     MosList pend_q;
+    MosList event_e;
 } MosSem;
 
 // Multi-writer / multi-reader blocking FIFO
@@ -198,7 +199,7 @@ bool MOS_ISR_SAFE MosTrySendToQueue(MosQueue * queue, u32 data);
 // Returns false on timeout, true if sent
 bool MosSendToQueueOrTO(MosQueue * queue, u32 data, u32 ticks);
 u32 MosReceiveFromQueue(MosQueue * queue);
-bool MosTryReceiveFromQueue(MosQueue * queue, u32 * data);
+bool MOS_ISR_SAFE MosTryReceiveFromQueue(MosQueue * queue, u32 * data);
 // Returns false on timeout, true if received
 bool MosReceiveFromQueueOrTO(MosQueue * queue, u32 * data, u32 ticks);
 

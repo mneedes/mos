@@ -13,8 +13,6 @@
 
 #include <errno.h>
 
-// TODO: Fix issues with semaphore yield when high-priority ISR interrupts scheduler (locking).
-// TODO: Can cure semaphore locking using dedicated event queue ... simplifies everything else
 // TODO: Named threads
 // TODO: Resource counter on thread -- dealloc?  Explore this concept
 // TODO: multi-level priority inheritance / multiple mutexes at the same time
@@ -115,6 +113,7 @@ static Thread * RunningThread = NO_SUCH_THREAD;
 static error_t * ErrNo;
 static Thread IdleThread;
 static MosList RunQueues[MOS_MAX_THREAD_PRIORITIES];
+static MosList ISREventQueue;
 static u32 IntDisableCount = 0;
 
 // Timers and Ticks
@@ -140,20 +139,20 @@ static void MOS_INLINE SetBasePri(u32 pri) {
     );
 }
 
-void MosDisableInterrupts(void) {
+void MOS_ISR_SAFE MosDisableInterrupts(void) {
     if (IntDisableCount++ == 0) {
         asm volatile ( "cpsid if" );
     }
 }
 
-void MosEnableInterrupts(void) {
+void MOS_ISR_SAFE MosEnableInterrupts(void) {
     if (IntDisableCount == 0) return;
     if (--IntDisableCount == 0) {
         asm volatile ( "cpsie if" );
     }
 }
 
-u32 MOS_NAKED MosGetIRQNumber(void) {
+u32 MOS_NAKED MOS_ISR_SAFE MosGetIRQNumber(void) {
     asm volatile (
         "mrs r0, psr\n\t"
         "and r0, #255\n\t"
@@ -167,7 +166,7 @@ static MOS_INLINE void SetThreadState(Thread * thd, ThreadState state) {
     thd->state = state;
 }
 
-static MOS_INLINE void YieldThread() {
+static MOS_INLINE MOS_ISR_SAFE void YieldThread() {
     // Invoke PendSV handler to potentially perform context switch
     SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
     asm volatile ( "isb" );
@@ -243,6 +242,12 @@ void SysTick_Handler(void) {
     EVENT(TICK, TickCount);
 }
 
+// Locking notes:
+//   Since semaphore data structures can be manipulated in high-priority
+//   ISR contexts interrupt disable is required to ensure data integrity.
+//   Interrupts must be disabled for anything that manipulates the IRQ
+//   event queue or manipulates/inspects semaphore pend queues.
+
 static u32 MOS_USED Scheduler(u32 sp) {
     EVENT(SCHEDULER_ENTRY, 0);
     // Save SP and ErrNo context
@@ -260,6 +265,9 @@ static u32 MOS_USED Scheduler(u32 sp) {
         asm volatile ( "cpsie if" );
         adj_tick_count = TickCount + (load - val) / CyclesPerTick;
     }
+    // Update Running Thread state
+    //   Threads can't directly kill themselves, so do it here.
+    //   If thread needs to go onto timer queue, do it here.
     if (RunningThread->state == THREAD_TIME_TO_STOP) {
         // Arrange death of running thread via kill handler
         if (MosIsOnList(&RunningThread->tmr_e.link))
@@ -285,10 +293,38 @@ static u32 MOS_USED Scheduler(u32 sp) {
             if (rem_ticks <= tmr_rem_ticks) break;
         }
         MosAddToListBefore(elm, &RunningThread->tmr_e.link);
+        // If thread is only waiting for a tick
         if (RunningThread->state == THREAD_WAIT_FOR_TICK)
             MosRemoveFromList(&RunningThread->run_e);
     }
+    // Process ISR event queue
+    //  Event queue allows ISRs to signal semaphores without directly
+    //  manipulating run queues, making critical sections shorter
+    while (1) {
+        asm volatile ( "cpsid if" );
+        if (!MosIsListEmpty(&ISREventQueue)) {
+            MosList * elm = ISREventQueue.next;
+            MosRemoveFromList(elm);
+            // Currently only semaphores are on event list
+            MosSem * sem = container_of(elm, MosSem, event_e);
+            // Release thread if it is pending
+            if (!MosIsListEmpty(&sem->pend_q)) {
+                MosList * elm = sem->pend_q.next;
+                MosRemoveFromList(elm);
+                asm volatile ("cpsie if");
+                Thread * thd = container_of(elm, Thread, run_e);
+                MosAddToFrontOfList(&RunQueues[thd->pri], elm);
+                if (MosIsOnList(&thd->tmr_e.link))
+                    MosRemoveFromList(&thd->tmr_e.link);
+                SetThreadState(thd, THREAD_RUNNABLE);
+            } else asm volatile ( "cpsie if" );
+        } else {
+            asm volatile ("cpsie if");
+            break;
+        }
+    }
     // Process timer queue
+    //  Timer queues can contain threads or message timers
     MosList * elm_save;
     for (MosList * elm = TimerQueue.next; elm != &TimerQueue; elm = elm_save) {
         elm_save = elm->next;
@@ -297,6 +333,7 @@ static u32 MOS_USED Scheduler(u32 sp) {
             s32 rem_ticks = (s32)thd->wake_tick - adj_tick_count;
             if (rem_ticks <= 0) {
                 MosRemoveFromList(elm);
+                // Lock interrupts since thread could be on semaphore pend queue
                 asm volatile ( "cpsid if" );
                 MosRemoveFromList(&thd->run_e);
                 asm volatile ( "cpsie if" );
@@ -313,8 +350,8 @@ static u32 MOS_USED Scheduler(u32 sp) {
         }
     }
     // Process Priority Queues
-    // Start scan at first thread of highest priority, looking for one or two
-    //   runnable threads (for tick enable), and if no threads are runnable
+    // Start scan at first thread of highest priority, looking for one (or two
+    //   runnable threads for tick enable), and if no threads are runnable
     //   schedule idle thread.
     bool tick_en = false;
     Thread * run_thd = NULL;
@@ -655,6 +692,7 @@ void MosInit(void) {
     // Initialize empty queues
     for (MosThreadPriority pri = 0; pri < MOS_MAX_THREAD_PRIORITIES; pri++)
         MosInitList(&RunQueues[pri]);
+    MosInitList(&ISREventQueue);
     MosInitList(&TimerQueue);
     // Create idle thread
     MosInitAndRunThread((MosThread *) &IdleThread, MOS_MAX_THREAD_PRIORITIES,
@@ -696,7 +734,7 @@ const MosParams * MosGetParams(void) {
     return (const MosParams *) &Params;
 }
 
-void MosYieldThread(void) {
+void MOS_ISR_SAFE MosYieldThread(void) {
     if (RunningThread == NO_SUCH_THREAD) return;
     // Invoke PendSV handler to potentially perform context switch
     SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
@@ -751,7 +789,10 @@ bool MosInitThread(MosThread * _thd, MosThreadPriority pri,
         //   is processed only after kill handler returns.
         if (MosIsOnList(&thd->tmr_e.link))
             MosRemoveFromList(&thd->tmr_e.link);
+        // Lock because thread might be on semaphore pend queue
+        asm volatile ( "cpsid if" );
         MosRemoveFromList(&thd->run_e);
+        asm volatile ( "cpsie if" );
         break;
     }
     SetThreadState(thd, THREAD_UNINIT);
@@ -824,7 +865,6 @@ void MosChangeThreadPriority(MosThread * _thd, MosThreadPriority pri) {
     // Set thread priority without disturbing ongoing priority inheritance
     if (thd->pri == thd->orig_pri) {
         thd->pri = pri;
-        // TODO: ISR safe since barriers are used before setting thread state in ISR?
         if (thd->state == THREAD_RUNNABLE) {
             MosRemoveFromList(&thd->run_e);
             MosAddToList(&RunQueues[pri], &thd->run_e);
@@ -916,7 +956,6 @@ void MosInitMutex(MosMutex * mtx) {
     MosInitList(&mtx->pend_q);
 }
 
-// TODO: Is it possible to encounter a higher priority thread waiting on the mutex?
 static void MOS_USED BlockOnMutex(MosMutex * mtx) {
     SetBasePri(IntPriMaskLow);
     asm volatile ( "dsb" );
@@ -1066,10 +1105,11 @@ bool MosIsMutexOwner(MosMutex * mtx) {
 void MosInitSem(MosSem * sem, u32 start_value) {
     sem->value = start_value;
     MosInitList(&sem->pend_q);
+    MosInitList(&sem->event_e);
 }
 
-// TODO: Couldn't some of this be done on pend ?
 static void MOS_USED BlockOnSem(MosSem * sem) {
+    // Lock in case semaphore is about to be given by another context.
     asm volatile ( "cpsid if" );
     // Retry (don't block) if count has since incremented
     if (sem->value == 0) {
@@ -1078,11 +1118,13 @@ static void MOS_USED BlockOnSem(MosSem * sem) {
             Thread * thd = container_of(elm, Thread, run_e);
             if (thd->pri > RunningThread->pri) break;
         }
+        // Can directly manipulate run queues here since scheduler
+        // and other other interrupts are locked out.
         MosRemoveFromList(&RunningThread->run_e);
         MosAddToListBefore(elm, &RunningThread->run_e);
         SetRunningThreadStateAndYield(THREAD_WAIT_FOR_SEM);
-        asm volatile ( "cpsie if" );
-    } else asm volatile ( "cpsie if" );
+    }
+    asm volatile ( "cpsie if" );
 }
 
 void MOS_NAKED MosTakeSem(MosSem * sem) {
@@ -1107,6 +1149,7 @@ void MOS_NAKED MosTakeSem(MosSem * sem) {
 
 static bool MOS_USED BlockOnSemOrTO(MosSem * sem) {
     bool timeout = false;
+    // Lock in case semaphore is about to be given by another context.
     asm volatile ( "cpsid if" );
     // Immediately retry (don't block) if count has since incremented
     if (sem->value == 0) {
@@ -1116,10 +1159,13 @@ static bool MOS_USED BlockOnSemOrTO(MosSem * sem) {
             Thread * thd = container_of(elm, Thread, run_e);
             if (thd->pri > RunningThread->pri) break;
         }
+        // Can directly manipulate run queues here since scheduler
+        // and other other interrupts are locked out.
         MosRemoveFromList(&RunningThread->run_e);
         MosAddToListBefore(elm, &RunningThread->run_e);
         SetRunningThreadStateAndYield(THREAD_WAIT_FOR_SEM_OR_TICK);
         asm volatile ( "cpsie if" );
+        // Must enable interrupts before checking timeout to allow pend
         if (RunningThread->timeout) timeout = true;
     } else asm volatile ( "cpsie if" );
     return timeout;
@@ -1153,7 +1199,7 @@ bool MOS_NAKED MosTakeSemOrTO(MosSem * sem, u32 ticks) {
     );
 }
 
-bool MOS_NAKED MosTrySem(MosSem * sem) {
+bool MOS_NAKED MOS_ISR_SAFE MosTrySem(MosSem * sem) {
     asm volatile (
         "RetryTRS:\n\t"
         "ldrex r1, [r0]\n\t"
@@ -1172,26 +1218,23 @@ bool MOS_NAKED MosTrySem(MosSem * sem) {
     );
 }
 
-// TODO: Event-based logic
-static void MOS_USED YieldOnSem(MosSem * sem) {
+// For yielding when semaphore is given
+static void MOS_USED MOS_ISR_SAFE YieldOnSem(MosSem * sem) {
+    // This places the semaphore on event queue to be processed by
+    // scheduler to avoid direct manipulation of run queues.  If run
+    // queues were manipulated here critical sections would be larger.
     asm volatile ( "cpsid if" );
-    if (!MosIsListEmpty(&sem->pend_q)) {
-        MosList * elm = sem->pend_q.next;
-        Thread * thd = container_of(elm, Thread, run_e);
-        MosRemoveFromList(elm);
-        // Release most interrupts but prevent threads from running for now
-        SetBasePri(IntPriMaskLow);
-        asm volatile ( "cpsie if" );
-        MosAddToFrontOfList(&RunQueues[thd->pri], elm);
-        if (MosIsOnList(&thd->tmr_e.link))
-            MosRemoveFromList(&thd->tmr_e.link);
-        SetThreadState(thd, THREAD_RUNNABLE);
-        if (thd->pri < RunningThread->pri) YieldThread();
-        SetBasePri(0);
-    } else asm volatile ( "cpsie if" );
+    // Only add event if pend_q is not empty and event not already queued
+    if (!MosIsListEmpty(&sem->pend_q) && !MosIsOnList(&sem->event_e)) {
+        MosAddToList(&ISREventQueue, &sem->event_e);
+        Thread * thd = container_of(sem->pend_q.next, Thread, run_e);
+        // Yield if released thread has higher priority than running thread
+        if (RunningThread && thd->pri < RunningThread->pri) YieldThread();
+    }
+    asm volatile ( "cpsie if" );
 }
 
-void MOS_NAKED MosGiveSem(MosSem * sem) {
+void MOS_NAKED MOS_ISR_SAFE MosGiveSem(MosSem * sem) {
     asm volatile (
         "push { lr }\n\t"
         "RetryGS:\n\t"
@@ -1256,7 +1299,7 @@ u32 MOS_NAKED MosWaitForSignalOrTO(MosSem * sem, u32 ticks) {
     );
 }
 
-u32 MOS_NAKED MosPollForSignal(MosSem * sem) {
+u32 MOS_NAKED MOS_ISR_SAFE MosPollForSignal(MosSem * sem) {
     asm volatile (
         "mov r3, #0\n\t"
         "RetryPS:\n\t"
@@ -1275,7 +1318,7 @@ u32 MOS_NAKED MosPollForSignal(MosSem * sem) {
     );
 }
 
-void MOS_NAKED MosRaiseSignal(MosSem * sem, u32 flags) {
+void MOS_NAKED MOS_ISR_SAFE MosRaiseSignal(MosSem * sem, u32 flags) {
     asm volatile (
         "push { lr }\n\t"
         "RetryRS:\n\t"
@@ -1291,7 +1334,7 @@ void MOS_NAKED MosRaiseSignal(MosSem * sem, u32 flags) {
     );
 }
 
-// TODO: Review this for ISR safety, maybe have TryReceiveFromQueue be interrupt safe
+// Blocking Message Queues
 
 void MosInitQueue(MosQueue * queue, u32 * buf, u32 len) {
     queue->buf = buf;
@@ -1302,9 +1345,6 @@ void MosInitQueue(MosQueue * queue, u32 * buf, u32 len) {
     MosInitSem(&queue->sem_tail, len);
 }
 
-// MosSendToQueue() is ISR safe since it disables interrupts for ALL send
-// to queue methods.  Receive methods are not ISR safe and can instead use
-// PRIMASK since only context switch should be disabled.
 
 void MosSendToQueue(MosQueue * queue, u32 data) {
     // After taking semaphore context has a "license to write one entry,"
@@ -1321,10 +1361,10 @@ void MosSendToQueue(MosQueue * queue, u32 data) {
     MosGiveSem(&queue->sem_head);
 }
 
-bool MosTrySendToQueue(MosQueue * queue, u32 data) {
-    // After taking semaphore context has a "license to write one entry,"
-    // but it still must wait if another context is trying to do the same
-    // thing in a thread or ISR.
+bool MOS_ISR_SAFE MosTrySendToQueue(MosQueue * queue, u32 data) {
+    // MosTrySendToQueue() and MosTryReceiveFromQueue() are ISR safe since
+    // they do not block and interrupts are locked out when queues are being
+    // manipulated.
     if (!MosTrySem(&queue->sem_tail)) return false;
     asm volatile ( "cpsid if" );
     queue->buf[queue->tail] = data;
@@ -1354,20 +1394,26 @@ bool MosSendToQueueOrTO(MosQueue * queue, u32 data, u32 ticks) {
 
 u32 MosReceiveFromQueue(MosQueue * queue) {
     MosTakeSem(&queue->sem_head);
-    SetBasePri(IntPriMaskLow);
+    asm volatile ( "cpsid if" );
     u32 data = queue->buf[queue->head];
     if (++queue->head >= queue->len) queue->head = 0;
-    SetBasePri(0);
+    asm volatile (
+        "dmb\n\t"
+        "cpsie if\n\t"
+    );
     MosGiveSem(&queue->sem_tail);
     return data;
 }
 
-bool MosTryReceiveFromQueue(MosQueue * queue, u32 * data) {
+bool MOS_ISR_SAFE MosTryReceiveFromQueue(MosQueue * queue, u32 * data) {
     if (MosTrySem(&queue->sem_head)) {
-        SetBasePri(IntPriMaskLow);
+        asm volatile ( "cpsid if" );
         *data = queue->buf[queue->head];
         if (++queue->head >= queue->len) queue->head = 0;
-        SetBasePri(0);
+        asm volatile (
+            "dmb\n\t"
+            "cpsie if\n\t"
+        );
         MosGiveSem(&queue->sem_tail);
         return true;
     }
@@ -1376,10 +1422,13 @@ bool MosTryReceiveFromQueue(MosQueue * queue, u32 * data) {
 
 bool MosReceiveFromQueueOrTO(MosQueue * queue, u32 * data, u32 ticks) {
     if (MosTakeSemOrTO(&queue->sem_head, ticks)) {
-        SetBasePri(IntPriMaskLow);
+        asm volatile ( "cpsid if" );
         *data = queue->buf[queue->head];
         if (++queue->head >= queue->len) queue->head = 0;
-        SetBasePri(0);
+        asm volatile (
+            "dmb\n\t"
+            "cpsie if\n\t"
+        );
         MosGiveSem(&queue->sem_tail);
         return true;
     }

@@ -837,7 +837,6 @@ static bool SemTests(void) {
     //  Take lots of semaphores
     //
     test_pass = true;
-    test_pass = true;
     MosPrint("Sem Test 4\n");
     ClearHistogram();
     MosInitSem(&TestSem, 5);
