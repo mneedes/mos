@@ -1164,8 +1164,12 @@ static bool MOS_USED BlockOnSemOrTO(MosSem * sem) {
         MosRemoveFromList(&RunningThread->run_e);
         MosAddToListBefore(elm, &RunningThread->run_e);
         SetRunningThreadStateAndYield(THREAD_WAIT_FOR_SEM_OR_TICK);
-        asm volatile ( "cpsie if" );
         // Must enable interrupts before checking timeout to allow pend
+        // Barrier ensures that pend occurs before checking timeout.
+        asm volatile (
+            "cpsie if\n\t"
+            "isb\n\t"
+        );
         if (RunningThread->timeout) timeout = true;
     } else asm volatile ( "cpsie if" );
     return timeout;
@@ -1344,7 +1348,6 @@ void MosInitQueue(MosQueue * queue, u32 * buf, u32 len) {
     MosInitSem(&queue->sem_head, 0);
     MosInitSem(&queue->sem_tail, len);
 }
-
 
 void MosSendToQueue(MosQueue * queue, u32 data) {
     // After taking semaphore context has a "license to write one entry,"
