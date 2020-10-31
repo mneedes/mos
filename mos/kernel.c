@@ -13,9 +13,12 @@
 
 #include <errno.h>
 
-// TODO: Anything depending on thread state when thread is waiting on sem must lock out interrupts.
-// TODO: Cure semaphore locking using dedicated event queue ... simplifies everything else
+// TODO: Fix issues with semaphore yield when high-priority ISR interrupts scheduler (locking).
+// TODO: Can cure semaphore locking using dedicated event queue ... simplifies everything else
 // TODO: Named threads
+// TODO: Resource counter on thread -- dealloc?  Explore this concept
+// TODO: multi-level priority inheritance / multiple mutexes at the same time
+// TODO: Waiting on multiple semaphores
 
 #if (MOS_FP_CONTEXT_SWITCHING == true)
   #if (__FPU_USED == 1U)
@@ -106,7 +109,6 @@ static MosSleepHook * SleepHook = NULL;
 static MosWakeHook * WakeHook = NULL;
 static void DummyEventHook(MosEvent e, u32 v) { }
 static MosEventHook * EventHook = DummyEventHook;
-static MosThreadFreeHook * ThreadFreeHook = NULL;
 
 // Threads and Events
 static Thread * RunningThread = NO_SUCH_THREAD;
@@ -391,7 +393,6 @@ static u32 MOS_USED Scheduler(u32 sp) {
 
 void MOS_NAKED PendSV_Handler(void) {
     // Floating point context switch (lazy stacking)
-
     asm volatile (
         "mrs r0, psp\n\t"
         "tst lr, #16\n\t"
@@ -426,7 +427,7 @@ void MOS_NAKED PendSV_Handler(void) {
 
 // TODO: Limit MSP stack dump to end of MSP stack
 // TODO: Dump more registers in general including FP registers ?
-static void MOS_USED FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 lr) {
+void MOS_USED FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 lr) {
     if (MOS_BKPT_IN_EXCEPTIONS) MosHaltIfDebugging();
     char * fault_type[] = {
         "Hard", "Mem", "Bus", "Usage", "Imprecise Bus"
@@ -481,7 +482,7 @@ static void MOS_USED FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 lr) {
     }
 }
 
-void MOS_NAKED HardFault_Handler(void) {
+void MOS_NAKED MOS_WEAK HardFault_Handler(void) {
     asm volatile (
         "mrs r0, msp\n\t"
         "mrs r1, psp\n\t"
@@ -492,19 +493,19 @@ void MOS_NAKED HardFault_Handler(void) {
     );
 }
 
-void MOS_NAKED MemManage_Handler(void) {
+void MOS_NAKED MOS_WEAK MemManage_Handler(void) {
     asm volatile (
         "b HardFault_Handler"
     );
 }
 
-void MOS_NAKED BusFault_Handler(void) {
+void MOS_NAKED MOS_WEAK BusFault_Handler(void) {
     asm volatile (
         "b HardFault_Handler"
     );
 }
 
-void MOS_NAKED UsageFault_Handler(void) {
+void MOS_NAKED MOS_WEAK UsageFault_Handler(void) {
     asm volatile (
         "b HardFault_Handler"
     );
@@ -666,7 +667,6 @@ void MosRegisterRawPrintfHook(MosRawPrintfHook * hook) { PrintfHook = hook; }
 void MosRegisterSleepHook(MosSleepHook * hook) { SleepHook = hook; }
 void MosRegisterWakeHook(MosWakeHook * hook) { WakeHook = hook; }
 void MosRegisterEventHook(MosEventHook * hook) { EventHook = hook; }
-void MosRegisterThreadFreeHook(MosThreadFreeHook * hook) { ThreadFreeHook = hook; };
 
 void MosRunScheduler(void) {
     // Ensure opaque thread structure has same size as internal structure
@@ -779,7 +779,8 @@ bool MosRunThread(MosThread * _thd) {
 bool MosInitAndRunThread(MosThread * _thd,  MosThreadPriority pri,
                          MosThreadEntry * entry, s32 arg, u8 * stack_bottom,
                          u32 stack_size) {
-    if (!MosInitThread(_thd, pri, entry, arg, stack_bottom, stack_size)) return false;
+    if (!MosInitThread(_thd, pri, entry, arg, stack_bottom, stack_size))
+        return false;
     return MosRunThread(_thd);
 }
 
@@ -823,7 +824,7 @@ void MosChangeThreadPriority(MosThread * _thd, MosThreadPriority pri) {
     // Set thread priority without disturbing ongoing priority inheritance
     if (thd->pri == thd->orig_pri) {
         thd->pri = pri;
-        // TODO: This check is ISR safe since barriers are used before setting thread state in ISR
+        // TODO: ISR safe since barriers are used before setting thread state in ISR?
         if (thd->state == THREAD_RUNNABLE) {
             MosRemoveFromList(&thd->run_e);
             MosAddToList(&RunQueues[pri], &thd->run_e);
@@ -881,8 +882,8 @@ void MosKillThread(MosThread * _thd) {
         // Not reachable
         MosAssert(0);
     } else {
-        // Snapshot the arguments, run thread stop handler, allowing thread to stop at
-        //   its original run priority.
+        // Snapshot the arguments, run thread stop handler, allowing thread
+        //   to stop at its original run priority.
         SetBasePri(IntPriMaskLow);
         MosThreadPriority pri = thd->pri;
         MosHandler * stop_handler = thd->stop_handler;
@@ -916,7 +917,6 @@ void MosInitMutex(MosMutex * mtx) {
 }
 
 // TODO: Is it possible to encounter a higher priority thread waiting on the mutex?
-// TODO: Multi-level priority inheritance.
 static void MOS_USED BlockOnMutex(MosMutex * mtx) {
     SetBasePri(IntPriMaskLow);
     asm volatile ( "dsb" );
@@ -1008,7 +1008,6 @@ bool MOS_NAKED MosTryMutex(MosMutex * mtx) {
     );
 }
 
-// TODO: multi-level priority inheritance
 static void MOS_USED YieldOnMutex(MosMutex * mtx) {
     SetBasePri(IntPriMaskLow);
     asm volatile ( "dsb" );
@@ -1024,7 +1023,8 @@ static void MOS_USED YieldOnMutex(MosMutex * mtx) {
         if (RunningThread->pri != RunningThread->orig_pri) {
             RunningThread->pri = RunningThread->orig_pri;
             MosRemoveFromList(&RunningThread->run_e);
-            MosAddToFrontOfList(&RunQueues[RunningThread->pri], &RunningThread->run_e);
+            MosAddToFrontOfList(&RunQueues[RunningThread->pri],
+                                    &RunningThread->run_e);
         }
         if (thd->pri < RunningThread->pri) YieldThread();
     }
@@ -1063,8 +1063,8 @@ bool MosIsMutexOwner(MosMutex * mtx) {
     return (mtx->owner == (void *)RunningThread);
 }
 
-void MosInitSem(MosSem * sem, u32 start_count) {
-    sem->count = start_count;
+void MosInitSem(MosSem * sem, u32 start_value) {
+    sem->value = start_value;
     MosInitList(&sem->pend_q);
 }
 
@@ -1072,7 +1072,7 @@ void MosInitSem(MosSem * sem, u32 start_count) {
 static void MOS_USED BlockOnSem(MosSem * sem) {
     asm volatile ( "cpsid if" );
     // Retry (don't block) if count has since incremented
-    if (sem->count == 0) {
+    if (sem->value == 0) {
         MosList * elm = sem->pend_q.next;
         for (; elm != &sem->pend_q; elm = elm->next) {
             Thread * thd = container_of(elm, Thread, run_e);
@@ -1109,7 +1109,7 @@ static bool MOS_USED BlockOnSemOrTO(MosSem * sem) {
     bool timeout = false;
     asm volatile ( "cpsid if" );
     // Immediately retry (don't block) if count has since incremented
-    if (sem->count == 0) {
+    if (sem->value == 0) {
         RunningThread->timeout = 0;
         MosList * elm = sem->pend_q.next;
         for (; elm != &sem->pend_q; elm = elm->next) {
@@ -1200,6 +1200,90 @@ void MOS_NAKED MosGiveSem(MosSem * sem) {
         "strex r2, r1, [r0]\n\t"
         "cmp r2, #0\n\t"
         "bne RetryGS\n\t"
+        "dmb\n\t"
+        "bl YieldOnSem\n\t"
+        "pop { pc }\n\t"
+            : : : "r0", "r1", "r2", "r3"
+    );
+}
+
+u32 MOS_NAKED MosWaitForSignal(MosSem * sem) {
+    asm volatile (
+        "mov r3, #0\n\t"
+        "RetryWS:\n\t"
+        "ldrex r1, [r0]\n\t"
+        "cbz r1, BlockWS\n\t"
+        "strex r2, r3, [r0]\n\t"
+        "cmp r2, #0\n\t"
+        "bne RetryWS\n\t"
+        "mov r0, r1\n\t"
+        "dmb\n\t"
+        "bx lr\n\t"
+        "BlockWS:\n\t"
+        "push {r0, r3, lr}\n\t"
+        "bl BlockOnSem\n\t"
+        "pop {r0, r3, lr}\n\t"
+        "b RetryWS\n\t"
+            : : : "r0", "r1", "r2", "r3"
+    );
+}
+
+u32 MOS_NAKED MosWaitForSignalOrTO(MosSem * sem, u32 ticks) {
+    asm volatile (
+        "push {r0, lr}\n\t"
+        "mov r0, r1\n\t"
+        "bl SetTimeout\n\t"
+        "pop {r0, lr}\n\t"
+        "RetryWSTO:\n\t"
+        "mov r2, #0\n\t"
+        "ldrex r1, [r0]\n\t"
+        "cbz r1, BlockWSTO\n\t"
+        "strex r2, r2, [r0]\n\t"
+        "cmp r2, #0\n\t"
+        "bne RetryWSTO\n\t"
+        "dmb\n\t"
+        "mov r0, r1\n\t"
+        "bx lr\n\t"
+        "BlockWSTO:\n\t"
+        "push {r0, lr}\n\t"
+        "bl BlockOnSemOrTO\n\t"
+        "cmp r0, #0\n\t"
+        "pop {r0, lr}\n\t"
+        "beq RetryWSTO\n\t"
+        "mov r0, #0\n\t"
+        "bx lr\n\t"
+            : : : "r0", "r1", "r2", "r3"
+    );
+}
+
+u32 MOS_NAKED MosPollForSignal(MosSem * sem) {
+    asm volatile (
+        "mov r3, #0\n\t"
+        "RetryPS:\n\t"
+        "ldrex r1, [r0]\n\t"
+        "cbz r1, FailPS\n\t"
+        "strex r2, r3, [r0]\n\t"
+        "cmp r2, #0\n\t"
+        "bne RetryPS\n\t"
+        "dmb\n\t"
+        "mov r0, r1\n\t"
+        "bx lr\n\t"
+        "FailPS:\n\t"
+        "mov r0, #0\n\t"
+        "bx lr\n\t"
+            : : : "r0", "r1", "r2", "r3"
+    );
+}
+
+void MOS_NAKED MosRaiseSignal(MosSem * sem, u32 flags) {
+    asm volatile (
+        "push { lr }\n\t"
+        "RetryRS:\n\t"
+        "ldrex r2, [r0]\n\t"
+        "orr r2, r2, r1\n\t"
+        "strex r2, r2, [r0]\n\t"
+        "cmp r2, #0\n\t"
+        "bne RetryRS\n\t"
         "dmb\n\t"
         "bl YieldOnSem\n\t"
         "pop { pc }\n\t"

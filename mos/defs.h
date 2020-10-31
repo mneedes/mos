@@ -38,8 +38,10 @@
 #define MOS_NAKED              __attribute__((naked))
 #define MOS_INLINE             __attribute__((always_inline)) inline
 #define MOS_USED               __attribute__((used))
+#define MOS_WEAK               __attribute__((weak))
 #define MOS_OPT(x)             __attribute__((optimize(x)))
 #define MOS_ALIGNED(x)         __attribute__((aligned(x)))
+#define MOS_ISR_SAFE
 
 #define MOS_STACK_ALIGNMENT    8
 #define MOS_STACK_ALIGNED      MOS_ALIGNED(MOS_STACK_ALIGNMENT)

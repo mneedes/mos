@@ -59,7 +59,7 @@ typedef struct {
 } MosMutex;
 
 typedef struct {
-    u32 count;
+    u32 value;
     MosList pend_q;
 } MosSem;
 
@@ -88,10 +88,6 @@ typedef void (MosRawPrintfHook)(const char * fmt, ...);
 typedef void (MosSleepHook)(void);
 typedef void (MosWakeHook)(void);
 typedef void (MosEventHook)(MosEvent evt, u32 val);
-typedef void (MosThreadFreeHook)(MosThread *); // TODO: Not implemented yet
-
-// IS (Interrupt Safe) means the function can be called from ISRs.
-// It may make sense to disable interrupts when calling those functions.
 
 // Initialize and Run
 // NOTE: SysTick and NVIC priority groups should be set up by HAL before running Init.
@@ -103,7 +99,6 @@ void MosRegisterRawPrintfHook(MosRawPrintfHook * hook);
 void MosRegisterSleepHook(MosSleepHook * hook);
 void MosRegisterWakeHook(MosWakeHook * hook);
 void MosRegisterEventHook(MosEventHook * hook);
-void MosRegisterThreadFreeHook(MosThreadFreeHook * hook);
 
 // Obtain Microkernel parameters
 const MosParams * MosGetParams(void);
@@ -112,9 +107,9 @@ const MosParams * MosGetParams(void);
 
 // Used primarily to determine if in interrupt context.
 // Returns '0' if not in an interrupt, otherwise returns vector number
-u32 MosGetIRQNumber(void); // IS
-void MosDisableInterrupts(void); // IS
-void MosEnableInterrupts(void); // IS
+u32 MOS_ISR_SAFE MosGetIRQNumber(void);
+void MOS_ISR_SAFE MosDisableInterrupts(void);
+void MOS_ISR_SAFE MosEnableInterrupts(void);
 
 // Time and Delays
 
@@ -122,7 +117,7 @@ u32 MosGetTickCount(void);
 void MosDelayThread(u32 ticks);
 // For short delays, e.g.: useful for bit-banging.
 //   Keep in mind there is an upper limit to usec.
-void MosDelayMicroSec(u32 usec); // IS
+void MOS_ISR_SAFE MosDelayMicroSec(u32 usec);
 
 // Timers - Write specified message to queue at appointed time
 
@@ -134,7 +129,7 @@ void MosResetTimer(MosTimer * timer);
 // Thread Functions
 
 // Can use MosYieldThread() for cooperative multitasking
-void MosYieldThread(void); // IS
+void MOS_ISR_SAFE MosYieldThread(void);
 MosThread * MosGetThread(void);
 u8 * MosGetStackBottom(MosThread * thd);
 u32 MosGetStackSize(MosThread * thd);
@@ -168,20 +163,38 @@ void MosGiveMutex(MosMutex * mtx);
 void MosRestoreMutex(MosMutex * mtx);
 bool MosIsMutexOwner(MosMutex * mtx);
 
-// Blocking Semaphore, intended for signaling
+// Blocking Semaphores (intended for signaling)
 
-void MosInitSem(MosSem * sem, u32 start_count);
-void MosTakeSem(MosSem * sem);
+void MosInitSem(MosSem * sem, u32 start_value);
+
+//   (1) Counting Semaphore
+
 // Returns false on timeout, true if taken
+void MosTakeSem(MosSem * sem);
 bool MosTakeSemOrTO(MosSem * sem, u32 ticks);
-bool MosTrySem(MosSem * sem); // IS
-void MosGiveSem(MosSem * sem); // IS
+bool MOS_ISR_SAFE MosTrySem(MosSem * sem);
+void MOS_ISR_SAFE MosGiveSem(MosSem * sem);
+
+//   (2) Signal (ganged 32-bit binary semaphores)
+//       zero is returned for timeout / no poll
+
+u32 MosWaitForSignal(MosSem * sem);
+u32 MosWaitForSignalOrTO(MosSem * sem, u32 ticks);
+u32 MOS_ISR_SAFE MosPollForSignal(MosSem * sem);
+void MOS_ISR_SAFE MosRaiseSignal(MosSem * sem, u32 flags);
+
+//   (3) Binary semaphore is a 1-bit signal
+
+#define MosTakeBinarySem(sem) MosWaitForSignal(sem)
+#define MosTakeBinarySemOrTO(sem, ticks) MosWaitForSignalOrTO(sem, ticks)
+#define MosTryBinarySem(sem) MosPollForSignal(sem)
+#define MosGiveBinarySem(sem) MosRaiseSignal(sem, 1)
 
 // Blocking Queue
 
 void MosInitQueue(MosQueue * queue, u32 * buf, u32 len);
 void MosSendToQueue(MosQueue * queue, u32 data);
-bool MosTrySendToQueue(MosQueue * queue, u32 data); // IS
+bool MOS_ISR_SAFE MosTrySendToQueue(MosQueue * queue, u32 data);
 // Returns false on timeout, true if sent
 bool MosSendToQueueOrTO(MosQueue * queue, u32 data, u32 ticks);
 u32 MosReceiveFromQueue(MosQueue * queue);

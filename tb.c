@@ -701,6 +701,54 @@ static s32 SemTestThreadRxTry(s32 arg) {
     return TEST_PASS;
 }
 
+static s32 SignalTestThreadTx(s32 arg) {
+    for (;;) {
+        //if (arg) MosDelayThread(arg);
+        MosRaiseSignal(&TestSem, 1 << arg);
+        TestHisto[arg]++;
+        MosDelayThread(sem_test_delay);
+        if (MosIsStopRequested()) break;
+    }
+    return TEST_PASS;
+}
+
+static s32 SignalTestThreadRx(s32 arg) {
+    for (;;) {
+        u32 flags = MosWaitForSignal(&TestSem);
+        MosAssert(flags > 0);
+        MosAssert(flags <= 3);
+        if (flags & 0x1) TestHisto[arg]++;
+        if (flags & 0x2) TestHisto[arg + 1]++;
+        if (MosIsStopRequested()) break;
+    }
+    return TEST_PASS;
+}
+
+static s32 SignalTestThreadRxTimeout(s32 arg) {
+    for (;;) {
+        u32 flags = MosWaitForSignalOrTO(&TestSem, 100);
+        if (flags) {
+            MosAssert(flags <= 3);
+            if (flags & 0x1) TestHisto[arg]++;
+            if (flags & 0x2) TestHisto[arg + 1]++;
+        } else MosAssert(0);
+        if (MosIsStopRequested()) break;
+    }
+    return TEST_PASS;
+}
+
+static s32 SignalTestPoll(s32 arg) {
+    for (;;) {
+        u32 flags = MosPollForSignal(&TestSem);
+        if (flags) {
+            if (flags & 0x1) TestHisto[arg]++;
+            if (flags & 0x2) TestHisto[arg + 1]++;
+        }
+        if (MosIsStopRequested()) break;
+    }
+    return TEST_PASS;
+}
+
 static bool SemTests(void) {
     const u32 test_time = 5000;
     u32 exp_cnt = test_time / sem_test_delay;
@@ -817,7 +865,7 @@ static bool SemTests(void) {
     // TrySem
     //
     test_pass = true;
-    MosPrint("Sem Test 5\n");
+    MosPrint("Try Sem\n");
     ClearHistogram();
     MosInitSem(&TestSem, 5);
     MosInitAndRunThread(Threads[1], 1, SemTestThreadTx, 0, Stacks[1], DFT_STACK_SIZE);
@@ -833,6 +881,84 @@ static bool SemTests(void) {
     DisplayHistogram(3);
     if (TestHisto[2] != TestHisto[0] + TestHisto[1] + 5)
         test_pass = false;
+    if (test_pass) MosPrint(" Passed\n");
+    else {
+        MosPrint(" Failed\n");
+        tests_all_pass = false;
+    }
+    //
+    // Signals
+    //
+    test_pass = true;
+    MosPrint("Signals\n");
+    ClearHistogram();
+    MosInitSem(&TestSem, 0);
+    MosInitAndRunThread(Threads[1], 1, SignalTestThreadRx, 2, Stacks[1], DFT_STACK_SIZE);
+    MosInitAndRunThread(Threads[2], 2, SignalTestThreadTx, 1, Stacks[2], DFT_STACK_SIZE);
+    MosInitAndRunThread(Threads[3], 2, SignalTestThreadTx, 0, Stacks[3], DFT_STACK_SIZE);
+    MosDelayThread(test_time);
+    MosRequestThreadStop(Threads[1]);
+    MosRequestThreadStop(Threads[2]);
+    MosRequestThreadStop(Threads[3]);
+    MosRaiseSignal(&TestSem, 2);
+    if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
+    if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
+    if (MosWaitForThreadStop(Threads[3]) != TEST_PASS) test_pass = false;
+    DisplayHistogram(4);
+    if (TestHisto[2] != TestHisto[0]) test_pass = false;
+    if (TestHisto[3] != TestHisto[1] + 1) test_pass = false;
+    if (test_pass) MosPrint(" Passed\n");
+    else {
+        MosPrint(" Failed\n");
+        tests_all_pass = false;
+    }
+    //
+    // Signals with Timeout
+    //   TODO: needs some work -- since timeout isn't tested yet
+    //
+    test_pass = true;
+    MosPrint("Signals With Timeout\n");
+    ClearHistogram();
+    MosInitSem(&TestSem, 0);
+    MosInitAndRunThread(Threads[1], 1, SignalTestThreadRxTimeout, 2, Stacks[1], DFT_STACK_SIZE);
+    MosInitAndRunThread(Threads[2], 2, SignalTestThreadTx, 1, Stacks[2], DFT_STACK_SIZE);
+    MosInitAndRunThread(Threads[3], 2, SignalTestThreadTx, 0, Stacks[3], DFT_STACK_SIZE);
+    MosDelayThread(test_time);
+    MosRequestThreadStop(Threads[1]);
+    MosRequestThreadStop(Threads[2]);
+    MosRequestThreadStop(Threads[3]);
+    MosRaiseSignal(&TestSem, 2);
+    if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
+    if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
+    if (MosWaitForThreadStop(Threads[3]) != TEST_PASS) test_pass = false;
+    DisplayHistogram(4);
+    if (TestHisto[2] != TestHisto[0]) test_pass = false;
+    if (TestHisto[3] != TestHisto[1] + 1) test_pass = false;
+    if (test_pass) MosPrint(" Passed\n");
+    else {
+        MosPrint(" Failed\n");
+        tests_all_pass = false;
+    }
+    //
+    // Poll Signals
+    //
+    test_pass = true;
+    MosPrint("Signal Polling\n");
+    ClearHistogram();
+    MosInitSem(&TestSem, 0);
+    MosInitAndRunThread(Threads[1], 1, SignalTestThreadTx, 0, Stacks[1], DFT_STACK_SIZE);
+    MosInitAndRunThread(Threads[2], 2, SignalTestThreadTx, 1, Stacks[2], DFT_STACK_SIZE);
+    MosInitAndRunThread(Threads[3], 3, SignalTestPoll, 2, Stacks[3], DFT_STACK_SIZE);
+    MosDelayThread(test_time);
+    MosRequestThreadStop(Threads[1]);
+    MosRequestThreadStop(Threads[2]);
+    MosRequestThreadStop(Threads[3]);
+    if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
+    if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
+    if (MosWaitForThreadStop(Threads[3]) != TEST_PASS) test_pass = false;
+    DisplayHistogram(4);
+    if (TestHisto[2] != TestHisto[0]) test_pass = false;
+    if (TestHisto[3] != TestHisto[1]) test_pass = false;
     if (test_pass) MosPrint(" Passed\n");
     else {
         MosPrint(" Failed\n");
