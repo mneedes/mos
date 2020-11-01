@@ -28,7 +28,8 @@ typedef struct {
 
 // Mos Thread (opaque container)
 typedef struct {
-    u32 rsvd[17];
+    u32 rsvd[18];
+    u32 ref_cnt;
 } MosThread;
 
 typedef enum {
@@ -135,6 +136,7 @@ MosThread * MosGetThread(void);
 u8 * MosGetStackBottom(MosThread * thd);
 u32 MosGetStackSize(MosThread * thd);
 void MosSetStack(MosThread * thd, u8 * stack_bottom, u32 stack_size);
+void MosSetThreadName(MosThread * thd, const char * name);
 bool MosInitThread(MosThread * thd, MosThreadPriority pri, MosThreadEntry * entry,
                    s32 arg, u8 * stack_bottom, u32 stack_size);
 bool MosRunThread(MosThread * thd);

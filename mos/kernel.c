@@ -13,10 +13,9 @@
 
 #include <errno.h>
 
-// TODO: Named threads
-// TODO: Resource counter on thread -- dealloc?  Explore this concept
 // TODO: multi-level priority inheritance / multiple mutexes at the same time
 // TODO: Waiting on multiple semaphores
+// TODO: Canary on top and bottom of stack?
 
 #if (MOS_FP_CONTEXT_SWITCHING == true)
   #if (__FPU_USED == 1U)
@@ -87,6 +86,8 @@ typedef struct Thread {
     s32 stop_arg;
     u8 * stack_bottom;
     u32 stack_size;
+    const char * name;
+    u32 ref_cnt;
 } Thread;
 
 // Parameters
@@ -233,6 +234,8 @@ static void InitThread(Thread * thd, MosThreadPriority pri,
     thd->stop_arg = 0;
     thd->stack_bottom = stack_bottom;
     thd->stack_size = stack_size;
+    thd->name = "";
+    // ref_cnt is not initialized here, it is manipulated externally
 }
 
 void SysTick_Handler(void) {
@@ -478,7 +481,10 @@ void MOS_USED FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 lr) {
         (*PrintfHook)("\n*** %s Fault %s", fault_type[fault_no],
                           in_isr ? "IN ISR " : "");
         if (RunningThread == NO_SUCH_THREAD) (*PrintfHook)("(Before MOS Run) ***\n");
-        else (*PrintfHook)("(Thread @%08X) ***\n", RunningThread);
+        else if (RunningThread->name && RunningThread->name[0] != '\0')
+            (*PrintfHook)("(Thread %s) ***\n", RunningThread->name);
+        else
+            (*PrintfHook)("(Thread @%08X) ***\n", RunningThread);
 
         if (fp_en) (*PrintfHook)("*** Lazy Floating Point Enabled ***\n");
 
@@ -765,6 +771,11 @@ void MosSetStack(MosThread * _thd, u8 * stack_bottom, u32 stack_size) {
     Thread * thd = (Thread *)_thd;
     thd->stack_bottom = stack_bottom;
     thd->stack_size = stack_size;
+}
+
+void MosSetThreadName(MosThread * _thd, const char * name) {
+    Thread * thd = (Thread *)_thd;
+    thd->name = name;
 }
 
 bool MosInitThread(MosThread * _thd, MosThreadPriority pri,

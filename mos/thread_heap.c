@@ -7,42 +7,75 @@
 #include "mos/thread_heap.h"
 
 static MosHeap * ThreadHeap = NULL;
+static MosMutex ThreadMutex;
 
 static void FreeThread(MosThread * thd) {
     MosFree(ThreadHeap, MosGetStackBottom(thd));
     MosFree(ThreadHeap, thd);
 }
 
-void MosSetThreadHeap(MosHeap * heap) {
+void MosInitThreadHeap(MosHeap * heap) {
     ThreadHeap = heap;
+    MosInitMutex(&ThreadMutex);
 }
 
-MosThread *
-MosAllocThread(u32 stack_size) {
-    if (!ThreadHeap) return NULL;
+bool MosAllocThread(MosThread ** _thd, u32 stack_size) {
+    if (!ThreadHeap) return false;
+    bool rtn = false;
     u8 * stack_bottom = (u8 *) MosAlloc(ThreadHeap, stack_size);
-    if (stack_bottom == NULL) return NULL;
+    if (stack_bottom == NULL) return false;
     MosThread * thd = (MosThread *) MosAlloc(ThreadHeap, sizeof(MosThread));
     if (thd == NULL) {
         MosFree(ThreadHeap, stack_bottom);
-        return NULL;
+        return false;
     }
     MosSetStack(thd, stack_bottom, stack_size);
-    return thd;
+    MosTakeMutex(&ThreadMutex);
+    if (*_thd == NULL) {
+        thd->ref_cnt = 1;
+        *_thd = thd;
+        rtn = true;
+    } else FreeThread(thd);
+    MosGiveMutex(&ThreadMutex);
+    return rtn;
 }
 
-MosThread *
-MosAllocAndRunThread(MosThreadPriority pri, MosThreadEntry * entry, s32 arg, u32 stack_size) {
-    MosThread * thd = MosAllocThread(stack_size);
-    if (thd == NULL) return NULL;
-    if (!MosInitAndRunThread(thd, pri, entry, arg, MosGetStackBottom(thd), stack_size)) {
-        FreeThread(thd);
-        return NULL;
+bool
+MosAllocAndRunThread(MosThread ** _thd, MosThreadPriority pri,
+                     MosThreadEntry * entry, s32 arg, u32 stack_size) {
+    if (!MosAllocThread(_thd, stack_size)) return false;
+    if (!MosInitAndRunThread(*_thd, pri, entry, arg, MosGetStackBottom(*_thd),
+                             stack_size)) {
+        MosDecThreadRefCount(_thd);
+        return false;
     }
-    return thd;
+    return true;
 }
 
-void MosFreeThread(MosThread * thd) {
-    if (!ThreadHeap) return;
-    FreeThread(thd);
+bool MosIncThreadRefCount(MosThread ** _thd) {
+    if (!ThreadHeap) return false;
+    bool rtn = false;
+    MosTakeMutex(&ThreadMutex);
+    MosThread * thd = *_thd;
+    if (thd != NULL) {
+        thd->ref_cnt++;
+        rtn = true;
+    }
+    MosGiveMutex(&ThreadMutex);
+    return rtn;
 }
+
+bool MosDecThreadRefCount(MosThread ** _thd) {
+    if (!ThreadHeap) return false;
+    bool rtn = false;
+    MosTakeMutex(&ThreadMutex);
+    MosThread * thd = *_thd;
+    if (thd != NULL && --thd->ref_cnt <= 0) {
+        *_thd = NULL;
+        FreeThread(thd);
+        rtn = true;
+    }
+    MosGiveMutex(&ThreadMutex);
+    return rtn;
+}
+

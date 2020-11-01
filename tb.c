@@ -277,17 +277,17 @@ static bool ThreadTests(void) {
     test_pass = true;
     MosPrint("Dynamic Threads\n");
     ClearHistogram();
-    MosThread * thd[2];
-    thd[0] = MosAllocAndRunThread(1, PriTestThread, 0, DFT_STACK_SIZE);
-    thd[1] = MosAllocAndRunThread(1, PriTestThread, 1, DFT_STACK_SIZE);
+    MosThread * thd[2] = {0};
+    MosAllocAndRunThread(&thd[0], 1, PriTestThread, 0, DFT_STACK_SIZE);
+    MosAllocAndRunThread(&thd[1], 1, PriTestThread, 1, DFT_STACK_SIZE);
     if (thd[0] && thd[1]) {
         MosDelayThread(2 * test_time);
         MosRequestThreadStop(thd[0]);
         MosRequestThreadStop(thd[1]);
         if (MosWaitForThreadStop(thd[0]) != TEST_PASS) test_pass = false;
         if (MosWaitForThreadStop(thd[1]) != TEST_PASS) test_pass = false;
-        MosFreeThread(thd[0]);
-        MosFreeThread(thd[1]);
+        MosDecThreadRefCount(&thd[0]);
+        MosDecThreadRefCount(&thd[1]);
         DisplayHistogram(3);
         if (TestHisto[0] < exp_iter || TestHisto[0] > exp_iter + 1)
             test_pass = false;
@@ -410,6 +410,7 @@ static bool ThreadTests(void) {
         MosPrint("Exception in FP thread\n");
         ClearHistogram();
         MosInitAndRunThread(Threads[1], 1, FPTestThread, 2, Stacks[1], DFT_STACK_SIZE);
+        MosSetThreadName(Threads[1], "fp_thread");
         if (MosWaitForThreadStop(Threads[1]) != TEST_PASS_HANDLER + 1) test_pass = false;
         if (test_pass) MosPrint(" Passed\n");
         else {
@@ -1849,16 +1850,15 @@ int InitTestBench() {
     MosReserveBlockSize(&TestThreadHeapDesc, 128);
     MosReserveBlockSize(&TestThreadHeapDesc, 64);
 
-    MosSetThreadHeap(&TestThreadHeapDesc);
+    MosInitThreadHeap(&TestThreadHeapDesc);
 
-    Threads[TEST_SHELL_THREAD_ID] = MosAllocAndRunThread(0, TestShell, 0, TEST_SHELL_STACK_SIZE);
-    if (Threads[TEST_SHELL_THREAD_ID] == NULL) {
+    if (!MosAllocAndRunThread(&Threads[TEST_SHELL_THREAD_ID], 0, TestShell,
+                              0, TEST_SHELL_STACK_SIZE)) {
         MosPrint("Thread allocation error\n");
         return -1;
     }
 
-    Threads[PIGEON_THREAD_ID] = MosAllocThread(DFT_STACK_SIZE);
-    if (Threads[PIGEON_THREAD_ID] == NULL) {
+    if (!MosAllocThread(&Threads[PIGEON_THREAD_ID], DFT_STACK_SIZE)) {
         MosPrint("Thread allocation error\n");
         return -1;
     }

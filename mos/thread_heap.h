@@ -5,8 +5,7 @@
 //  "License") included under this distribution.
 
 //
-// MOS Thread Library
-//   Dynamic thread interface
+// MOS Thread Heap Library (Dynamic thread interface)
 //
 
 #ifndef _MOS_THREAD_HEAP_H_
@@ -15,12 +14,17 @@
 #include "mos/kernel.h"
 #include "mos/heap.h"
 
-// auto_free means thread resources are freed in the idle task after threads stop
-void MosSetThreadHeap(MosHeap * heap);
-MosThread * MosAllocThread(u32 stack_size);
-MosThread * MosAllocAndRunThread(MosThreadPriority pri, MosThreadEntry * entry,
-                                 s32 arg, u32 stack_size);
-// NOTE: Cannot free running thread
-void MosFreeThread(MosThread * thd);
+void MosInitThreadHeap(MosHeap * heap);
+
+// Allocate threads, setting reference count to 1
+bool MosAllocThread(MosThread ** thd, u32 stack_size);
+bool MosAllocAndRunThread(MosThread ** thd, MosThreadPriority pri,
+                           MosThreadEntry * entry, s32 arg, u32 stack_size);
+// Increment reference count (used when sharing handles between threads)
+bool MosIncThreadRefCount(MosThread ** thd);
+
+// Decrement reference count (frees thread when reference count is zero)
+// NOTE: A running thread should not have its reference count decremented.
+bool MosDecThreadRefCount(MosThread ** thd);
 
 #endif
