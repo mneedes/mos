@@ -7,18 +7,18 @@ MOS was originally developed on a SGS-Thomson STM32F4Discovery and has also been
 
 Design Goals:
 * RTOS: Hard priorities and bounded execution
-* Short critical sections: Interrupts are only disabled for a few instructions, BASEPRI is used for scheduler locking-allowing higher priority interrupts to operate unimpeded.
+* Short critical sections: Interrupts are disabled for very short sections, BASEPRI is instead used for scheduler locking-allowing high priority interrupts to interrupt scheduler.
 * Simple configuration with low use of conditional compilation.
 * Tick reduction (_i.e.:_ the so-called "tickless" operation)
-* Small code size (_e.g.:_ mos/kernel.c compiled size is < 5KB)
+* Small code size (_e.g.:_ mos/kernel.c compiled size is ~5KB)
 * Static kernel and (optionally) static application
 * Easily modifiable
 
 Included Primitives:
 * Recursive mutex with priority inheritance
-* Semaphores
+* Semaphores (counting / multi-bit binary)
 * Message queues
-* SysTick-based Timers
+* SysTick-based Message Timers
 
 Included Optional Modules:
 * Heap
