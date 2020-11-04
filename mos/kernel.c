@@ -80,14 +80,14 @@ typedef struct Thread {
     MosThreadPriority pri;
     MosThreadPriority orig_pri;
     u8 stop_request;
-    u8 timeout;
+    u8 timed_out;
     s32 rtn_val;
     MosHandler * stop_handler;
     s32 stop_arg;
     u8 * stack_bottom;
     u32 stack_size;
     const char * name;
-    u32 ref_cnt;
+    s32 ref_cnt;
 } Thread;
 
 // Parameters
@@ -341,7 +341,7 @@ static u32 MOS_USED Scheduler(u32 sp) {
                 MosRemoveFromList(&thd->run_e);
                 asm volatile ( "cpsie if" );
                 MosAddToList(&RunQueues[thd->pri], &thd->run_e);
-                thd->timeout = 1;
+                thd->timed_out = 1;
                 SetThreadState(thd, THREAD_RUNNABLE);
             } else break;
         } else {
@@ -912,7 +912,7 @@ s32 MosWaitForThreadStop(MosThread * _thd) {
 bool MosWaitForThreadStopOrTO(MosThread * _thd, s32 * rtn_val, u32 ticks) {
     Thread * thd = (Thread *)_thd;
     SetTimeout(ticks);
-    RunningThread->timeout = 0;
+    RunningThread->timed_out = 0;
     SetBasePri(IntPriMaskLow);
     if (thd->state > THREAD_STOPPED) {
         MosRemoveFromList(&RunningThread->run_e);
@@ -921,7 +921,7 @@ bool MosWaitForThreadStopOrTO(MosThread * _thd, s32 * rtn_val, u32 ticks) {
         YieldThread();
     }
     SetBasePri(0);
-    if (RunningThread->timeout) return false;
+    if (RunningThread->timed_out) return false;
     *rtn_val = thd->rtn_val;
     return true;
 }
@@ -1164,7 +1164,7 @@ static bool MOS_USED BlockOnSemOrTO(MosSem * sem) {
     asm volatile ( "cpsid if" );
     // Immediately retry (don't block) if count has since incremented
     if (sem->value == 0) {
-        RunningThread->timeout = 0;
+        RunningThread->timed_out = 0;
         MosList * elm = sem->pend_q.next;
         for (; elm != &sem->pend_q; elm = elm->next) {
             Thread * thd = container_of(elm, Thread, run_e);
@@ -1181,7 +1181,7 @@ static bool MOS_USED BlockOnSemOrTO(MosSem * sem) {
             "cpsie if\n\t"
             "isb\n\t"
         );
-        if (RunningThread->timeout) timeout = true;
+        if (RunningThread->timed_out) timeout = true;
     } else asm volatile ( "cpsie if" );
     return timeout;
 }
@@ -1296,8 +1296,8 @@ u32 MOS_NAKED MosWaitForSignalOrTO(MosSem * sem, u32 ticks) {
         "mov r2, #0\n\t"
         "ldrex r1, [r0]\n\t"
         "cbz r1, BlockWSTO\n\t"
-        "strex r2, r2, [r0]\n\t"
-        "cmp r2, #0\n\t"
+        "strex r3, r2, [r0]\n\t"
+        "cmp r3, #0\n\t"
         "bne RetryWSTO\n\t"
         "dmb\n\t"
         "mov r0, r1\n\t"
@@ -1339,8 +1339,8 @@ void MOS_NAKED MOS_ISR_SAFE MosRaiseSignal(MosSem * sem, u32 flags) {
         "RetryRS:\n\t"
         "ldrex r2, [r0]\n\t"
         "orr r2, r2, r1\n\t"
-        "strex r2, r2, [r0]\n\t"
-        "cmp r2, #0\n\t"
+        "strex r3, r2, [r0]\n\t"
+        "cmp r3, #0\n\t"
         "bne RetryRS\n\t"
         "dmb\n\t"
         "bl YieldOnSem\n\t"

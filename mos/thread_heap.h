@@ -19,7 +19,7 @@ void MosInitThreadHeap(MosHeap * heap);
 // Allocate threads, setting reference count to 1
 bool MosAllocThread(MosThread ** thd, u32 stack_size);
 bool MosAllocAndRunThread(MosThread ** thd, MosThreadPriority pri,
-                           MosThreadEntry * entry, s32 arg, u32 stack_size);
+                          MosThreadEntry * entry, s32 arg, u32 stack_size);
 // Increment reference count (used when sharing handles between threads)
 bool MosIncThreadRefCount(MosThread ** thd);
 
