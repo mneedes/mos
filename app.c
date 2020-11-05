@@ -11,9 +11,10 @@
 #include <errno.h>
 #include <string.h>
 
-#include "hal.h"
-#include "mos/kernel.h"
-#include "mos/trace.h"
+#include <mos/hal.h>
+#include <mos/kernel.h>
+#include <mos/trace.h>
+
 #include "tb.h"
 
 int main() {

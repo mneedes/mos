@@ -10,7 +10,7 @@
 
 #include <string.h>
 
-#include "hal.h"
+#include <mos/hal.h>
 #include "mos/trace.h"
 #include "mos/internal/trace.h"
 #include "mos/shell.h"

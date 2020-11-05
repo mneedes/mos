@@ -30,11 +30,12 @@
 //
 // Application HAL
 //
-#include "stm32f4xx_hal.h"
-#include "hal.h"
 
-#include "mos/kernel.h"
-#include "mos_phal.h"
+#include <bsp/stm32f4disc/phal.h>
+#include "stm32f4xx_hal.h"
+
+#include <mos/kernel.h>
+#include <mos/hal.h>
 
 #define USARTx                           USART2
 #define USARTx_CLK_ENABLE()              __HAL_RCC_USART2_CLK_ENABLE();

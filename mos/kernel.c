@@ -8,9 +8,8 @@
 //  MOS Microkernel
 //
 
-#include "mos_phal.h"
-#include "mos/kernel.h"
-
+#include <phal.h>
+#include <mos/kernel.h>
 #include <errno.h>
 
 // TODO: multi-level priority inheritance / multiple mutexes at the same time

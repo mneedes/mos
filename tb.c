@@ -11,14 +11,14 @@
 #include <errno.h>
 #include <string.h>
 
-#include "hal.h"
-#include "mos/kernel.h"
-#include "mos/heap.h"
-#include "mos/thread_heap.h"
-#include "mos/trace.h"
-#include "mos/shell.h"
+#include <mos/kernel.h>
+#include <mos/heap.h>
+#include <mos/thread_heap.h>
+#include <mos/trace.h>
+#include <mos/shell.h>
+
 #include "tb.h"
-#include "hal_tb.h"
+#include "bsp/hal_tb.h"
 
 #define DFT_STACK_SIZE           384
 #define TEST_SHELL_STACK_SIZE    2048

@@ -12,9 +12,9 @@
 
 #include <string.h>
 
-#include "hal.h"
-#include "mos/trace.h"
-#include "mos/internal/trace.h"
+#include <mos/hal.h>
+#include <mos/trace.h>
+#include <mos/internal/trace.h>
 
 #define Mos_PRINT_BUFFER_SIZE   128
 
