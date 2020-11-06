@@ -7,7 +7,7 @@
 #ifndef _MOS_LIST_H_
 #define _MOS_LIST_H_
 
-#include "mos/defs.h"
+#include <mos/defs.h>
 
 // Doubly-Linked Lists (idea borrowed from famous OS)
 

@@ -12,8 +12,7 @@
 #ifndef _HAL_H_
 #define _HAL_H_
 
-#include "mos_phal.h"
-#include "mos/kernel.h"
+#include <mos/kernel.h>
 
 typedef void (HalRxUARTCallback)(char ch);
 

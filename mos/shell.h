@@ -17,7 +17,7 @@
 
 #include <stdarg.h>
 
-#include "mos/kernel.h"
+#include <mos/kernel.h>
 
 // Command shell callback
 typedef s32 (MosCmdFunc)(s32 argc, char * argv[]);

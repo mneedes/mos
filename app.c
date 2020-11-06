@@ -8,9 +8,6 @@
 //  MOS Application Entry
 //
 
-#include <errno.h>
-#include <string.h>
-
 #include <mos/hal.h>
 #include <mos/kernel.h>
 #include <mos/trace.h>
@@ -28,9 +25,11 @@ int main() {
     MosInitTrace(TRACE_INFO | TRACE_ERROR | TRACE_FATAL, true);
     MosPrintf("\nMaintainable OS (Version %s)\n", MosGetParams()->version);
 
+#if 0
     if (CoreDebug->DHCSR & CoreDebug_DHCSR_C_DEBUGEN_Msk) {
         MosPrint("Debug Enabled\n");
     }
+#endif
 
     // Initialize and Run test bench example Application.
     if (InitTestBench() == 0) {

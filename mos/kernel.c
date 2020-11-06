@@ -8,7 +8,7 @@
 //  MOS Microkernel
 //
 
-#include <phal.h>
+#include <bsp_hal.h>
 #include <mos/kernel.h>
 #include <errno.h>
 

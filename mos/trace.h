@@ -16,7 +16,7 @@
 
 #include <stdarg.h>
 
-#include "mos/kernel.h"
+#include <mos/kernel.h>
 
 // Display trace message
 #define MosLogTrace(level, args...) \

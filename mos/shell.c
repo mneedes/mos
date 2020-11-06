@@ -11,9 +11,9 @@
 #include <string.h>
 
 #include <mos/hal.h>
-#include "mos/trace.h"
-#include "mos/internal/trace.h"
-#include "mos/shell.h"
+#include <mos/trace.h>
+#include <mos/internal/trace.h>
+#include <mos/shell.h>
 
 static MosQueue RxQueue;
 static u32 RxQueueBuf[16];

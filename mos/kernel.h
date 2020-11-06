@@ -12,8 +12,8 @@
 #define _MOS_KERNEL_H_
 
 #include "mos_config.h"
-#include "mos/defs.h"
-#include "mos/list.h"
+#include <mos/defs.h>
+#include <mos/list.h>
 
 // Microkernel Parameters
 typedef struct {

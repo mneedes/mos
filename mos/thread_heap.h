@@ -11,8 +11,8 @@
 #ifndef _MOS_THREAD_HEAP_H_
 #define _MOS_THREAD_HEAP_H_
 
-#include "mos/kernel.h"
-#include "mos/heap.h"
+#include <mos/kernel.h>
+#include <mos/heap.h>
 
 void MosInitThreadHeap(MosHeap * heap);
 

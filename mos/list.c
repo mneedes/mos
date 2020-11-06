@@ -4,7 +4,7 @@
 //  terms and conditions contained within the LICENSE file (the
 //  "License") included under this distribution.
 
-#include "mos/list.h"
+#include <mos/list.h>
 
 void MosInitList(MosList * list) {
     list->prev = list;

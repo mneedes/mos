@@ -4,7 +4,7 @@
 //  terms and conditions contained within the LICENSE file (the
 //  "License") included under this distribution.
 
-#include "mos/thread_heap.h"
+#include <mos/thread_heap.h>
 
 static MosHeap * ThreadHeap = NULL;
 static MosMutex ThreadMutex;

@@ -20,9 +20,7 @@
 //
 // Application HAL
 //
-#include <mos/hal.h>
-#include "stm32f7xx_hal.h"
-#include "mos/kernel.h"
+#include <bsp_hal.h>
 
 void SystemClock_Config(void);
 
@@ -394,7 +392,7 @@ void HalInit() {
 
     HAL_Init();
 
-	/* Configure the system clock to 216 MHz */
+    /* Configure the system clock to 216 MHz */
     SystemClock_Config();
 
     MX_GPIO_Init();

@@ -4,7 +4,7 @@
 //  terms and conditions contained within the LICENSE file (the
 //  "License") included under this distribution.
 
-#include "mos/heap.h"
+#include <mos/heap.h>
 
 enum {
     STD_BLOCK_ID = 0xe711dead,

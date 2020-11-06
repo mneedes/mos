@@ -21,9 +21,6 @@
 // Tick rate
 #define MOS_MICRO_SEC_PER_TICK      1000
 
-// Cycles per inner loop iteration (1 or 3, typically 3)
-#define MOS_CYCLES_PER_INNER_LOOP   3
-
 // Starting tick count
 //   Set to early rollover to always test rollovers,
 //   Set to zero for more intuitive time keeping

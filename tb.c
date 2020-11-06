@@ -18,7 +18,7 @@
 #include <mos/shell.h>
 
 #include "tb.h"
-#include "bsp/hal_tb.h"
+#include "bsp_hal.h"
 
 #define DFT_STACK_SIZE           384
 #define TEST_SHELL_STACK_SIZE    2048
@@ -1641,8 +1641,10 @@ static s32 CmdTest(s32 argc, char * argv[]) {
 #endif
             if (MutexTests() == false) test_pass = false;
             if (HeapTests() == false) test_pass = false;
+#if 0
         } else if (strcmp(argv[1], "hal") == 0) {
             test_pass = HalTests(Threads, MAX_APP_THREADS, Stacks, DFT_STACK_SIZE);
+#endif
         } else if (strcmp(argv[1], "thread") == 0) {
             test_pass = ThreadTests();
         } else if (strcmp(argv[1], "timer") == 0) {

@@ -30,7 +30,7 @@
 #ifndef _MOS_HEAP_H_
 #define _MOS_HEAP_H_
 
-#include "mos/kernel.h"
+#include <mos/kernel.h>
 
 #define MOS_HEAP_ALIGNED      MOS_STACK_ALIGNED
 #define MOS_HEAP_ALIGNMENT    MOS_STACK_ALIGNMENT

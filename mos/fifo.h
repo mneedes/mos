@@ -11,7 +11,7 @@
 #ifndef _MOS_FIFO_H_
 #define _MOS_FIFO_H_
 
-#include "mos/kernel.h"
+#include <mos/kernel.h>
 
 // Single-reader / single-writer non-blocking lock-free FIFO
 //   NOTE: Usable depth is len - 1.
