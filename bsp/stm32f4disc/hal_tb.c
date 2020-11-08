@@ -9,12 +9,8 @@
 //    It uses the HAL primarily for toggling GPIOs.
 //
 
-
-#include "stm32f4xx_hal.h"
-
 #include <mos/kernel.h>
 #include <mos/trace.h>
-
 #include <bsp/hal_tb.h>
 
 typedef enum {
