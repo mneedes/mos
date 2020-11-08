@@ -9,7 +9,7 @@
 
 #include <bsp_hal.h>
 
-bool HalTests(MosThread * threads[], u32 max_threads, u8 * stacks[], u32 stack_size);
+bool HalTests(int argc, char * argv[]);
 void HalSetGpio(u32 num, bool value);
 
 #endif

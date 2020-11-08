@@ -16,9 +16,10 @@
 #include <mos/thread_heap.h>
 #include <mos/trace.h>
 #include <mos/shell.h>
+#include <bsp_hal.h>
 
+#include <bsp/hal_tb.h>
 #include "tb.h"
-#include "bsp_hal.h"
 
 #define DFT_STACK_SIZE           384
 #define TEST_SHELL_STACK_SIZE    2048
@@ -1641,10 +1642,8 @@ static s32 CmdTest(s32 argc, char * argv[]) {
 #endif
             if (MutexTests() == false) test_pass = false;
             if (HeapTests() == false) test_pass = false;
-#if 0
         } else if (strcmp(argv[1], "hal") == 0) {
-            test_pass = HalTests(Threads, MAX_APP_THREADS, Stacks, DFT_STACK_SIZE);
-#endif
+            test_pass = HalTests(argc - 1, argv + 1);
         } else if (strcmp(argv[1], "thread") == 0) {
             test_pass = ThreadTests();
         } else if (strcmp(argv[1], "timer") == 0) {
@@ -1693,6 +1692,7 @@ static s32 CmdPigeon(s32 argc, char * argv[]) {
                             MosGetStackSize(thd));
         PigeonFlag = 1;
     } else {
+        // TODO: This could run into issue with mutex
         MosKillThread(Threads[PIGEON_THREAD_ID]);
         PigeonFlag = 0;
     }
