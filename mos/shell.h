@@ -20,7 +20,7 @@
 #include <mos/kernel.h>
 
 // Command shell callback
-typedef s32 (MosCmdFunc)(s32 argc, char * argv[]);
+typedef s32 MOS_ISR_SAFE (MosCmdFunc)(s32 argc, char * argv[]);
 
 // Command entry
 typedef struct MosCmd {
