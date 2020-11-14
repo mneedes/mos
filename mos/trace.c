@@ -16,7 +16,7 @@
 #include <mos/trace.h>
 #include <mos/internal/trace.h>
 
-#define Mos_PRINT_BUFFER_SIZE   128
+#define MOS_PRINT_BUFFER_SIZE   128
 
 u32 MosTraceMask = 0;
 
@@ -25,8 +25,8 @@ static MosMutex PrintMutex;
 static const char LowerCaseDigits[] = "0123456789abcdef";
 static const char UpperCaseDigits[] = "0123456789ABCDEF";
 
-static char PrintBuffer[Mos_PRINT_BUFFER_SIZE];
-static char RawPrintBuffer[Mos_PRINT_BUFFER_SIZE];
+static char PrintBuffer[MOS_PRINT_BUFFER_SIZE];
+static char RawPrintBuffer[MOS_PRINT_BUFFER_SIZE];
 
 static void
 WriteBuf(char * restrict * out, const char * restrict in,
@@ -173,7 +173,7 @@ u32 _MosPrint(char * str) {
 static void MosRawPrintfCallback(const char * fmt, ...) {
     va_list args;
     va_start(args, fmt);
-    FormatString(RawPrintBuffer, Mos_PRINT_BUFFER_SIZE, fmt, args);
+    FormatString(RawPrintBuffer, MOS_PRINT_BUFFER_SIZE, fmt, args);
     va_end(args);
     _MosPrint(RawPrintBuffer);
 }
@@ -296,7 +296,7 @@ u32 MosPrintf(const char * fmt, ...) {
     va_list args;
     va_start(args, fmt);
     MosTakeMutex(&PrintMutex);
-    FormatString(PrintBuffer, Mos_PRINT_BUFFER_SIZE, fmt, args);
+    FormatString(PrintBuffer, MOS_PRINT_BUFFER_SIZE, fmt, args);
     u32 cnt = _MosPrint(PrintBuffer);
     MosGiveMutex(&PrintMutex);
     va_end(args);
@@ -308,7 +308,7 @@ void MosLogTraceMessage(char * id, const char * fmt, ...) {
     va_start(args, fmt);
     MosTakeMutex(&PrintMutex);
     _MosPrint(id);
-    FormatString(PrintBuffer, Mos_PRINT_BUFFER_SIZE, fmt, args);
+    FormatString(PrintBuffer, MOS_PRINT_BUFFER_SIZE, fmt, args);
     _MosPrint(PrintBuffer);
     MosGiveMutex(&PrintMutex);
     va_end(args);

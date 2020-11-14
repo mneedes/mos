@@ -20,6 +20,8 @@ void HalInit(void);
 void HalRegisterRxUARTCallback(HalRxUARTCallback * rx_callback);
 void HalSendToTxUART(char ch);
 
+// TODO: There might be a better place for these
 u32 HalGetRandomU32(void);
+void HalSetGpio(u32 num, bool value);
 
 #endif

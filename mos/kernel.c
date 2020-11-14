@@ -240,6 +240,34 @@ static void InitThread(Thread * thd, MosThreadPriority pri,
 void SysTick_Handler(void) {
     if (RunningThread == NO_SUCH_THREAD) return;
     TickCount += TickInterval;
+#if 0
+    // Process timer queue
+    //  Timer queues can contain threads or message timers
+    MosList * elm_save;
+    for (MosList * elm = TimerQueue.next; elm != &TimerQueue; elm = elm_save) {
+        elm_save = elm->next;
+        if (((MosListElm *)elm)->type == ELM_THREAD) {
+            Thread * thd = container_of(elm, Thread, tmr_e);
+            s32 rem_ticks = (s32)thd->wake_tick - TickCount;
+            if (rem_ticks <= 0) {
+                MosRemoveFromList(elm);
+                // Lock interrupts since thread could be on semaphore pend queue
+                asm volatile ( "cpsid if" );
+                MosRemoveFromList(&thd->run_e);
+                asm volatile ( "cpsie if" );
+                MosAddToList(&RunQueues[thd->pri], &thd->run_e);
+                thd->timed_out = 1;
+                SetThreadState(thd, THREAD_RUNNABLE);
+            } else break;
+        } else {
+            MosTimer * tmr = container_of(elm, MosTimer, tmr_e);
+            s32 rem_ticks = (s32)tmr->wake_tick - TickCount;
+            if (rem_ticks <= 0) {
+                if (MosTrySendToQueue(tmr->q, tmr->msg)) MosRemoveFromList(elm);
+            } else break;
+        }
+    }
+#endif
     YieldThread();
     EVENT(TICK, TickCount);
 }
@@ -325,6 +353,7 @@ static u32 MOS_USED Scheduler(u32 sp) {
             break;
         }
     }
+#if 1
     // Process timer queue
     //  Timer queues can contain threads or message timers
     MosList * elm_save;
@@ -351,6 +380,7 @@ static u32 MOS_USED Scheduler(u32 sp) {
             } else break;
         }
     }
+#endif
     // Process Priority Queues
     // Start scan at first thread of highest priority, looking for one (or two
     //   runnable threads for tick enable), and if no threads are runnable
@@ -406,16 +436,16 @@ static u32 MOS_USED Scheduler(u32 sp) {
             // Reset timer with new tick increment
             SysTick->LOAD = (next_tick_interval * CyclesPerTick) - 1;
             SysTick->VAL = 0;
-            asm volatile ( "cpsie if" );
             if (TickInterval == 0) SysTick->CTRL |= SysTick_CTRL_TICKINT_Msk;
+            asm volatile ( "cpsie if" );
         } else {
             // Counter is free-running; ticks are no longer being accumulated,
             // but still set timer so adjusted tick calculation is more or less
             // accurate.
             SysTick->LOAD = CyclesPerTick - 1;
             SysTick->VAL = 0;
-            asm volatile ( "cpsie if" );
             SysTick->CTRL &= ~SysTick_CTRL_TICKINT_Msk;
+            asm volatile ( "cpsie if" );
         }
         // Adjust tick count and change interval
         TickCount = adj_tick_count;
@@ -558,9 +588,9 @@ u32 MosGetTickCount(void) {
     asm volatile ( "cpsid if" );
     u32 load = SysTick->LOAD;
     u32 val = SysTick->VAL;
+    u32 tick_count = TickCount;
     asm volatile ( "cpsie if" );
-    u32 adj_tick_cnt = TickCount + (load - val) / CyclesPerTick;
-    return adj_tick_cnt;
+    return tick_count + (load - val) / CyclesPerTick;
 }
 
 static void MOS_USED SetTimeout(u32 ticks) {
@@ -568,9 +598,9 @@ static void MOS_USED SetTimeout(u32 ticks) {
     asm volatile ( "cpsid if" );
     u32 load = SysTick->LOAD;
     u32 val = SysTick->VAL;
+    u32 tick_count = TickCount;
     asm volatile ( "cpsie if" );
-    u32 adj_tick_cnt = TickCount + (load - val) / CyclesPerTick;
-    RunningThread->wake_tick = adj_tick_cnt + ticks;
+    RunningThread->wake_tick = tick_count + ticks + (load - val) / CyclesPerTick;
 }
 
 void MosDelayThread(u32 ticks) {
@@ -1088,8 +1118,8 @@ void MOS_NAKED MosGiveMutex(MosMutex * mtx) {
         "cbnz r1, SkipGM\n\t"
         "mov r1, #0\n\t"
         "RetryGM:\n\t"
-        "ldrex r2, [r0]\n\t"     // Not sure this is needed
-        "strex r2, r1, [r0]\n\t" //  ... just store 0 ?
+        "ldrex r2, [r0]\n\t"
+        "strex r2, r1, [r0]\n\t"
         "cmp r2, #0\n\t"
         "bne RetryGM\n\t"
         "push { lr }\n\t"

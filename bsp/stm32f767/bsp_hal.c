@@ -328,6 +328,18 @@ static void MX_USB_OTG_FS_PCD_Init(void)
     /* USER CODE END USB_OTG_FS_Init 2 */
 }
 
+// GPIOs are mapped to pin PB0, PB7, PB14 on Nucleo-767
+#define GPIO_BASE   GPIOB_BASE
+#define LED_ON(x)   (MOS_VOL_U32(GPIO_BASE + 24) = (1 << (x)))
+#define LED_OFF(x)  (MOS_VOL_U32(GPIO_BASE + 24) = (1 << (x)) << 16)
+
+// Using LED pins as GPIO for logic analyzer
+void HalSetGpio(u32 num, bool value) {
+	const u8 bit[3] = { 0, 7, 14 };
+    if (value) LED_ON(bit[num]);
+    else LED_OFF(bit[num]);
+}
+
 /**
   * @brief GPIO Initialization Function
   * @param None

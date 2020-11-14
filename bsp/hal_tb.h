@@ -10,6 +10,5 @@
 #include <bsp_hal.h>
 
 bool HalTests(int argc, char * argv[]);
-void HalSetGpio(u32 num, bool value);
 
 #endif

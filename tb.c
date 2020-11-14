@@ -188,6 +188,7 @@ static bool ThreadTests(void) {
     u32 exp_iter = test_time / pri_test_delay;
     bool tests_all_pass = true;
     bool test_pass;
+#if 0
     //
     // Highest priorities must starve lowest
     //
@@ -271,7 +272,7 @@ static bool ThreadTests(void) {
     //
     // Set and Restore errno
     //
-
+#endif
     //
     // Dynamic threads
     //
@@ -304,6 +305,7 @@ static bool ThreadTests(void) {
         MosPrint(" Failed\n");
         tests_all_pass = false;
     }
+#if 0
     //
     // Kill Thread using Default Handler
     //
@@ -356,6 +358,7 @@ static bool ThreadTests(void) {
         MosPrint(" Failed\n");
         tests_all_pass = false;
     }
+#if 0
     //
     // Thread exception handler
     //
@@ -369,6 +372,7 @@ static bool ThreadTests(void) {
         MosPrint(" Failed\n");
         tests_all_pass = false;
     }
+#endif
     //
     // Assertion test
     //
@@ -407,6 +411,7 @@ static bool ThreadTests(void) {
             MosPrint(" Failed\n");
             tests_all_pass = false;
         }
+#if 0
         test_pass = true;
         MosPrint("Exception in FP thread\n");
         ClearHistogram();
@@ -418,7 +423,9 @@ static bool ThreadTests(void) {
             MosPrint(" Failed\n");
             tests_all_pass = false;
         }
+#endif
     }
+#endif
     return tests_all_pass;
 }
 
@@ -1631,7 +1638,10 @@ typedef enum {
 
 static s32 CmdTest(s32 argc, char * argv[]) {
     bool test_pass = true;
-    if (argc == 2) {
+    if (argc >= 2 && strcmp(argv[1], "hal") == 0) {
+	    if (HalTests(argc - 2, argv + 2)) return CMD_OK;
+        else return CMD_ERR;
+    } else if (argc == 2) {
         if (strcmp(argv[1], "main") == 0) {
             if (ThreadTests() == false) test_pass = false;
             if (TimerTests() == false) test_pass = false;
@@ -1642,8 +1652,6 @@ static s32 CmdTest(s32 argc, char * argv[]) {
 #endif
             if (MutexTests() == false) test_pass = false;
             if (HeapTests() == false) test_pass = false;
-        } else if (strcmp(argv[1], "hal") == 0) {
-            test_pass = HalTests(argc - 1, argv + 1);
         } else if (strcmp(argv[1], "thread") == 0) {
             test_pass = ThreadTests();
         } else if (strcmp(argv[1], "timer") == 0) {
