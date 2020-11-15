@@ -14,7 +14,7 @@
 
 // TODO: multi-level priority inheritance / multiple mutexes at the same time
 // TODO: Waiting on multiple semaphores
-// TODO: Canary on top and bottom of stack?
+// TODO: Change wait queue position on priority change
 
 #if (MOS_FP_CONTEXT_SWITCHING == true)
   #if (__FPU_USED == 1U)
@@ -213,8 +213,11 @@ static void InitThread(Thread * thd, MosThreadPriority pri,
                        MosThreadEntry * entry, s32 arg,
                        u8 * stack_bottom, u32 stack_size) {
     // Initialize Stack
-    *((u32 *) stack_bottom) = STACK_CANARY;
-    StackFrame * sf = (StackFrame *) (stack_bottom + stack_size);
+    u8 * sp = stack_bottom;
+    *((u32 *)sp) = STACK_CANARY;
+    sp += (stack_size - sizeof(u32));
+    *((u32 *)sp) = STACK_CANARY;
+    StackFrame * sf = (StackFrame *) sp;
     sf--;
     // Set Thumb Mode
     sf->PSR = 0x01000000;
@@ -437,16 +440,16 @@ static u32 MOS_USED Scheduler(u32 sp) {
             SysTick->LOAD = (next_tick_interval * CyclesPerTick) - 1;
             SysTick->VAL = 0;
             if (TickInterval == 0) SysTick->CTRL |= SysTick_CTRL_TICKINT_Msk;
-            asm volatile ( "cpsie if" );
         } else {
+        	// TODO: Could leave it alone ... set to maximum ?
             // Counter is free-running; ticks are no longer being accumulated,
             // but still set timer so adjusted tick calculation is more or less
             // accurate.
             SysTick->LOAD = CyclesPerTick - 1;
             SysTick->VAL = 0;
             SysTick->CTRL &= ~SysTick_CTRL_TICKINT_Msk;
-            asm volatile ( "cpsie if" );
         }
+        asm volatile ( "cpsie if" );
         // Adjust tick count and change interval
         TickCount = adj_tick_count;
         TickInterval = next_tick_interval;
@@ -525,9 +528,13 @@ void MOS_USED FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 lr) {
         u32 * sp = use_psp ? psp : msp;
         s32 num_words = 16;
         if (use_psp && RunningThread != NO_SUCH_THREAD) {
-            if (*((u32 *)RunningThread->stack_bottom) != STACK_CANARY)
-                (*PrintfHook)("!!! Stack corruption !!!\n");
-            s32 rem_words = (u32 *)(RunningThread->stack_bottom + RunningThread->stack_size) - sp;
+            u8 * sp2 = RunningThread->stack_bottom;
+            if (*((u32 *)sp2) != STACK_CANARY)
+                (*PrintfHook)("!!! Thread Stack corruption (bottom) !!!\n");
+            sp2 += (RunningThread->stack_size - sizeof(u32));
+            if (*((u32 *)sp2) != STACK_CANARY)
+                (*PrintfHook)("!!! Thread Stack corruption (top) !!!\n");
+            s32 rem_words = ((u32 *) sp2) - sp;
             if (rem_words < 64) num_words = rem_words;
             else num_words = 64;
         }
