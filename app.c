@@ -12,6 +12,8 @@
 #include <mos/kernel.h>
 #include <mos/trace.h>
 
+#include <bsp_hal.h>
+
 #include "tb.h"
 
 int main() {
@@ -24,11 +26,15 @@ int main() {
     // Init trace before calling any print functions
     MosInitTrace(TRACE_INFO | TRACE_ERROR | TRACE_FATAL, true);
     MosPrintf("\nMaintainable OS (Version %s)\n", MosGetParams()->version);
+    MosPrint("Copyright 2020, Matthew Needes  All Rights Reserved\n");
 
-#if 0
+#if 1
     if (CoreDebug->DHCSR & CoreDebug_DHCSR_C_DEBUGEN_Msk) {
         MosPrint("Debug Enabled\n");
     }
+    u32 cpu_id = SCB->CPUID;
+    MosPrintf("CPU ID(0x%08X) ARCH(%1X) PART_NO(%02X)\n", cpu_id, (cpu_id >> 16) & 0xF,
+    		      (cpu_id >> 4) & 0xFFF);
 #endif
 
     // Initialize and Run test bench example Application.
