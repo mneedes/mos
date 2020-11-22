@@ -15,6 +15,8 @@
 // TODO: multi-level priority inheritance / multiple mutexes at the same time
 // TODO: Waiting on multiple semaphores
 // TODO: Change wait queue position on priority change
+// TODO: Hooks for other timers such as LPTIM ?
+// TODO: External tick compensation
 
 #if (MOS_FP_CONTEXT_SWITCHING == true)
   #if (__FPU_USED == 1U)
@@ -681,6 +683,7 @@ void MosInit(void) {
     MaxTickInterval = ((1 << 24) - 1) / CyclesPerTick;
     CyclesPerMicroSec = CyclesPerTick / MOS_MICRO_SEC_PER_TICK;
     // Set lowest preemption priority for SysTick and PendSV (highest number).
+    // MOS requires that SysTick and PendSV share the same priority.
     u32 pri_grp = NVIC_GetPriorityGrouping();
     u32 pri_bits = 7 - pri_grp;
     if (pri_bits > __NVIC_PRIO_BITS) pri_bits = __NVIC_PRIO_BITS;
@@ -1138,7 +1141,8 @@ static void MOS_USED BlockOnSem(MosSem * sem) {
         // and other other interrupts are locked out.
         MosRemoveFromList(&RunningThread->run_e);
         MosAddToListBefore(elm, &RunningThread->run_e);
-        SetRunningThreadStateAndYield(THREAD_WAIT_FOR_SEM);
+        RunningThread->state = THREAD_WAIT_FOR_SEM;
+        YieldThread();
     }
     asm volatile ( "cpsie if" );
 }
@@ -1179,7 +1183,8 @@ static bool MOS_USED BlockOnSemOrTO(MosSem * sem) {
         // and other other interrupts are locked out.
         MosRemoveFromList(&RunningThread->run_e);
         MosAddToListBefore(elm, &RunningThread->run_e);
-        SetRunningThreadStateAndYield(THREAD_WAIT_FOR_SEM_OR_TICK);
+        RunningThread->state = THREAD_WAIT_FOR_SEM_OR_TICK;
+        YieldThread();
         // Must enable interrupts before checking timeout to allow pend
         // Barrier ensures that pend occurs before checking timeout.
         asm volatile (
