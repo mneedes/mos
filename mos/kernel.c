@@ -369,20 +369,19 @@ static u32 MOS_USED Scheduler(u32 sp) {
         if (!MosIsLastElement(&RunQueues[run_thd->pri], &run_thd->run_e))
             MosMoveToEndOfList(&RunQueues[run_thd->pri], &run_thd->run_e);
     } else run_thd = &IdleThread;
+    // Determine next timer interval
+    //   If more than 1 active thread, enable tick to commutate threads
+    //   If there is an active timer, delay tick to next expiration up to max
+    s32 adj_tick_count = TickCount;
     u32 next_tick_interval = 1;
     asm volatile ( "cpsid if" );
     // Obtain current tick count
-    s32 adj_tick_count = TickCount;
     if (TickInterval > 1) {
         // Adjust TickCount / Remaining ticks
         u32 load = SysTick->LOAD;
         u32 val = SysTick->VAL;
-        asm volatile ( "cpsie if" );
         adj_tick_count = TickCount + (load - val) / CyclesPerTick;
     }
-    // Determine next timer interval
-    //   If more than 1 active thread, enable tick to commutate threads
-    //   If there is an active timer, delay tick to next expiration up to max
     if (tick_en == false) {
         // This ensures that the LOAD value will fit in SysTick counter...
         s32 tmr_ticks_rem = 0x7fffffff;
@@ -412,12 +411,6 @@ static u32 MOS_USED Scheduler(u32 sp) {
             SysTick->VAL = 0;
             if (TickInterval == 0) SysTick->CTRL |= SysTick_CTRL_TICKINT_Msk;
         } else {
-        	// TODO: Could leave it alone ... set to maximum ?
-            // Counter is free-running; ticks are no longer being accumulated,
-            // but still set timer so adjusted tick calculation is more or less
-            // accurate.
-            SysTick->LOAD = CyclesPerTick - 1;
-            SysTick->VAL = 0;
             SysTick->CTRL &= ~SysTick_CTRL_TICKINT_Msk;
         }
         // Adjust tick count and change interval
