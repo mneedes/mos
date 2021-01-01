@@ -194,6 +194,17 @@ void HAL_RNG_MspInit(RNG_HandleTypeDef * hrng) {
     }
 }
 
+// GPIOs are mapped to pin 12 through 15 on STM32F4 Discovery
+#define GPIO_BASE   0x40020C00
+#define LED_ON(x)   (MOS_VOL_U32(GPIO_BASE + 24) = (1 << (12 + (x))))
+#define LED_OFF(x)  (MOS_VOL_U32(GPIO_BASE + 24) = (1 << (12 + (x))) << 16)
+
+// Using LED pins as GPIO for logic analyzer
+void HalSetGpio(u32 num, bool value) {
+    if (value) LED_ON(num);
+    else LED_OFF(num);
+}
+
 static void MX_GPIO_Init(void)
 {
   /* GPIO Ports Clock Enable */
