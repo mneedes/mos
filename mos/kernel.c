@@ -32,6 +32,9 @@
 #define NO_SUCH_THREAD       NULL
 #define STACK_CANARY         0xca5eca11
 
+/* The parameter is really used, but tell compiler it is unused to reject warnings */
+#define MOS_USED_PARAM(x)    MOS_UNUSED(x)
+
 #define EVENT(e, v) \
     { if (MOS_ENABLE_EVENTS) (*EventHook)((MOS_EVENT_ ## e), (v)); }
 
@@ -107,7 +110,7 @@ static MosParams Params = {
 static MosRawPrintfHook * PrintfHook = NULL;
 static MosSleepHook * SleepHook = NULL;
 static MosWakeHook * WakeHook = NULL;
-static void DummyEventHook(MosEvent e, u32 v) { }
+static void DummyEventHook(MosEvent e, u32 v) { MOS_UNUSED(e); MOS_UNUSED(v); }
 static MosEventHook * EventHook = DummyEventHook;
 
 // Threads and Events
@@ -122,7 +125,7 @@ static u32 IntDisableCount = 0;
 static MosList TimerQueue;
 static volatile u32 TickCount = MOS_START_TICK_COUNT;
 static volatile u32 TickInterval = 1;
-static u32 MaxTickInterval;
+static s32 MaxTickInterval;
 static u32 CyclesPerTick;
 static u32 MOS_USED CyclesPerMicroSec;
 
@@ -133,7 +136,7 @@ static u8 MOS_STACK_ALIGNED IdleStack[112 + sizeof(StackFrame)];
 
 // Mask interrupts by priority, primarily for temporarily
 //   disabling context switches.
-static void MOS_INLINE SetBasePri(u32 pri) {
+static MOS_INLINE void SetBasePri(u32 pri) {
     asm volatile (
         "msr basepri, %0\n\t"
         "isb"
@@ -168,7 +171,7 @@ static MOS_INLINE void SetThreadState(Thread * thd, ThreadState state) {
     thd->state = state;
 }
 
-static MOS_INLINE MOS_ISR_SAFE void YieldThread() {
+static MOS_INLINE MOS_ISR_SAFE void YieldThread(void) {
     // Invoke PendSV handler to potentially perform context switch
     SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
     asm volatile ( "isb" );
@@ -580,6 +583,7 @@ void MosDelayThread(u32 ticks) {
 }
 
 void MOS_NAKED MosDelayMicroSec(u32 usec) {
+    MOS_UNUSED(usec);
     asm volatile (
         "ldr r1, _CyclesPerMicroSec\n\t"
         "ldr r1, [r1]\n\t"
@@ -617,11 +621,11 @@ static void AddMessageTimer(MosTimer * timer) {
         if (((MosListElm *)tmr)->type == ELM_THREAD) {
             Thread * thd = container_of(tmr, Thread, tmr_e);
             s32 tmr_rem_ticks = (s32)thd->wake_tick - tick_count;
-            if (timer->ticks <= tmr_rem_ticks) break;
+            if ((s32)timer->ticks <= tmr_rem_ticks) break;
         } else {
             MosTimer * tmr_tmr = container_of(tmr, MosTimer, tmr_e);
             s32 tmr_rem_ticks = (s32)tmr_tmr->wake_tick - tick_count;
-            if (timer->ticks <= tmr_rem_ticks) break;
+            if ((s32)timer->ticks <= tmr_rem_ticks) break;
         }
     }
     MosAddToListBefore(tmr, &timer->tmr_e.link);
@@ -646,6 +650,7 @@ void MosResetTimer(MosTimer * timer) {
 }
 
 static s32 IdleThreadEntry(s32 arg) {
+    MOS_UNUSED(arg);
     while (1) {
         if (SleepHook) (*SleepHook)();
         asm volatile (
@@ -997,6 +1002,7 @@ static void MOS_USED BlockOnMutex(MosMutex * mtx) {
 }
 
 void MOS_NAKED MosTakeMutex(MosMutex * mtx) {
+    MOS_USED_PARAM(mtx);
     asm volatile (
         "ldr r1, _ThreadID\n\t"
         "ldr r1, [r1]\n\t"
@@ -1031,6 +1037,7 @@ void MOS_NAKED MosTakeMutex(MosMutex * mtx) {
 }
 
 bool MOS_NAKED MosTryMutex(MosMutex * mtx) {
+    MOS_USED_PARAM(mtx);
     asm volatile (
         "ldr r1, _ThreadID2\n\t"
         "ldr r1, [r1]\n\t"
@@ -1083,6 +1090,7 @@ static void MOS_USED YieldOnMutex(MosMutex * mtx) {
 }
 
 void MOS_NAKED MosGiveMutex(MosMutex * mtx) {
+    MOS_USED_PARAM(mtx);
     asm volatile (
         "ldr r1, [r0, #4]\n\t"
         "sub r1, #1\n\t"
@@ -1141,6 +1149,7 @@ static void MOS_USED BlockOnSem(MosSem * sem) {
 }
 
 void MOS_NAKED MosTakeSem(MosSem * sem) {
+    MOS_USED_PARAM(sem);
     asm volatile (
         "RetryTS:\n\t"
         "ldrex r1, [r0]\n\t"
@@ -1190,6 +1199,8 @@ static bool MOS_USED BlockOnSemOrTO(MosSem * sem) {
 }
 
 bool MOS_NAKED MosTakeSemOrTO(MosSem * sem, u32 ticks) {
+    MOS_USED_PARAM(sem);
+    MOS_USED_PARAM(ticks);
     asm volatile (
         "push {r0, lr}\n\t"
         "mov r0, r1\n\t"
@@ -1218,6 +1229,7 @@ bool MOS_NAKED MosTakeSemOrTO(MosSem * sem, u32 ticks) {
 }
 
 bool MOS_NAKED MOS_ISR_SAFE MosTrySem(MosSem * sem) {
+    MOS_USED_PARAM(sem);
     asm volatile (
         "RetryTRS:\n\t"
         "ldrex r1, [r0]\n\t"
@@ -1253,6 +1265,7 @@ static void MOS_USED MOS_ISR_SAFE YieldOnSem(MosSem * sem) {
 }
 
 void MOS_NAKED MOS_ISR_SAFE MosGiveSem(MosSem * sem) {
+    MOS_USED_PARAM(sem);
     asm volatile (
         "push { lr }\n\t"
         "RetryGS:\n\t"
@@ -1269,6 +1282,7 @@ void MOS_NAKED MOS_ISR_SAFE MosGiveSem(MosSem * sem) {
 }
 
 u32 MOS_NAKED MosWaitForSignal(MosSem * sem) {
+    MOS_USED_PARAM(sem);
     asm volatile (
         "mov r3, #0\n\t"
         "RetryWS:\n\t"
@@ -1290,6 +1304,8 @@ u32 MOS_NAKED MosWaitForSignal(MosSem * sem) {
 }
 
 u32 MOS_NAKED MosWaitForSignalOrTO(MosSem * sem, u32 ticks) {
+    MOS_USED_PARAM(sem);
+    MOS_USED_PARAM(ticks);
     asm volatile (
         "push {r0, lr}\n\t"
         "mov r0, r1\n\t"
@@ -1318,6 +1334,7 @@ u32 MOS_NAKED MosWaitForSignalOrTO(MosSem * sem, u32 ticks) {
 }
 
 u32 MOS_NAKED MOS_ISR_SAFE MosPollForSignal(MosSem * sem) {
+    MOS_USED_PARAM(sem);
     asm volatile (
         "mov r3, #0\n\t"
         "RetryPS:\n\t"
@@ -1337,6 +1354,8 @@ u32 MOS_NAKED MOS_ISR_SAFE MosPollForSignal(MosSem * sem) {
 }
 
 void MOS_NAKED MOS_ISR_SAFE MosRaiseSignal(MosSem * sem, u32 flags) {
+    MOS_USED_PARAM(sem);
+    MOS_USED_PARAM(flags);
     asm volatile (
         "push { lr }\n\t"
         "RetryRS:\n\t"

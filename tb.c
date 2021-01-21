@@ -188,7 +188,7 @@ static bool ThreadTests(void) {
     u32 exp_iter = test_time / pri_test_delay;
     bool tests_all_pass = true;
     bool test_pass;
-#if 0
+#if 1
     //
     // Highest priorities must starve lowest
     //
@@ -305,7 +305,7 @@ static bool ThreadTests(void) {
         MosPrint(" Failed\n");
         tests_all_pass = false;
     }
-#if 0
+#if 1
     //
     // Kill Thread using Default Handler
     //
@@ -358,7 +358,7 @@ static bool ThreadTests(void) {
         MosPrint(" Failed\n");
         tests_all_pass = false;
     }
-#if 0
+#if 1
     //
     // Thread exception handler
     //
@@ -411,7 +411,7 @@ static bool ThreadTests(void) {
             MosPrint(" Failed\n");
             tests_all_pass = false;
         }
-#if 0
+#if 1
         test_pass = true;
         MosPrint("Exception in FP thread\n");
         ClearHistogram();
@@ -1784,9 +1784,9 @@ static CmdStatus RunCmd(char * cmd_buf_in) {
 static s32 TestShell(s32 arg) {
 
     static MosCmd list_cmds[] = {
-        { CmdTest,           "run", "Run Test", "[TEST]" },
-        { CmdPigeon,         "p",   "Toggle Pigeon Printing", "" },
-        { CmdClearTickHisto, "cth", "Clear tick histogram", "" },
+        { CmdTest,           "run", "Run Test", "[TEST]", {0} },
+        { CmdPigeon,         "p",   "Toggle Pigeon Printing", "", {0} },
+        { CmdClearTickHisto, "cth", "Clear tick histogram", "", {0} },
     };
 
     MosInitShell();

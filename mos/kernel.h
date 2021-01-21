@@ -109,9 +109,9 @@ const MosParams * MosGetParams(void);
 
 // Used primarily to determine if in interrupt context.
 // Returns '0' if not in an interrupt, otherwise returns vector number
-u32 MOS_ISR_SAFE MosGetIRQNumber(void);
-void MOS_ISR_SAFE MosDisableInterrupts(void);
-void MOS_ISR_SAFE MosEnableInterrupts(void);
+MOS_ISR_SAFE u32 MosGetIRQNumber(void);
+MOS_ISR_SAFE void MosDisableInterrupts(void);
+MOS_ISR_SAFE void MosEnableInterrupts(void);
 
 // Time and Delays
 
@@ -119,7 +119,7 @@ u32 MosGetTickCount(void);
 void MosDelayThread(u32 ticks);
 // For short delays, e.g.: useful for bit-banging.
 //   Keep in mind there is an upper limit to usec.
-void MOS_ISR_SAFE MosDelayMicroSec(u32 usec);
+MOS_ISR_SAFE void MosDelayMicroSec(u32 usec);
 
 // Timers - Write specified message to queue at appointed time
 
@@ -131,7 +131,7 @@ void MosResetTimer(MosTimer * timer);
 // Thread Functions
 
 // Can use MosYieldThread() for cooperative multitasking
-void MOS_ISR_SAFE MosYieldThread(void);
+MOS_ISR_SAFE void MosYieldThread(void);
 MosThread * MosGetThread(void);
 u8 * MosGetStackBottom(MosThread * thd);
 u32 MosGetStackSize(MosThread * thd);
@@ -175,16 +175,16 @@ void MosInitSem(MosSem * sem, u32 start_value);
 // Returns false on timeout, true if taken
 void MosTakeSem(MosSem * sem);
 bool MosTakeSemOrTO(MosSem * sem, u32 ticks);
-bool MOS_ISR_SAFE MosTrySem(MosSem * sem);
-void MOS_ISR_SAFE MosGiveSem(MosSem * sem);
+MOS_ISR_SAFE bool MosTrySem(MosSem * sem);
+MOS_ISR_SAFE void MosGiveSem(MosSem * sem);
 
 //   (2) Signal (ganged 32-bit binary semaphores)
 //       zero is returned for timeout / no poll
 
 u32 MosWaitForSignal(MosSem * sem);
 u32 MosWaitForSignalOrTO(MosSem * sem, u32 ticks);
-u32 MOS_ISR_SAFE MosPollForSignal(MosSem * sem);
-void MOS_ISR_SAFE MosRaiseSignal(MosSem * sem, u32 flags);
+MOS_ISR_SAFE u32 MosPollForSignal(MosSem * sem);
+MOS_ISR_SAFE void MosRaiseSignal(MosSem * sem, u32 flags);
 
 //   (3) Binary semaphore is a 1-bit signal
 
@@ -197,18 +197,18 @@ void MOS_ISR_SAFE MosRaiseSignal(MosSem * sem, u32 flags);
 
 void MosInitQueue(MosQueue * queue, u32 * buf, u32 len);
 void MosSendToQueue(MosQueue * queue, u32 data);
-bool MOS_ISR_SAFE MosTrySendToQueue(MosQueue * queue, u32 data);
+MOS_ISR_SAFE bool MosTrySendToQueue(MosQueue * queue, u32 data);
 // Returns false on timeout, true if sent
 bool MosSendToQueueOrTO(MosQueue * queue, u32 data, u32 ticks);
 u32 MosReceiveFromQueue(MosQueue * queue);
-bool MOS_ISR_SAFE MosTryReceiveFromQueue(MosQueue * queue, u32 * data);
+MOS_ISR_SAFE bool MosTryReceiveFromQueue(MosQueue * queue, u32 * data);
 // Returns false on timeout, true if received
 bool MosReceiveFromQueueOrTO(MosQueue * queue, u32 * data, u32 ticks);
 
 #define MosAssert(c) { if (!(c)) MosAssertAt(__FILE__, __LINE__); }
 void MosAssertAt(char * file, u32 line);
 
-static u32 MOS_INLINE MosGetStackDepth(u8 * top) {
+static MOS_INLINE u32 MosGetStackDepth(u8 * top) {
     u32 sp;
     asm volatile (
         "mrs %0, psp\n\t"
