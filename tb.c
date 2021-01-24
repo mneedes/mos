@@ -1607,13 +1607,33 @@ static bool HeapTests(void) {
     //
     // Allocation of several odd size blocks of differing sizes
     //
-
+    test_pass = true;
+    MosPrint("Heap Test 3: Odd blocks Only - different sizes\n");
+    MosInitHeap(&TestHeapDesc, TestHeap, sizeof(TestHeap), 0);
+    if (MosAllocBlock(&TestHeapDesc, 16) != NULL) test_pass = false;
+    for (u32 ix = 0; ix < num_blocks; ix++) {
+        blocks[ix] = MosAlloc(&TestHeapDesc, 57 << ix);
+        if (blocks[ix] == NULL) test_pass = false;
+        if ((u32)blocks[ix] % MOS_HEAP_ALIGNMENT != 0) test_pass = false;
+        if (!MosIsListEmpty(&TestHeapDesc.osl)) test_pass = false;
+    }
+    for (u32 ix = 0; ix < num_blocks; ix++) {
+        // ReAlloc with 0 to free
+        if (MosReAlloc(&TestHeapDesc, blocks[ix], 0) != NULL) test_pass = false;
+        if (MosIsListEmpty(&TestHeapDesc.osl)) test_pass = false;
+    }
+    if (MosAllocBlock(&TestHeapDesc, 32) != NULL) test_pass = false;
+    if (test_pass) MosPrint(" Passed\n");
+    else {
+        MosPrint(" Failed\n");
+        tests_all_pass = false;
+    }
     //
     // Allocate and Free of short-lived blocks
     //    NOTE:  Uses TestThread Heap !
     //
     test_pass = true;
-    MosPrint("Heap Test 3: Short-lived blocks\n");
+    MosPrint("Heap Test 4: Short-lived blocks\n");
     u8 * fun[8];
     for (u32 ix = 0; ix < count_of(fun); ix++) {
         fun[ix] = MosAllocShortLived(&TestThreadHeapDesc, 64);
@@ -1630,7 +1650,7 @@ static bool HeapTests(void) {
     // Reallocation
     //
     test_pass = true;
-    MosPrint("Heap Test 4: Reallocation\n");
+    MosPrint("Heap Test 5: Reallocation\n");
     MosInitHeap(&TestHeapDesc, TestHeap, sizeof(TestHeap), 3);
     MosReserveBlockSize(&TestHeapDesc, 64);
     MosReserveBlockSize(&TestHeapDesc, 128);

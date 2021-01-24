@@ -86,10 +86,10 @@ void * MosAlloc(MosHeap * heap, u32 bs) {
 }
 
 void * MosReAlloc(MosHeap * heap, void * cur_block, u32 bs) {
+    if (cur_block == NULL) return MosAlloc(heap, bs);
     MosLink * cur_link = (MosLink *)((u8 *)cur_block - sizeof(MosLink));
-    void * block = NULL;
-    u32 cur_bs = 0;
     MosTakeMutex(&heap->mtx);
+    u32 cur_bs = 0;
     switch (cur_link->id_canary) {
         case STD_BLOCK_ID:
             cur_bs = cur_link->bd->bs;
@@ -102,6 +102,7 @@ void * MosReAlloc(MosHeap * heap, void * cur_block, u32 bs) {
             MosGiveMutex(&heap->mtx);
             return NULL;
     }
+    void * block = NULL;
     if (bs > heap->max_bs) {
         // Move to new odd block if larger than current block,
         //   or smaller than half of current block
@@ -112,7 +113,8 @@ void * MosReAlloc(MosHeap * heap, void * cur_block, u32 bs) {
         }
     } else {
         // If current block best accommodates new size, it will
-        //   be retrieved again on new allocation.
+        //   be retrieved again on new allocation.  If bs is zero,
+        //   cur_block is freed only.
         MosFree(heap, cur_block);
         block = MosAllocBlock(heap, bs);
     }
@@ -161,31 +163,30 @@ void MosFree(MosHeap * heap, void * block) {
 }
 
 void * MosAllocBlock(MosHeap * heap, u32 bs) {
+    if (!bs) return NULL;
     u8 * block = NULL;
     MosTakeMutex(&heap->mtx);
-    if (!MosIsListEmpty(&heap->bsl)) {
-        // Find the smallest block size to accommodate request
-        MosList * elm;
-        for (elm = heap->bsl.next; elm != &heap->bsl; elm = elm->next) {
-            if (container_of(elm, MosBlockDesc, bsl)->bs >= bs) {
-                // Allocate free block if available...
-                MosBlockDesc * bd = container_of(elm, MosBlockDesc, bsl);
-                if (!MosIsListEmpty(&bd->fl)) {
-                    MosLink * link = container_of(bd->fl.next, MosLink, fl);
-                    MosRemoveFromList(bd->fl.next);
-                    block = (u8 *) link + sizeof(MosLink);
-                    break;
-                } else if (heap->pit + bd->bs < heap->bot) {
-                    // ...allocate new block from pit since there is room
-                    MosLink * link = (MosLink *)heap->pit;
-                    link->bd = bd;
-                    heap->pit += (bd->bs + sizeof(MosLink));
-                    link->id_canary = STD_BLOCK_ID;
-                    block = (u8 *) link + sizeof(MosLink);
-                    break;
-                }
-                // continue to see if next higher block size is available
+    // Find the smallest block size to accommodate request
+    MosList * elm;
+    for (elm = heap->bsl.next; elm != &heap->bsl; elm = elm->next) {
+        if (container_of(elm, MosBlockDesc, bsl)->bs >= bs) {
+            // Allocate free block if available...
+            MosBlockDesc * bd = container_of(elm, MosBlockDesc, bsl);
+            if (!MosIsListEmpty(&bd->fl)) {
+                MosLink * link = container_of(bd->fl.next, MosLink, fl);
+                MosRemoveFromList(bd->fl.next);
+                block = (u8 *) link + sizeof(MosLink);
+                break;
+            } else if (heap->pit + bd->bs < heap->bot) {
+                // ...allocate new block from pit since there is room
+                MosLink * link = (MosLink *)heap->pit;
+                link->bd = bd;
+                heap->pit += (bd->bs + sizeof(MosLink));
+                link->id_canary = STD_BLOCK_ID;
+                block = (u8 *) link + sizeof(MosLink);
+                break;
             }
+            // continue to see if next higher block size is available
         }
     }
     MosGiveMutex(&heap->mtx);
@@ -193,6 +194,7 @@ void * MosAllocBlock(MosHeap * heap, u32 bs) {
 }
 
 void * MosAllocOddBlock(MosHeap * heap, u32 bs) {
+    if (bs == 0) return NULL;
     MosLink * link = NULL;
     MosLink * link_found = NULL;
     // Round bs to next aligned value
@@ -229,6 +231,7 @@ void * MosAllocOddBlock(MosHeap * heap, u32 bs) {
 }
 
 void * MosAllocShortLived(MosHeap * heap, u32 bs) {
+    if (bs == 0) return NULL;
     u8 * block = NULL;
     // Round bs to next aligned value
     if (bs % MOS_HEAP_ALIGNMENT)
