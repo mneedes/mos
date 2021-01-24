@@ -1610,6 +1610,7 @@ static bool HeapTests(void) {
 
     //
     // Allocate and Free of short-lived blocks
+    //    NOTE:  Uses TestThread Heap !
     //
     test_pass = true;
     MosPrint("Heap Test 3: Short-lived blocks\n");
@@ -1619,6 +1620,69 @@ static bool HeapTests(void) {
     }
     for (u32 ix = 0; ix < count_of(fun); ix++) {
         MosFree(&TestThreadHeapDesc, fun[ix]);
+    }
+    if (test_pass) MosPrint(" Passed\n");
+    else {
+        MosPrint(" Failed\n");
+        tests_all_pass = false;
+    }
+    //
+    // Reallocation
+    //
+    test_pass = true;
+    MosPrint("Heap Test 4: Reallocation\n");
+    MosInitHeap(&TestHeapDesc, TestHeap, sizeof(TestHeap), 3);
+    MosReserveBlockSize(&TestHeapDesc, 64);
+    MosReserveBlockSize(&TestHeapDesc, 128);
+    MosReserveBlockSize(&TestHeapDesc, 256);
+    for (u8 ix = 0; ix < count_of(fun); ix++) {
+        fun[ix] = MosAlloc(&TestHeapDesc, 400);
+        if (fun[ix] == NULL) test_pass = false;
+        else memset(fun[ix], ix, 400);
+    }
+    for (u8 ix = 0; ix < count_of(fun); ix++) {
+        fun[ix] = MosReAlloc(&TestHeapDesc, fun[ix], 600);
+        if (fun[ix] == NULL) test_pass = false;
+    }
+    for (u8 ix = 0; ix < count_of(fun); ix++) {
+        if (fun[ix] != NULL) {
+            for (u32 iy = 0; iy < 400; iy++) {
+                if (fun[ix][iy] != ix) test_pass = false;
+            }
+        }
+    }
+    for (u8 ix = 0; ix < count_of(fun); ix++) {
+        fun[ix] = MosReAlloc(&TestHeapDesc, fun[ix], 400);
+        if (fun[ix] == NULL) test_pass = false;
+    }
+    for (u8 ix = 0; ix < count_of(fun); ix++) {
+        if (fun[ix] != NULL) {
+            for (u32 iy = 0; iy < 400; iy++) {
+                if (fun[ix][iy] != ix) test_pass = false;
+            }
+        }
+    }
+    for (u8 ix = 0; ix < count_of(fun); ix++) {
+        fun[ix] = MosReAlloc(&TestHeapDesc, fun[ix], 100);
+        if (fun[ix] == NULL) test_pass = false;
+    }
+    for (u8 ix = 0; ix < count_of(fun); ix++) {
+        if (fun[ix] != NULL) {
+            for (u32 iy = 0; iy < 100; iy++) {
+                if (fun[ix][iy] != ix) test_pass = false;
+            }
+        }
+    }
+    for (u8 ix = 0; ix < count_of(fun); ix++) {
+        fun[ix] = MosReAlloc(&TestHeapDesc, fun[ix], 128);
+        if (fun[ix] == NULL) test_pass = false;
+    }
+    for (u8 ix = 0; ix < count_of(fun); ix++) {
+        if (fun[ix] != NULL) {
+            for (u32 iy = 0; iy < 100; iy++) {
+                if (fun[ix][iy] != ix) test_pass = false;
+            }
+        }
     }
     if (test_pass) MosPrint(" Passed\n");
     else {

@@ -175,6 +175,8 @@ void SystemClock_Config(void)
     }
 }
 
+#if 0
+
 /**
   * @brief ETH Initialization Function
   * @param None
@@ -214,6 +216,7 @@ static void MX_ETH_Init(void)
 
     /* USER CODE END ETH_Init 2 */
 }
+#endif
 
 /**
   * @brief RNG Initialization Function
@@ -295,6 +298,7 @@ static void MX_USART3_UART_Init(void)
     /* USER CODE END USART3_Init 2 */
 }
 
+#if 0
 /**
   * @brief USB_OTG_FS Initialization Function
   * @param None
@@ -327,6 +331,7 @@ static void MX_USB_OTG_FS_PCD_Init(void)
 
     /* USER CODE END USB_OTG_FS_Init 2 */
 }
+#endif
 
 // GPIOs are mapped to pin PB0, PB7, PB14 on Nucleo-767
 #define GPIO_BASE   GPIOB_BASE

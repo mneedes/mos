@@ -5,6 +5,7 @@
 //  "License") included under this distribution.
 
 #include <mos/heap.h>
+#include <string.h>
 
 enum {
     STD_BLOCK_ID = 0xe711dead,
@@ -59,7 +60,7 @@ bool MosReserveBlockSize(MosHeap * heap, u32 bs) {
     MosTakeMutex(&heap->mtx);
     if (!MosIsListEmpty(&heap->bsl_free)) {
         MosBlockDesc * new_bd = container_of(heap->bsl_free.next,
-                                              MosBlockDesc, bsl);
+                                             MosBlockDesc, bsl);
         MosRemoveFromList(&new_bd->bsl);
         new_bd->bs = bs;
         MosList * elm;
@@ -84,12 +85,54 @@ void * MosAlloc(MosHeap * heap, u32 bs) {
     return block;
 }
 
+void * MosReAlloc(MosHeap * heap, void * cur_block, u32 bs) {
+    MosLink * cur_link = (MosLink *)((u8 *)cur_block - sizeof(MosLink));
+    void * block = NULL;
+    u32 cur_bs = 0;
+    MosTakeMutex(&heap->mtx);
+    switch (cur_link->id_canary) {
+        case STD_BLOCK_ID:
+            cur_bs = cur_link->bd->bs;
+            break;
+        case ODD_BLOCK_ID:
+            cur_bs = cur_link->bs;
+            break;
+        default:
+            // MosReAlloc does not support SL blocks
+            MosGiveMutex(&heap->mtx);
+            return NULL;
+    }
+    if (bs > heap->max_bs) {
+        // Move to new odd block if larger than current block,
+        //   or smaller than half of current block
+        if (bs > cur_bs || 2*bs < cur_bs) {
+            block = MosAllocOddBlock(heap, bs);
+        } else {
+            block = cur_block;
+        }
+    } else {
+        // If current block best accommodates new size, it will
+        //   be retrieved again on new allocation.
+        MosFree(heap, cur_block);
+        block = MosAllocBlock(heap, bs);
+    }
+    if (block && block != cur_block) {
+        // Copy contents and free old block if block changed
+        memcpy(block, cur_block, (cur_bs < bs) ? cur_bs : bs);
+        MosFree(heap, cur_block);
+    }
+    MosGiveMutex(&heap->mtx);
+    return block;
+}
+
 void MosFree(MosHeap * heap, void * block) {
     MosLink * link = (MosLink *)((u8 *)block - sizeof(MosLink));
     MosTakeMutex(&heap->mtx);
     switch (link->id_canary) {
     case STD_BLOCK_ID:
-        MosAddToList(&link->bd->fl, &link->fl);
+        // Put on front of list so realloc will grab it first if
+        //  it is still the best fit.
+        MosAddToFrontOfList(&link->bd->fl, &link->fl);
         break;
     case ODD_BLOCK_ID:
         {

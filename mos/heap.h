@@ -16,14 +16,14 @@
 //     reallocated but its size cannot change.  Latency here scales with the
 //     number of unallocated objects and therefore is generally not
 //     deterministic.
-//  3. MosAlloc() / MosFree()
+//  3. MosAlloc() / MosReAlloc() / MosFree()
 //     Automatic allocation.  Uses method (1) if requested size fits in a
 //     reserved block size.  Uses method (2) if the size is larger than any
 //     reserved block size.
 //  4. MosAllocShortLived() / MosFree()
-//     Allocation of short-lived data (any size).  These blocks should
-//     be returned "within a tick or two" to prevent fragmentation. These
-//     blocks can be of any size.
+//     Allocation of short-lived data.  These blocks should be returned
+//     "within a tick or two" to prevent fragmentation.  These blocks can be
+//     of any size.
 
 //  NOTE: All reserved block sizes must be reserved prior to allocating from heap.
 
@@ -52,6 +52,7 @@ void MosInitHeap(MosHeap * heap, u8 * pit, u32 size, u8 nbs);
 bool MosReserveBlockSize(MosHeap * heap, u32 bs);
 
 void * MosAlloc(MosHeap * heap, u32 size);
+void * MosReAlloc(MosHeap * heap, void * block, u32 new_size);
 void MosFree(MosHeap * heap, void * block);
 
 void * MosAllocBlock(MosHeap * heap, u32 size);
