@@ -108,6 +108,7 @@ void * MosReAlloc(MosHeap * heap, void * cur_block, u32 bs) {
         //   or smaller than half of current block
         if (bs > cur_bs || 2*bs < cur_bs) {
             block = MosAllocOddBlock(heap, bs);
+            MosFree(heap, cur_block);
         } else {
             block = cur_block;
         }
@@ -118,10 +119,9 @@ void * MosReAlloc(MosHeap * heap, void * cur_block, u32 bs) {
         MosFree(heap, cur_block);
         block = MosAllocBlock(heap, bs);
     }
+    // Copy contents and free old block if block changed
     if (block && block != cur_block) {
-        // Copy contents and free old block if block changed
         memcpy(block, cur_block, (cur_bs < bs) ? cur_bs : bs);
-        MosFree(heap, cur_block);
     }
     MosGiveMutex(&heap->mtx);
     return block;
