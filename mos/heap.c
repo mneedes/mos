@@ -132,12 +132,14 @@ void MosFree(MosHeap * heap, void * block) {
     MosTakeMutex(&heap->mtx);
     switch (link->id_canary) {
     case STD_BLOCK_ID:
-        // Put on front of list so realloc will grab it first if
-        //  it is still the best fit.
-        MosAddToFrontOfList(&link->bd->fl, &link->fl);
+        // Double-free protection, plus put on front of list so realloc
+        //  will grab it first if it is still the best fit.
+        if (MosIsListEmpty(&link->fl))
+            MosAddToFrontOfList(&link->bd->fl, &link->fl);
         break;
     case ODD_BLOCK_ID:
-        {
+        // Double-free protection
+        if (MosIsListEmpty(&link->fl)) {
             MosList * elm;
             // Insertion sort into odd size free-list
             for (elm = heap->osl.next; elm != &heap->osl; elm = elm->next) {
@@ -147,6 +149,7 @@ void MosFree(MosHeap * heap, void * block) {
         }
         break;
     case SL_BLOCK_ID:
+        // TODO: Short-lived blocks need double-free protection
         if (heap->sl.next == &link->fl) {
             heap->bot += (link->bs + sizeof(MosLink));
         } else {
@@ -169,9 +172,9 @@ void * MosAllocBlock(MosHeap * heap, u32 bs) {
     // Find the smallest block size to accommodate request
     MosList * elm;
     for (elm = heap->bsl.next; elm != &heap->bsl; elm = elm->next) {
-        if (container_of(elm, MosBlockDesc, bsl)->bs >= bs) {
+        MosBlockDesc * bd = container_of(elm, MosBlockDesc, bsl);
+        if (bd->bs >= bs) {
             // Allocate free block if available...
-            MosBlockDesc * bd = container_of(elm, MosBlockDesc, bsl);
             if (!MosIsListEmpty(&bd->fl)) {
                 MosLink * link = container_of(bd->fl.next, MosLink, fl);
                 MosRemoveFromList(bd->fl.next);
@@ -181,6 +184,7 @@ void * MosAllocBlock(MosHeap * heap, u32 bs) {
                 // ...allocate new block from pit since there is room
                 MosLink * link = (MosLink *)heap->pit;
                 link->bd = bd;
+                link->fl.prev = &link->fl;
                 heap->pit += (bd->bs + sizeof(MosLink));
                 link->id_canary = STD_BLOCK_ID;
                 block = (u8 *) link + sizeof(MosLink);
@@ -217,6 +221,7 @@ void * MosAllocOddBlock(MosHeap * heap, u32 bs) {
         if (heap->pit + bs < heap->bot) {
             link = (MosLink *)heap->pit;
             link->bs = bs;
+            link->fl.prev = &link->fl;
             heap->pit += (bs + sizeof(MosLink));
             link->id_canary = ODD_BLOCK_ID;
         } else if (link_found) {

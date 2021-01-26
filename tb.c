@@ -151,11 +151,9 @@ static s32 KillSelfTestThread(s32 arg) {
 }
 
 static s32 ExcTestThread(s32 arg) {
-    volatile u32 x;
     MosSetStopArg(MosGetThread(), TEST_PASS_HANDLER + 1);
     MosDelayThread(50);
-    x = 30 / arg;
-    (void)x;
+    MosCrash();
     return TEST_FAIL;
 }
 
@@ -1547,13 +1545,48 @@ static bool HeapTests(void) {
     if (TestHeapDesc.max_bs != 0) test_pass = false;
     MosReserveBlockSize(&TestHeapDesc, 128);
     if (TestHeapDesc.max_bs != 128) test_pass = false;
-    MosReserveBlockSize(&TestHeapDesc, 64);
+    MosReserveBlockSize(&TestHeapDesc, 16);
     if (TestHeapDesc.max_bs != 128) test_pass = false;
     MosReserveBlockSize(&TestHeapDesc, 256);
     if (TestHeapDesc.max_bs != 256) test_pass = false;
-    // Check for sorted blocks
-    // Check for alignment
-    // TODO: Finish
+    {
+        u32 * blocks[10];
+        // Start off with a double-free for good measure
+        blocks[0] = MosAlloc(&TestHeapDesc, 4);
+        MosFree(&TestHeapDesc, blocks[0]);
+        MosFree(&TestHeapDesc, blocks[0]);
+        for (u32 ix = 0; ix < count_of(blocks); ix++) {
+            blocks[ix] = MosAlloc(&TestHeapDesc, 4);
+            if (blocks[ix] == NULL) test_pass = false;
+            if ((u32)blocks[ix] % MOS_HEAP_ALIGNMENT != 0) test_pass = false;
+            *(blocks[ix]) = ix + 1;
+        }
+        for (u32 ix = 0; ix < count_of(blocks); ix++) {
+            MosFree(&TestHeapDesc, blocks[ix]);
+        }
+        for (u32 ix = 0; ix < count_of(blocks); ix++) {
+            blocks[ix] = MosAlloc(&TestHeapDesc, 4);
+            if (blocks[ix] == NULL) test_pass = false;
+            if ((u32)blocks[ix] % MOS_HEAP_ALIGNMENT != 0) test_pass = false;
+            *(blocks[ix]) = ix;
+        }
+        for (u32 ix = 0; ix < count_of(blocks); ix++) {
+            blocks[ix] = MosReAlloc(&TestHeapDesc, blocks[ix], 8);
+            if (blocks[ix] == NULL) test_pass = false;
+            if ((u32)blocks[ix] % MOS_HEAP_ALIGNMENT != 0) test_pass = false;
+        }
+        for (u32 ix = 0; ix < count_of(blocks); ix++) {
+            if (*blocks[ix] != ix) test_pass = false;
+        }
+        for (u32 ix = 0; ix < count_of(blocks); ix++) {
+            blocks[ix] = MosReAlloc(&TestHeapDesc, blocks[ix], 32);
+            if (blocks[ix] == NULL) test_pass = false;
+            if ((u32)blocks[ix] % MOS_HEAP_ALIGNMENT != 0) test_pass = false;
+        }
+        for (u32 ix = 0; ix < count_of(blocks); ix++) {
+            if (*blocks[ix] != ix) test_pass = false;
+        }
+    }
     if (test_pass) MosPrint(" Passed\n");
     else {
         MosPrint(" Failed\n");
@@ -1568,12 +1601,15 @@ static bool HeapTests(void) {
     MosReserveBlockSize(&TestHeapDesc, 64);
     MosReserveBlockSize(&TestHeapDesc, 128);
     MosReserveBlockSize(&TestHeapDesc, 256);
-    if (TestHeapDesc.max_bs != 256) test_pass = false;
-    rem = TestHeapDesc.bot - TestHeapDesc.pit + 16;
-    MosPrintf("  Starting: %u bytes\n", rem);
-    if (rem != sizeof(TestHeap) - 3 * 24) test_pass = false;
     const u16 num_blocks = 5;
     void * blocks[num_blocks];
+    rem = TestHeapDesc.bot - TestHeapDesc.pit + 16;
+    MosPrintf("  Starting: %u bytes\n", rem);
+    // Start off with a double-free for good measure
+    blocks[0] = MosAlloc(&TestHeapDesc, 257);
+    MosFree(&TestHeapDesc, blocks[0]);
+    MosFree(&TestHeapDesc, blocks[0]);
+    if (TestHeapDesc.max_bs != 256) test_pass = false;
     for (u32 ix = 0; ix < num_blocks; ix++) {
         blocks[ix] = MosAlloc(&TestHeapDesc, 257);
         if (blocks[ix] == NULL) test_pass = false;
@@ -1703,6 +1739,35 @@ static bool HeapTests(void) {
                 if (fun[ix][iy] != ix) test_pass = false;
             }
         }
+    }
+    if (test_pass) MosPrint(" Passed\n");
+    else {
+        MosPrint(" Failed\n");
+        tests_all_pass = false;
+    }
+    //
+    // Exhaustion
+    //
+    test_pass = true;
+    MosPrint("Heap Test 6: Exhaustion\n");
+    const u32 nbs = 2;
+    const u32 bs1 = 64;
+    MosInitHeap(&TestHeapDesc, TestHeap, sizeof(TestHeap), nbs);
+    MosReserveBlockSize(&TestHeapDesc, bs1);
+    MosReserveBlockSize(&TestHeapDesc, 128);
+    {
+        u32 ctr = 0;
+        void * block, * last_block = NULL;
+        while (1) {
+             block = MosAlloc(&TestHeapDesc, bs1);
+             if (block) last_block = block;
+             else break;
+             ctr++;
+        } while (block);
+        MosFree(&TestHeapDesc, last_block);
+        if (MosAlloc(&TestHeapDesc, bs1) != last_block) test_pass = false;
+        MosPrintf("Allocated up to %u blocks\n", ctr);
+        if (ctr != (sizeof(TestHeap) - nbs*24) / (bs1 + 16)) test_pass = false;
     }
     if (test_pass) MosPrint(" Passed\n");
     else {

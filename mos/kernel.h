@@ -211,10 +211,21 @@ void MosAssertAt(char * file, u32 line);
 static MOS_INLINE u32 MosGetStackDepth(u8 * top) {
     u32 sp;
     asm volatile (
-        "mrs %0, psp\n\t"
+        "mrs %0, psp"
                 : "=r" (sp)
     );
     return ((u32) top) - sp;
+}
+
+// Induces a divide by zero fault
+static MOS_INLINE void MosCrash(void) {
+    // Requires divide by zero faults are enabled (see MosInit()).
+    asm volatile (
+        "mov r0, #0\n\t"
+        "udiv r1, r1, r0\n\t"
+        "isb\n\t"
+            : : : "r0", "r1"
+    );
 }
 
 #define MosHaltIfDebugging() \
