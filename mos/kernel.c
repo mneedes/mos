@@ -217,10 +217,11 @@ static s32 DefaultStopHandler(s32 arg) {
 static void InitThread(Thread * thd, MosThreadPriority pri,
                        MosThreadEntry * entry, s32 arg,
                        u8 * stack_bottom, u32 stack_size) {
-    // Initialize Stack
+    // Initialize Stack, placing canary at bottom and top.
     u8 * sp = stack_bottom;
     *((u32 *)sp) = STACK_CANARY;
-    sp += (stack_size - sizeof(u32));
+    // Ensure 8-byte alignment for ARM / varargs compatibility.
+    sp = (u8 *) ((u32)(sp + stack_size - sizeof(u32)) & 0xfffffff8);
     *((u32 *)sp) = STACK_CANARY;
     StackFrame * sf = (StackFrame *) sp;
     sf--;
@@ -498,7 +499,7 @@ void MOS_USED FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 lr) {
             u8 * sp2 = RunningThread->stack_bottom;
             if (*((u32 *)sp2) != STACK_CANARY)
                 (*PrintfHook)("!!! Thread Stack corruption (bottom) !!!\n");
-            sp2 += (RunningThread->stack_size - sizeof(u32));
+            sp2 = (u8 *) ((u32)(sp2 + RunningThread->stack_size - sizeof(u32)) & 0xfffffff8);
             if (*((u32 *)sp2) != STACK_CANARY)
                 (*PrintfHook)("!!! Thread Stack corruption (top) !!!\n");
             s32 rem_words = ((u32 *) sp2) - sp;

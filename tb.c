@@ -1777,6 +1777,32 @@ static bool HeapTests(void) {
     return tests_all_pass;
 }
 
+static s32 StackPrintThread(s32 arg) {
+    u64 e = 0xdeadbeeffeebdaed;
+    MosPrintf("DEADBEEFFEEBDAED == %llX\n", e);
+    return TEST_PASS;
+}
+
+static bool StackTests(void) {
+    bool tests_all_pass = true;
+    bool test_pass;
+    //
+    // 64-bit print test
+    //
+    test_pass = true;
+    MosPrint("Stack Test 1: Alignment\n");
+    for (u32 ix = 0; ix < 8; ix++) {
+        MosInitAndRunThread(Threads[1], 3, StackPrintThread, 1, Stacks[2], DFT_STACK_SIZE + ix);
+        if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
+    }
+    if (test_pass) MosPrint(" Passed\n");
+    else {
+        MosPrint(" Failed\n");
+        tests_all_pass = false;
+    }
+    return tests_all_pass;
+}
+
 typedef enum {
     CMD_ERR_OUT_OF_RANGE = -3,
     CMD_ERR_NOT_FOUND = -2,
@@ -1801,6 +1827,7 @@ static s32 CmdTest(s32 argc, char * argv[]) {
 #endif
             if (MutexTests() == false) test_pass = false;
             if (HeapTests() == false) test_pass = false;
+            if (StackTests() == false) test_pass = false;
         } else if (strcmp(argv[1], "thread") == 0) {
             test_pass = ThreadTests();
         } else if (strcmp(argv[1], "timer") == 0) {
@@ -1817,6 +1844,8 @@ static s32 CmdTest(s32 argc, char * argv[]) {
             test_pass = MutexTests();
         } else if (strcmp(argv[1], "heap") == 0) {
             test_pass = HeapTests();
+        } else if (strcmp(argv[1], "stack") == 0) {
+            test_pass = StackTests();
         } else return CMD_ERR_NOT_FOUND;
         if (test_pass) {
             MosPrint("Tests Passed\n");
