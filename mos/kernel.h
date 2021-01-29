@@ -109,7 +109,15 @@ const MosParams * MosGetParams(void);
 
 // Used primarily to determine if in interrupt context.
 // Returns '0' if not in an interrupt, otherwise returns vector number
-MOS_ISR_SAFE u32 MosGetIRQNumber(void);
+static MOS_INLINE u32 MOS_ISR_SAFE MosGetIRQNumber(void) {
+    u32 irq;
+    asm volatile (
+        "mrs %0, ipsr"
+            : "=r" (irq)
+    );
+    return irq;
+}
+
 MOS_ISR_SAFE void MosDisableInterrupts(void);
 MOS_ISR_SAFE void MosEnableInterrupts(void);
 
@@ -223,7 +231,6 @@ static MOS_INLINE void MosCrash(void) {
     asm volatile (
         "mov r0, #0\n\t"
         "udiv r1, r1, r0\n\t"
-        "isb\n\t"
             : : : "r0", "r1"
     );
 }

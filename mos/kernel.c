@@ -157,15 +157,6 @@ void MOS_ISR_SAFE MosEnableInterrupts(void) {
     }
 }
 
-u32 MOS_NAKED MOS_ISR_SAFE MosGetIRQNumber(void) {
-    asm volatile (
-        "mrs r0, psr\n\t"
-        "and r0, #255\n\t"
-        "bx lr\n\t"
-            : : : "r0"
-    );
-}
-
 static MOS_INLINE void SetThreadState(Thread * thd, ThreadState state) {
     asm volatile ( "dmb" );
     thd->state = state;
