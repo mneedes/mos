@@ -39,6 +39,11 @@
 // Enable events (required for MOS profiling)
 #define MOS_ENABLE_EVENTS           false
 
+// Enable "unintentional" alignment faults
+// Recommend true for small from-scratch projects,
+// false for large, pre-existing code bases.
+#define MOS_ENABLE_UNALIGN_FAULTS   false
+
 // Enable breakpoint in exceptions if debugger detected
 #define MOS_BKPT_IN_EXCEPTIONS      false
 

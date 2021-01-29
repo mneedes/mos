@@ -655,8 +655,12 @@ static s32 IdleThreadEntry(s32 arg) {
 }
 
 void MosInit(void) {
-    // Trap Divide By 0 and "Unintentional" Unaligned Accesses
+    // Trap Divide By 0 and optionally "Unintentional" Unaligned Accesses
+#ifdef MOS_ENABLE_UNALIGN_FAULTS
     SCB->CCR |= (SCB_CCR_DIV_0_TRP_Msk | SCB_CCR_UNALIGN_TRP_Msk);
+#else
+    SCB->CCR |= (SCB_CCR_DIV_0_TRP_Msk);
+#endif
     // Enable Bus, Memory and Usage Faults in general
     SCB->SHCSR |= (SCB_SHCSR_BUSFAULTENA_Msk | SCB_SHCSR_MEMFAULTENA_Msk |
                    SCB_SHCSR_USGFAULTENA_Msk);
