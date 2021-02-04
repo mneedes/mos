@@ -28,11 +28,12 @@
 #define TEST_SHELL_THREAD_ID     0
 #define PIGEON_THREAD_ID         (MAX_APP_THREADS - 1)
 
-typedef enum {
+typedef s32 TestStatus;
+enum TestStatus {
     TEST_PASS         = 0xba5eba11,
     TEST_PASS_HANDLER = 0xba5eba12,
     TEST_FAIL         = 0xdeadbeef,
-} TestStatus;
+};
 
 // Test thread stacks and heap
 static MosThread StaticThreads[MAX_APP_THREADS];
@@ -40,10 +41,10 @@ static MosThread * Threads[MAX_APP_THREADS];
 static u8 * Stacks[MAX_APP_THREADS];
 
 static MosHeap TestThreadHeapDesc;
-static u8 MOS_HEAP_ALIGNED TestThreadHeap[8192];
+static u8 MOS_STACK_ALIGNED TestThreadHeap[8192];
 
 // Heap for Heap testing
-static u8 MOS_HEAP_ALIGNED TestHeap[16384];
+static u8 MOS_STACK_ALIGNED TestHeap[16384];
 
 // Generic flag for tests
 static volatile u32 TestFlag = 0;
@@ -1535,7 +1536,9 @@ static bool HeapTests(void) {
     bool tests_all_pass = true;
     bool test_pass;
     MosHeap TestHeapDesc;
-    u32 rem;
+    //u32 rem;
+
+#if 0
     //
     // Allocate and Free of blocks with reserved block sizes
     //
@@ -1682,23 +1685,25 @@ static bool HeapTests(void) {
         MosPrint(" Failed\n");
         tests_all_pass = false;
     }
+#endif
     //
     // Reallocation
     //
     test_pass = true;
     MosPrint("Heap Test 5: Reallocation\n");
-    MosInitHeap(&TestHeapDesc, TestHeap, sizeof(TestHeap), 3);
-    MosReserveBlockSize(&TestHeapDesc, 64);
-    MosReserveBlockSize(&TestHeapDesc, 128);
-    MosReserveBlockSize(&TestHeapDesc, 256);
+    u32 alignment = 8;
+    MosInitHeap(&TestHeapDesc, TestHeap, sizeof(TestHeap), alignment);
+    u8 * fun[8];
     for (u8 ix = 0; ix < count_of(fun); ix++) {
         fun[ix] = MosAlloc(&TestHeapDesc, 400);
         if (fun[ix] == NULL) test_pass = false;
         else memset(fun[ix], ix, 400);
+        if (((u32)fun[ix] & (alignment - 1)) != 0) test_pass = false;
     }
     for (u8 ix = 0; ix < count_of(fun); ix++) {
         fun[ix] = MosReAlloc(&TestHeapDesc, fun[ix], 600);
         if (fun[ix] == NULL) test_pass = false;
+        if (((u32)fun[ix] & (alignment - 1)) != 0) test_pass = false;
     }
     for (u8 ix = 0; ix < count_of(fun); ix++) {
         if (fun[ix] != NULL) {
@@ -1710,6 +1715,7 @@ static bool HeapTests(void) {
     for (u8 ix = 0; ix < count_of(fun); ix++) {
         fun[ix] = MosReAlloc(&TestHeapDesc, fun[ix], 400);
         if (fun[ix] == NULL) test_pass = false;
+        if (((u32)fun[ix] & (alignment - 1)) != 0) test_pass = false;
     }
     for (u8 ix = 0; ix < count_of(fun); ix++) {
         if (fun[ix] != NULL) {
@@ -1721,6 +1727,7 @@ static bool HeapTests(void) {
     for (u8 ix = 0; ix < count_of(fun); ix++) {
         fun[ix] = MosReAlloc(&TestHeapDesc, fun[ix], 100);
         if (fun[ix] == NULL) test_pass = false;
+        if (((u32)fun[ix] & (alignment - 1)) != 0) test_pass = false;
     }
     for (u8 ix = 0; ix < count_of(fun); ix++) {
         if (fun[ix] != NULL) {
@@ -1740,6 +1747,9 @@ static bool HeapTests(void) {
             }
         }
     }
+    for (u8 ix = 0; ix < count_of(fun); ix++) {
+        MosFree(&TestHeapDesc, fun[ix]);
+    }
     if (test_pass) MosPrint(" Passed\n");
     else {
         MosPrint(" Failed\n");
@@ -1750,24 +1760,21 @@ static bool HeapTests(void) {
     //
     test_pass = true;
     MosPrint("Heap Test 6: Exhaustion\n");
-    const u32 nbs = 2;
-    const u32 bs1 = 64;
-    MosInitHeap(&TestHeapDesc, TestHeap, sizeof(TestHeap), nbs);
-    MosReserveBlockSize(&TestHeapDesc, bs1);
-    MosReserveBlockSize(&TestHeapDesc, 128);
     {
+        const u32 bs1 = 64;
         u32 ctr = 0;
         void * block, * last_block = NULL;
         while (1) {
              block = MosAlloc(&TestHeapDesc, bs1);
              if (block) last_block = block;
              else break;
+             if (((u32)block & (alignment - 1)) != 0) test_pass = false;
              ctr++;
         } while (block);
         MosFree(&TestHeapDesc, last_block);
         if (MosAlloc(&TestHeapDesc, bs1) != last_block) test_pass = false;
         MosPrintf("Allocated up to %u blocks\n", ctr);
-        if (ctr != (sizeof(TestHeap) - nbs*24) / (bs1 + 16)) test_pass = false;
+        if (ctr != sizeof(TestHeap) / (bs1 + 12 + 4)) test_pass = false;
     }
     if (test_pass) MosPrint(" Passed\n");
     else {
@@ -2031,12 +2038,14 @@ int InitTestBench() {
 
     MosRegisterEventHook(EventCallback);
 
-    MosInitHeap(&TestThreadHeapDesc, TestThreadHeap, sizeof(TestThreadHeap), 5);
+    MosInitHeap(&TestThreadHeapDesc, TestThreadHeap, sizeof(TestThreadHeap), MOS_STACK_ALIGNMENT);
+#if 0
     MosReserveBlockSize(&TestThreadHeapDesc, 1024);
     MosReserveBlockSize(&TestThreadHeapDesc, 512);
     MosReserveBlockSize(&TestThreadHeapDesc, 256);
     MosReserveBlockSize(&TestThreadHeapDesc, 128);
     MosReserveBlockSize(&TestThreadHeapDesc, 64);
+#endif
 
     MosInitThreadHeap(&TestThreadHeapDesc);
 
@@ -2054,7 +2063,7 @@ int InitTestBench() {
     // Static threads with stacks allocated from the heap
     for (u32 id = 1; id < (MAX_APP_THREADS - 1); id++) {
         Threads[id] = &StaticThreads[id];
-        Stacks[id] = MosAllocBlock(&TestThreadHeapDesc, DFT_STACK_SIZE);
+        Stacks[id] = MosAlloc(&TestThreadHeapDesc, DFT_STACK_SIZE);
         if (Stacks[id] == NULL) {
             MosPrint("Stack allocation error\n");
             return -1;

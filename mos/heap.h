@@ -1,36 +1,36 @@
 
-//  Copyright 2019-2020 Matthew C Needes
+//  Copyright 2019-2021 Matthew C Needes
 //  You may not use this source file except in compliance with the
 //  terms and conditions contained within the LICENSE file (the
 //  "License") included under this distribution.
 
 //
 // MOS Heap Allocation Methods:
-//  1. MosReserveBlockSize() / MosAllocBlock() / MosFree()
-//     Allocation from a set of reserved block sizes.  Once a block has been
-//     allocated using this method it can be returned and reallocated but its
-//     size cannot change.  This method is deterministic.
-//  2. MosAllocOddBlock() / MosFree()
-//     Allocation of objects outside of the reserved sizes.  Once a
-//     block has been allocated using this method it can be returned and
-//     reallocated but its size cannot change.  Latency here scales with the
-//     number of unallocated objects and therefore is generally not
-//     deterministic.
-//  3. MosAlloc() / MosReAlloc() / MosFree()
-//     Automatic allocation.  Uses method (1) if requested size fits in a
-//     reserved block size.  Uses method (2) if the size is larger than any
-//     reserved block size.
-//  4. MosAllocShortLived() / MosFree()
-//     Allocation of short-lived data.  These blocks should be returned
-//     "within a tick or two" to prevent fragmentation.  These blocks can be
-//     of any size.
-
-//  NOTE: All reserved block sizes must be reserved prior to allocating from heap.
+//  TODO
+//
 
 #ifndef _MOS_HEAP_H_
 #define _MOS_HEAP_H_
 
 #include <mos/kernel.h>
+
+typedef struct {
+    MosMutex mtx;
+    MosList fl;
+    u32 bytes_free;
+    u16 align_mask;
+    u16 fl_block_cnt;
+    u16 min_block_size;
+    u16 double_free_cnt;
+    u16 dead_canary_cnt;
+} MosHeap;
+
+void MosInitHeap(MosHeap * heap, u8 * data, u32 heap_size, u32 alignment);
+void * MosAlloc(MosHeap * heap, u32 size);
+void * MosReAlloc(MosHeap * heap, void * block, u32 new_size);
+void MosFree(MosHeap * heap, void * block);
+
+#if 0
 
 #define MOS_HEAP_ALIGNED      MOS_STACK_ALIGNED
 #define MOS_HEAP_ALIGNMENT    MOS_STACK_ALIGNMENT
@@ -58,5 +58,7 @@ void MosFree(MosHeap * heap, void * block);
 void * MosAllocBlock(MosHeap * heap, u32 size);
 void * MosAllocOddBlock(MosHeap * heap, u32 size);
 void * MosAllocShortLived(MosHeap * heap, u32 size);
+#endif
 
 #endif
+

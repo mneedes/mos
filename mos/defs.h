@@ -1,5 +1,5 @@
 
-//  Copyright 2020 Matthew C Needes
+//  Copyright 2020-2021 Matthew C Needes
 //  You may not use this source file except in compliance with the
 //  terms and conditions contained within the LICENSE file (the
 //  "License") included under this distribution.
@@ -48,6 +48,15 @@
 #define MOS_STACK_ALIGNMENT    8
 #define MOS_STACK_ALIGNED      MOS_ALIGNED(MOS_STACK_ALIGNMENT)
 
+// Align values up or down to nearest boundary
+//   mask is (alignment - 1)
+#define MOS_ALIGN32(val, mask)         (((u32)(val) + (mask) - 1) & ~((u32)(mask)))
+#define MOS_ALIGN32_DOWN(val, mask)    (((u32)(val) & ~((u32)(mask))))
+#define MOS_ALIGN64(val, mask)         (((u64)(val) + (mask) - 1) & ~((u64)(mask)))
+#define MOS_ALIGN64_DOWN(val, mask)    (((u64)(val) & ~((u64)(mask))))
+#define MOS_ALIGN_PTR(val, mask)       (((mos_size)(val) + (mask) - 1) & ~((mos_size)(mask)))
+#define MOS_ALIGN_PTR_DOWN(val, mask)  (((mos_size)(val) + (mask) - 1) & ~((mos_size)(mask)))
+
 // Can be used for U32 register reads and writes
 #define MOS_VOL_U32(addr)      (*((volatile u32 *)(addr)))
 
@@ -59,6 +68,7 @@ typedef uint32_t    u32;
 typedef int32_t     s32;
 typedef uint64_t    u64;
 typedef int64_t     s64;
+typedef uint32_t    mos_size;
 
 typedef u8 MosThreadPriority;
 
