@@ -131,15 +131,30 @@ void * MosAlloc(MosHeap * heap, u32 size) {
 }
 
 void * MosReAlloc(MosHeap * heap, void * _block, u32 _new_size) {
+    if (!_block) return MosAlloc(heap, _new_size);
     MosTakeMutex(&heap->mtx);
-    u8 * new_block = MosAlloc(heap, _new_size);
-    if (!_block) return new_block;
-    if (!new_block) return NULL;
     Block * block = (Block *) ((u8 *) _block - sizeof(Link));
+    // Check for canary value and double-free
+    if (block->link.canary != HEAP_CANARY_VALUE) {
+        heap->dead_canary_cnt++;
+        MosGiveMutex(&heap->mtx);
+        return NULL;
+    }
+    if (!(block->link.size & 0x1)) {
+        heap->double_free_cnt++;
+        MosGiveMutex(&heap->mtx);
+        return NULL;
+    }
     u32 old_copy_size = block->link.size - sizeof(Link);
+    u8 * new_block = MosAlloc(heap, _new_size);
+    if (!new_block) {
+        MosFree(heap, _block);
+        MosGiveMutex(&heap->mtx);
+        return NULL;
+    }
     u32 copy_size = _new_size < old_copy_size ? _new_size : old_copy_size;
     for (u32 ix = 0; ix < copy_size; ix++)
-        new_block[ix] = ((u8 *)_block)[ix];
+        new_block[ix] = ((u8 *) _block)[ix];
     MosFree(heap, _block);
     MosGiveMutex(&heap->mtx);
     return new_block;
