@@ -1052,7 +1052,7 @@ bool MOS_NAKED MosTryMutex(MosMutex * mtx) {
         "add r2, #1\n\t"
         "str r2, [r0, #4]\n\t"
         "dmb\n\t"
-        "mov r1, #1\n\t"
+        "mov r0, #1\n\t"
         "bx lr\n\t"
         "FailTRM:\n\t"
         "mov r0, #0\n\t"
