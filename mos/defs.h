@@ -15,7 +15,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define MOS_VERSION            0.3
+#define MOS_VERSION            0.5
 
 #ifndef count_of
 #define count_of(x)            (sizeof(x) / sizeof(x[0]))
