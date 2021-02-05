@@ -51,11 +51,11 @@
 // Align values up or down to nearest boundary
 //   mask is (alignment - 1)
 #define MOS_ALIGN32(val, mask)         (((u32)(val) + (mask)) & ~((u32)(mask)))
-#define MOS_ALIGN32_DOWN(val, mask)    (((u32)(val) & ~((u32)(mask))))
+#define MOS_ALIGN32_DOWN(val, mask)    (((u32)(val)) & ~((u32)(mask)))
 #define MOS_ALIGN64(val, mask)         (((u64)(val) + (mask)) & ~((u64)(mask)))
-#define MOS_ALIGN64_DOWN(val, mask)    (((u64)(val) & ~((u64)(mask))))
+#define MOS_ALIGN64_DOWN(val, mask)    (((u64)(val)) & ~((u64)(mask)))
 #define MOS_ALIGN_PTR(val, mask)       (((mos_size)(val) + (mask)) & ~((mos_size)(mask)))
-#define MOS_ALIGN_PTR_DOWN(val, mask)  (((mos_size)(val) + (mask)) & ~((mos_size)(mask)))
+#define MOS_ALIGN_PTR_DOWN(val, mask)  (((mos_size)(val)) & ~((mos_size)(mask)))
 
 // Can be used for U32 register reads and writes
 #define MOS_VOL_U32(addr)      (*((volatile u32 *)(addr)))
