@@ -18,6 +18,7 @@ typedef struct {
     MosMutex mtx;
     MosList fl;
     u32 bytes_free;
+    u32 min_bytes_free;
     u16 align_mask;
     u16 fl_block_cnt;
     u16 min_block_size;
@@ -30,35 +31,4 @@ void * MosAlloc(MosHeap * heap, u32 size);
 void * MosReAlloc(MosHeap * heap, void * block, u32 new_size);
 void MosFree(MosHeap * heap, void * block);
 
-#if 0
-
-#define MOS_HEAP_ALIGNED      MOS_STACK_ALIGNED
-#define MOS_HEAP_ALIGNMENT    MOS_STACK_ALIGNMENT
-
-typedef struct {
-    MosMutex mtx;
-    u8 * pit;
-    u8 * bot;
-    MosList bsl;      // block size list
-    MosList bsl_free; // block descriptor free list
-    MosList osl;      // odd size list
-    MosList sl;       // short-lived list
-    u32 max_bs;       // Largest block size
-} MosHeap;
-
-// Initialize heap with maximum number of reserved block sizes (nbs)
-// Pit shall be aligned to MOSH_HEAP_ALIGNMENT.
-void MosInitHeap(MosHeap * heap, u8 * pit, u32 size, u8 nbs);
-bool MosReserveBlockSize(MosHeap * heap, u32 bs);
-
-void * MosAlloc(MosHeap * heap, u32 size);
-void * MosReAlloc(MosHeap * heap, void * block, u32 new_size);
-void MosFree(MosHeap * heap, void * block);
-
-void * MosAllocBlock(MosHeap * heap, u32 size);
-void * MosAllocOddBlock(MosHeap * heap, u32 size);
-void * MosAllocShortLived(MosHeap * heap, u32 size);
 #endif
-
-#endif
-
