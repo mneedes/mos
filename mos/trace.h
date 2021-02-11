@@ -1,5 +1,5 @@
 
-//  Copyright 2019-2020 Matthew C Needes
+//  Copyright 2019-2021 Matthew C Needes
 //  You may not use this source file except in compliance with the
 //  terms and conditions contained within the LICENSE file (the
 //  "License") included under this distribution.
@@ -7,16 +7,13 @@
 //
 // MOS tracing facility
 //   Mutex to synchronize printing from different threads
-//   Lightweight format strings
 //   Maskable trace messaging
 //
 
 #ifndef _MOS_TRACE_H_
 #define _MOS_TRACE_H_
 
-#include <stdarg.h>
-
-#include <mos/kernel.h>
+#include <mos/defs.h>
 
 // Display trace message
 #define MosLogTrace(level, args...) \
@@ -40,21 +37,15 @@ extern u32 MosTraceMask;
 //   through this module.
 void MosInitTrace(u32 mask, bool enable_raw_print_hook);
 
-u32 MosItoa(char * restrict out, s32 input, u16 base, bool is_upper,
-            u16 min_digits, char pad_char, bool is_signed);
-
-u32 MosItoa64(char * restrict out, s64 input, u16 base, bool is_upper,
-              u16 min_digits, char pad_char, bool is_signed);
-
-u32 MosPrint(char * str);
-u32 MosPrintf(const char * fmt, ...);
+s32 MosPrint(char * str);
+s32 MosPrintf(const char * fmt, ...);
 
 // Parse format string and arguments into provided buffer
 void MosLogTraceMessage(char * id, const char * fmt, ...);
 
 // Create a hex dump into provided buffer
 void MosLogHexDumpMessage(char * id, char * name,
-                          const void * addr, u32 size);
+                          const void * addr, mos_size size);
 
 // Callers can use mutex for multi-line prints
 void MosTakeTraceMutex(void);

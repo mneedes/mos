@@ -1,5 +1,5 @@
 
-//  Copyright 2019-2020 Matthew C Needes
+//  Copyright 2019-2021 Matthew C Needes
 //  You may not use this source file except in compliance with the
 //  terms and conditions contained within the LICENSE file (the
 //  "License") included under this distribution.
@@ -14,6 +14,7 @@
 #include <mos/kernel.h>
 #include <mos/heap.h>
 #include <mos/thread_heap.h>
+#include <mos/format_string.h>
 #include <mos/trace.h>
 #include <mos/shell.h>
 #include <bsp_hal.h>
@@ -1790,18 +1791,33 @@ static s32 StackPrintThread(s32 arg) {
     return TEST_PASS;
 }
 
-static bool StackTests(void) {
+static bool MiscTests(void) {
     bool tests_all_pass = true;
     bool test_pass;
     //
-    // 64-bit print test
+    // 64-bit print test (stack alignment)
     //
     test_pass = true;
-    MosPrint("Stack Test 1: Alignment\n");
+    MosPrint("Misc Test 1: Stack and 64-bit print alignment\n");
     for (u32 ix = 0; ix < 8; ix++) {
         MosInitAndRunThread(Threads[1], 3, StackPrintThread, 1, Stacks[2], DFT_STACK_SIZE + ix);
         if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
     }
+    if (test_pass) MosPrint(" Passed\n");
+    else {
+        MosPrint(" Failed\n");
+        tests_all_pass = false;
+    }
+    MosPrint("Misc Test 2: MosSNPrintf()\n");
+    char * dummy = "bummy_dummy_mummy_";
+    char buf[128];
+    if (MosSNPrintf(buf, 32, "%s%s%s", dummy, dummy, dummy) != 31) test_pass = false;
+    if (MosSNPrintf(buf, sizeof(buf), "%s", dummy) != strlen(dummy)) test_pass = false;
+    if (strcmp(buf, dummy)) test_pass = false;
+    if (MosSNPrintf(buf, 11, "%010llx", 0xdeadbee90) != 10) test_pass = false;
+    if (strcmp(buf, "0deadbee90")) test_pass = false;
+    if (MosSNPrintf(buf, 8, "%c%%%d%%d%c%", '*', -1, '$') != 7) test_pass = false;
+    if (strcmp(buf, "*%-1%d$")) test_pass = false;
     if (test_pass) MosPrint(" Passed\n");
     else {
         MosPrint(" Failed\n");
@@ -1834,7 +1850,7 @@ static s32 CmdTest(s32 argc, char * argv[]) {
 #endif
             if (MutexTests() == false) test_pass = false;
             if (HeapTests() == false) test_pass = false;
-            if (StackTests() == false) test_pass = false;
+            if (MiscTests() == false) test_pass = false;
         } else if (strcmp(argv[1], "thread") == 0) {
             test_pass = ThreadTests();
         } else if (strcmp(argv[1], "timer") == 0) {
@@ -1851,8 +1867,8 @@ static s32 CmdTest(s32 argc, char * argv[]) {
             test_pass = MutexTests();
         } else if (strcmp(argv[1], "heap") == 0) {
             test_pass = HeapTests();
-        } else if (strcmp(argv[1], "stack") == 0) {
-            test_pass = StackTests();
+        } else if (strcmp(argv[1], "misc") == 0) {
+            test_pass = MiscTests();
         } else return CMD_ERR_NOT_FOUND;
         if (test_pass) {
             MosPrint("Tests Passed\n");
