@@ -192,8 +192,9 @@ void * MosReAlloc(MosHeap * heap, void * _block, u32 _new_size) {
             u32 copy_size = _new_size < old_size ? _new_size : old_size;
             for (u32 ix = 0; ix < copy_size; ix++)
                 new_block[ix] = ((u8 *) _block)[ix];
+            // Only free block if successful
+            MosFree(heap, _block);
         }
-        MosFree(heap, _block);
         _block = new_block;
     }
     MosGiveMutex(&heap->mtx);
