@@ -82,7 +82,7 @@ typedef struct Thread {
     MosListElm tmr_e;
     u32 wake_tick;
     MosThreadPriority pri;
-    MosThreadPriority orig_pri;
+    MosThreadPriority nom_pri;
     u8 stop_request;
     u8 timed_out;
     s32 rtn_val;
@@ -227,7 +227,7 @@ static void InitThread(Thread * thd, MosThreadPriority pri,
     thd->sp = (u32)sf;
     thd->err_no = 0;
     thd->pri = pri;
-    thd->orig_pri = pri;
+    thd->nom_pri = pri;
     thd->stop_request = false;
     thd->stop_handler = DefaultStopHandler;
     thd->stop_arg = 0;
@@ -869,24 +869,28 @@ MosThreadPriority MosGetThreadPriority(MosThread * _thd) {
     return thd->pri;
 }
 
-void MosChangeThreadPriority(MosThread * _thd, MosThreadPriority pri) {
+void MosChangeThreadPriority(MosThread * _thd, MosThreadPriority new_pri) {
     Thread * thd = (Thread *)_thd;
     SetBasePri(IntPriMaskLow);
-    if (thd->orig_pri == pri) {
-        SetBasePri(0);
-        return;
-    }
-    // Set thread priority without disturbing ongoing priority inheritance
-    if (thd->pri == thd->orig_pri) {
-        thd->pri = pri;
+    // Snapshot the running thread priority (in case it gets changed)
+    MosThreadPriority curr_pri = 0;
+    if (RunningThread != NO_SUCH_THREAD) curr_pri = RunningThread->pri;
+    // Change current priority if priority inheritance isn't active
+    //  -OR- if new priority is higher than priority inheritance priority
+    if (thd->pri == thd->nom_pri || new_pri < thd->pri) {
+        thd->pri = new_pri;
         if (thd->state == THREAD_RUNNABLE) {
             MosRemoveFromList(&thd->run_e);
-            MosAddToList(&RunQueues[pri], &thd->run_e);
-            if (RunningThread != NO_SUCH_THREAD && (thd->pri < RunningThread->pri))
-                YieldThread();
+            MosAddToList(&RunQueues[new_pri], &thd->run_e);
         }
     }
-    thd->orig_pri = pri;
+    // Always change nominal priority
+    thd->nom_pri = new_pri;
+    // Yield if priority is lowered on currently running thread
+    //  -OR- if other thread has a greater priority than running thread
+    if (thd == RunningThread) {
+        if (thd->pri > curr_pri) YieldThread();
+    } else if (thd->pri < curr_pri) YieldThread();
     SetBasePri(0);
 }
 
@@ -1075,8 +1079,8 @@ static void MOS_USED YieldOnMutex(MosMutex * mtx) {
             MosRemoveFromList(&thd->tmr_e.link);
         SetThreadState(thd, THREAD_RUNNABLE);
         // Reset priority inheritance
-        if (RunningThread->pri != RunningThread->orig_pri) {
-            RunningThread->pri = RunningThread->orig_pri;
+        if (RunningThread->pri != RunningThread->nom_pri) {
+            RunningThread->pri = RunningThread->nom_pri;
             MosRemoveFromList(&RunningThread->run_e);
             MosAddToFrontOfList(&RunQueues[RunningThread->pri],
                                     &RunningThread->run_e);
