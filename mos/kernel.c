@@ -391,9 +391,9 @@ static u32 MOS_USED Scheduler(u32 sp) {
         }
         if (tmr_ticks_rem != 0x7fffffff) {
             // This ensures that the LOAD value will fit in SysTick counter...
-            if (tmr_ticks_rem < MaxTickInterval)
-                next_tick_interval = tmr_ticks_rem;
-            else next_tick_interval = MaxTickInterval;
+            if (tmr_ticks_rem < MaxTickInterval) {
+                next_tick_interval = (tmr_ticks_rem <= 0) ? 1 : tmr_ticks_rem;
+            } else next_tick_interval = MaxTickInterval;
         } else if (MOS_KEEP_TICKS_RUNNING == false) {
             next_tick_interval = 0;
         } else next_tick_interval = MaxTickInterval;
@@ -570,8 +570,10 @@ static void MOS_USED SetTimeout(u32 ticks) {
 }
 
 void MosDelayThread(u32 ticks) {
-    SetTimeout(ticks);
-    SetRunningThreadStateAndYield(THREAD_WAIT_FOR_TICK);
+    if (ticks) {
+        SetTimeout(ticks);
+        SetRunningThreadStateAndYield(THREAD_WAIT_FOR_TICK);
+    } else YieldThread();
 }
 
 void MOS_NAKED MosDelayMicroSec(u32 usec) {

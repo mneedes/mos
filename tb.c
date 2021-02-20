@@ -10,6 +10,7 @@
 
 #include <errno.h>
 #include <string.h>
+#include <stdlib.h>
 
 #include <mos/kernel.h>
 #include <mos/heap.h>
@@ -500,6 +501,29 @@ static bool TimerTests(void) {
     u32 exp_iter = test_time / timer_test_delay;
     bool tests_all_pass = true;
     bool test_pass;
+    //
+    // Zero timers
+    //
+    test_pass = true;
+    MosPrint("Thread Timer Test 0\n");
+    ClearHistogram();
+    MosInitAndRunThread(Threads[1], 1, ThreadTimerTestThreadOdd, 0, Stacks[1], DFT_STACK_SIZE);
+    MosInitAndRunThread(Threads[2], 1, ThreadTimerTestThreadOdd, 37 | 0x10000, Stacks[2], DFT_STACK_SIZE);
+    MosDelayThread(test_time);
+    MosRequestThreadStop(Threads[1]);
+    MosRequestThreadStop(Threads[2]);
+    if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
+    if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
+    DisplayHistogram(2);
+    if (TestHisto[1] != (test_time / 37) + 1) test_pass = false;
+    // Bad time checks
+    MosDelayThread(0);
+    MosDelayThread((u32)(-4));
+    if (test_pass) MosPrint(" Passed\n");
+    else {
+        MosPrint(" Failed\n");
+        tests_all_pass = false;
+    }
     //
     // Run uniform timers
     //
@@ -1808,6 +1832,10 @@ static bool MiscTests(void) {
         MosPrint(" Failed\n");
         tests_all_pass = false;
     }
+    //
+    // MosSNPrintf
+    //
+    test_pass = true;
     MosPrint("Misc Test 2: MosSNPrintf()\n");
     char * dummy = "bummy_dummy_mummy_";
     char buf[128];
@@ -1845,6 +1873,21 @@ static bool MiscTests(void) {
     p0 = 0x7ff8000000000001;
     MosSNPrintf(buf, sizeof(buf), "%f", *pf);
     if (strcmp(buf, "NaN")) test_pass = false;
+    if (test_pass) MosPrint(" Passed\n");
+    else {
+        MosPrint(" Failed\n");
+        tests_all_pass = false;
+    }
+    //
+    // String tests
+    //
+    MosPrint("Misc Test 3: strtod()\n");
+    double exp = 1.87554603778e-18;
+    double diff = exp / 10.0;
+    char * str3p0 = "1.87554603778e-18";
+    char * ptr = NULL;
+    double res = strtod(str3p0, &ptr);
+    if (res < exp - diff || res > exp + diff) test_pass = false;
     if (test_pass) MosPrint(" Passed\n");
     else {
         MosPrint(" Failed\n");
