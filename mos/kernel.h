@@ -124,6 +124,7 @@ MOS_ISR_SAFE void MosEnableInterrupts(void);
 // Time and Delays
 
 u32 MosGetTickCount(void);
+// Delay thread a number of ticks, zero yields thread.
 void MosDelayThread(u32 ticks);
 // For short delays, e.g.: useful for bit-banging.
 //   Keep in mind there is an upper limit to usec.
