@@ -23,7 +23,6 @@
     #define ENABLE_FP_CONTEXT_SAVE    1
   #else
     #define ENABLE_FP_CONTEXT_SAVE    0
-    #error "Processor does not support hardware floating point"
   #endif
 #else
   #define ENABLE_FP_CONTEXT_SAVE    0
