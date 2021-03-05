@@ -34,7 +34,7 @@
 // TODO: Deterministic allocations using power of 2 bins.
 
 enum {
-    HEAP_CANARY_VALUE = 0xE711DEAD,
+    HEAP_CANARY_VALUE = 0xe711dead,
     MIN_PAYLOAD_SIZE  = sizeof(MosList)
 };
 
@@ -59,11 +59,11 @@ void MosInitHeap(MosHeap * heap, u8 * _bot, u32 heap_size, u32 alignment) {
     alignment = (alignment > sizeof(void *)) ? alignment : sizeof(void *);
     heap->align_mask = alignment - 1;
     MosAssert((alignment & heap->align_mask) == 0);
-    heap->min_block_size = MOS_ALIGN32(MIN_PAYLOAD_SIZE + sizeof(Link), alignment - 1);
+    heap->min_block_size = MOS_ALIGN32(MIN_PAYLOAD_SIZE + sizeof(Link), heap->align_mask);
     // Initialize implicit links
-    Link * ptr  = (Link *) MOS_ALIGN_PTR(_bot + sizeof(Link), alignment - 1);
+    Link * ptr  = (Link *) MOS_ALIGN_PTR(_bot + sizeof(Link), heap->align_mask);
     Block * bot = (Block *) (ptr - 1);
-    ptr         = (Link *) MOS_ALIGN_PTR_DOWN(_bot + heap_size, alignment - 1);
+    ptr         = (Link *) MOS_ALIGN_PTR_DOWN(_bot + heap_size, heap->align_mask);
     Block * top = (Block *) (ptr - 1);
     bot->link.canary = HEAP_CANARY_VALUE;
     bot->link.size_p = 0x1;

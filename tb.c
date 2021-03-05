@@ -14,6 +14,7 @@
 
 #include <mos/kernel.h>
 #include <mos/heap.h>
+#include <mos/slab.h>
 #include <mos/thread_heap.h>
 #include <mos/format_string.h>
 #include <mos/trace.h>
@@ -1712,67 +1713,156 @@ static bool HeapTests(void) {
     }
 #endif
     //
+    // Slabs 1
+    //
+    test_pass = true;
+    MosPrint("Heap Test 4: Slabs\n");
+    {
+        const u32 alignment = 4;
+        const u32 block_size = 20;
+        MosInitHeap(&TestHeapDesc, TestHeap, sizeof(TestHeap), 8);
+        MosPool TestPoolDesc;
+        MosInitPool(&TestPoolDesc, &TestHeapDesc, 32, 20, alignment);
+        if (MosAllocFromSlab(&TestPoolDesc) != NULL) test_pass = false;
+        if (MosAddSlabsToPool(&TestPoolDesc, 2) != 2) test_pass = false;
+        u8 * block[64];
+        for (u32 ix = 0; ix < count_of(block); ix++) {
+            block[ix] = MosAllocFromSlab(&TestPoolDesc);
+            if (!block[ix]) test_pass = false;
+            if ((u32)block[ix] % alignment != 0) test_pass = false;
+            memset(block[ix], 0xa5, block_size);
+        }
+        if (MosAllocFromSlab(&TestPoolDesc) != NULL) test_pass = false;
+        for (u32 ix = 0; ix < count_of(block); ix++) {
+            MosFreeToSlab(&TestPoolDesc, block[ix]);
+        }
+        if (MosFreeUnallocatedSlabs(&TestPoolDesc, 2) != 2) test_pass = false;
+        if (MosAllocFromSlab(&TestPoolDesc) != NULL) test_pass = false;
+        if (MosAddSlabsToPool(&TestPoolDesc, 2) != 2) test_pass = false;
+        for (u32 ix = 0; ix < count_of(block); ix++) {
+            block[ix] = MosAllocFromSlab(&TestPoolDesc);
+            if (!block[ix]) test_pass = false;
+            if ((u32)block[ix] % alignment != 0) test_pass = false;
+            memset(block[ix], 0x5a, block_size);
+        }
+        if (MosAllocFromSlab(&TestPoolDesc) != NULL) test_pass = false;
+        for (u32 ix = 0; ix < count_of(block); ix++) {
+            MosFreeToSlab(&TestPoolDesc, block[count_of(block) - ix - 1]);
+        }
+        if (MosFreeUnallocatedSlabs(&TestPoolDesc, 2) != 2) test_pass = false;
+        if (MosAllocFromSlab(&TestPoolDesc) != NULL) test_pass = false;
+    }
+    if (test_pass) MosPrint(" Passed\n");
+    else {
+        MosPrint(" Failed\n");
+        tests_all_pass = false;
+    }
+    //
+    // Slabs 2
+    //
+    test_pass = true;
+    MosPrint("Heap Test 5: Slabs 2\n");
+    {
+        const u32 alignment = 32;
+        const u32 block_size = 64;
+        MosInitHeap(&TestHeapDesc, TestHeap, sizeof(TestHeap), 8);
+        MosPool TestPoolDesc;
+        MosInitPool(&TestPoolDesc, &TestHeapDesc, 64, block_size, alignment);
+        if (MosAddSlabsToPool(&TestPoolDesc, 2) != 2) test_pass = false;
+        u8 * block[128];
+        for (u32 ix = 0; ix < count_of(block); ix++) {
+            block[ix] = MosAllocFromSlab(&TestPoolDesc);
+            if (!block[ix]) test_pass = false;
+            if ((u32)block[ix] % alignment != 0) test_pass = false;
+            memset(block[ix], 0xa5, block_size);
+        }
+        if (MosAllocFromSlab(&TestPoolDesc) != NULL) test_pass = false;
+        for (u32 ix = 0; ix < count_of(block); ix++) {
+            MosFreeToSlab(&TestPoolDesc, block[ix]);
+        }
+        if (MosFreeUnallocatedSlabs(&TestPoolDesc, 2) != 2) test_pass = false;
+        if (MosAllocFromSlab(&TestPoolDesc) != NULL) test_pass = false;
+        if (MosAddSlabsToPool(&TestPoolDesc, 2) != 2) test_pass = false;
+        for (u32 ix = 0; ix < count_of(block); ix++) {
+            block[ix] = MosAllocFromSlab(&TestPoolDesc);
+            if (!block[ix]) test_pass = false;
+            if ((u32)block[ix] % alignment != 0) test_pass = false;
+            memset(block[ix], 0x5a, block_size);
+        }
+        if (MosAllocFromSlab(&TestPoolDesc) != NULL) test_pass = false;
+        for (u32 ix = 0; ix < count_of(block); ix++) {
+            MosFreeToSlab(&TestPoolDesc, block[count_of(block) - ix - 1]);
+        }
+        if (MosFreeUnallocatedSlabs(&TestPoolDesc, 2) != 2) test_pass = false;
+        if (MosAllocFromSlab(&TestPoolDesc) != NULL) test_pass = false;
+    }
+    if (test_pass) MosPrint(" Passed\n");
+    else {
+        MosPrint(" Failed\n");
+        tests_all_pass = false;
+    }
+    //
     // Reallocation
     //
     test_pass = true;
-    MosPrint("Heap Test 5: Reallocation\n");
+    MosPrint("Heap Test 6: Reallocation\n");
     u32 alignment = 8;
     MosInitHeap(&TestHeapDesc, TestHeap, sizeof(TestHeap), alignment);
     u8 * fun[8];
-    for (u8 ix = 0; ix < count_of(fun); ix++) {
+    for (u32 ix = 0; ix < count_of(fun); ix++) {
         fun[ix] = MosAlloc(&TestHeapDesc, 400);
         if (fun[ix] == NULL) test_pass = false;
         else memset(fun[ix], ix, 400);
         if (((u32)fun[ix] & (alignment - 1)) != 0) test_pass = false;
     }
-    for (u8 ix = 0; ix < count_of(fun); ix++) {
+    for (u32 ix = 0; ix < count_of(fun); ix++) {
         fun[ix] = MosReAlloc(&TestHeapDesc, fun[ix], 600);
         if (fun[ix] == NULL) test_pass = false;
         if (((u32)fun[ix] & (alignment - 1)) != 0) test_pass = false;
     }
-    for (u8 ix = 0; ix < count_of(fun); ix++) {
+    for (u32 ix = 0; ix < count_of(fun); ix++) {
         if (fun[ix] != NULL) {
             for (u32 iy = 0; iy < 400; iy++) {
                 if (fun[ix][iy] != ix) test_pass = false;
             }
         }
     }
-    for (u8 ix = 0; ix < count_of(fun); ix++) {
+    for (u32 ix = 0; ix < count_of(fun); ix++) {
         fun[ix] = MosReAlloc(&TestHeapDesc, fun[ix], 400);
         if (fun[ix] == NULL) test_pass = false;
         if (((u32)fun[ix] & (alignment - 1)) != 0) test_pass = false;
     }
-    for (u8 ix = 0; ix < count_of(fun); ix++) {
+    for (u32 ix = 0; ix < count_of(fun); ix++) {
         if (fun[ix] != NULL) {
             for (u32 iy = 0; iy < 400; iy++) {
                 if (fun[ix][iy] != ix) test_pass = false;
             }
         }
     }
-    for (u8 ix = 0; ix < count_of(fun); ix++) {
+    for (u32 ix = 0; ix < count_of(fun); ix++) {
         fun[ix] = MosReAlloc(&TestHeapDesc, fun[ix], 100);
         if (fun[ix] == NULL) test_pass = false;
         if (((u32)fun[ix] & (alignment - 1)) != 0) test_pass = false;
     }
-    for (u8 ix = 0; ix < count_of(fun); ix++) {
+    for (u32 ix = 0; ix < count_of(fun); ix++) {
         if (fun[ix] != NULL) {
             for (u32 iy = 0; iy < 100; iy++) {
                 if (fun[ix][iy] != ix) test_pass = false;
             }
         }
     }
-    for (u8 ix = 0; ix < count_of(fun); ix++) {
+    for (u32 ix = 0; ix < count_of(fun); ix++) {
         fun[ix] = MosReAlloc(&TestHeapDesc, fun[ix], 128);
         if (fun[ix] == NULL) test_pass = false;
     }
-    for (u8 ix = 0; ix < count_of(fun); ix++) {
+    for (u32 ix = 0; ix < count_of(fun); ix++) {
         if (fun[ix] != NULL) {
             for (u32 iy = 0; iy < 100; iy++) {
                 if (fun[ix][iy] != ix) test_pass = false;
             }
         }
     }
-    for (u8 ix = 0; ix < count_of(fun); ix++) {
+    for (u32 ix = 0; ix < count_of(fun); ix++) {
         MosFree(&TestHeapDesc, fun[ix]);
     }
     if (test_pass) MosPrint(" Passed\n");
@@ -1784,7 +1874,7 @@ static bool HeapTests(void) {
     // Exhaustion
     //
     test_pass = true;
-    MosPrint("Heap Test 6: Exhaustion\n");
+    MosPrint("Heap Test 7: Exhaustion\n");
     {
         const u32 bs1 = 64;
         u32 ctr = 0;
