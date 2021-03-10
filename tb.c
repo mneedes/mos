@@ -87,7 +87,7 @@ void EXTI0_IRQHandler(void) {
     TestHisto[0]++;
 }
 
-void EXTI1_IRQHandler(void) {
+void EXTI10_IRQHandler(void) {
     if (MosTrySendToQueue(&TestQueue, 1)) TestHisto[0]++;
 }
 
@@ -1009,7 +1009,7 @@ static const u32 queue_test_delay = 50;
 static s32 QueueTestPendIRQ(s32 arg) {
     for (;;) {
         // Fire Software Interrupt
-        NVIC_SetPendingIRQ(EXTI1_IRQn);
+        NVIC_SetPendingIRQ(EXTI10_IRQn);
         MosDelayThread(queue_test_delay);
         if (MosIsStopRequested()) break;
     }
@@ -1971,6 +1971,7 @@ static bool MiscTests(void) {
     //
     // String tests
     //
+    test_pass = true;
     MosPrint("Misc Test 3: strtod()\n");
     double exp = 1.87554603778e-18;
     double diff = exp / 10.0;
@@ -2210,7 +2211,7 @@ static s32 TestShell(s32 arg) {
 
 int InitTestBench() {
     NVIC_EnableIRQ(EXTI0_IRQn);
-    NVIC_EnableIRQ(EXTI1_IRQn);
+    NVIC_EnableIRQ(EXTI10_IRQn);
 
     MosRegisterEventHook(EventCallback);
 
