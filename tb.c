@@ -87,7 +87,7 @@ void EXTI0_IRQHandler(void) {
     TestHisto[0]++;
 }
 
-void EXTI10_IRQHandler(void) {
+void EXTI1_IRQHandler(void) {
     if (MosTrySendToQueue(&TestQueue, 1)) TestHisto[0]++;
 }
 
@@ -1009,7 +1009,7 @@ static const u32 queue_test_delay = 50;
 static s32 QueueTestPendIRQ(s32 arg) {
     for (;;) {
         // Fire Software Interrupt
-        NVIC_SetPendingIRQ(EXTI10_IRQn);
+        NVIC_SetPendingIRQ(EXTI1_IRQn);
         MosDelayThread(queue_test_delay);
         if (MosIsStopRequested()) break;
     }
@@ -2047,9 +2047,12 @@ static volatile bool PigeonFlag = false;
 static s32 PigeonThread(s32 arg) {
     u32 cnt = 0;
     while (1) {
-        MosDelayThread(877);
-        MosPrintf("Incoming ---- .. .. %u %08X.. ------\n", cnt,
-                       MosGetStackDepth(MosGetStackBottom(NULL) + DFT_STACK_SIZE));
+        u64 last = MosGetCycleCount();
+        MosDelayThread(1000);
+        u32 dur = MosGetCycleCount() - last;
+        MosPrintf("Incoming ---- .. .. %u %08X.. %lu ------\n", cnt,
+                       MosGetStackDepth(MosGetStackBottom(NULL) + DFT_STACK_SIZE),
+                       dur);
         cnt++;
     }
     return 0;
@@ -2211,19 +2214,13 @@ static s32 TestShell(s32 arg) {
 
 int InitTestBench() {
     NVIC_EnableIRQ(EXTI0_IRQn);
-    NVIC_EnableIRQ(EXTI10_IRQn);
+    NVIC_EnableIRQ(EXTI1_IRQn);
+
+    //DWT->CYCCNT -> COOL, High resolution timer built-in
 
     MosRegisterEventHook(EventCallback);
 
     MosInitHeap(&TestThreadHeapDesc, TestThreadHeap, sizeof(TestThreadHeap), MOS_STACK_ALIGNMENT);
-#if 0
-    MosReserveBlockSize(&TestThreadHeapDesc, 1024);
-    MosReserveBlockSize(&TestThreadHeapDesc, 512);
-    MosReserveBlockSize(&TestThreadHeapDesc, 256);
-    MosReserveBlockSize(&TestThreadHeapDesc, 128);
-    MosReserveBlockSize(&TestThreadHeapDesc, 64);
-#endif
-
     MosInitThreadHeap(&TestThreadHeapDesc);
 
     if (!MosAllocAndRunThread(&Threads[TEST_SHELL_THREAD_ID], 0, TestShell,
