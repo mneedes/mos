@@ -133,7 +133,7 @@ static u32 IntDisableCount = 0;
 
 // Timers and Ticks
 static MosList TimerQueue;
-static volatile Ticker Tick = { .count = MOS_START_TICK_COUNT };
+static volatile Ticker MOS_ALIGNED(8) Tick = { .count = MOS_START_TICK_COUNT };
 static s32 MaxTickInterval;
 static u32 CyclesPerTick;
 static u32 MOS_USED CyclesPerMicroSec;
@@ -247,7 +247,9 @@ static void InitThread(Thread * thd, MosThreadPriority pri,
 }
 
 void SysTick_Handler(void) {
-    Tick.count += 1;
+    asm volatile ( "cpsid if" );
+    if (SysTick->CTRL & SysTick_CTRL_COUNTFLAG_Msk) Tick.count += 1;
+    asm volatile ( "cpsie if" );
     if (RunningThread == NO_SUCH_THREAD) return;
     // Process timer queue
     //  Timer queues can contain threads or message timers
@@ -283,7 +285,8 @@ void SysTick_Handler(void) {
 //   Since semaphore data structures can be manipulated in high-priority
 //   ISR contexts interrupt disable is required to ensure data integrity.
 //   Interrupts must be disabled for anything that manipulates the IRQ
-//   event queue or manipulates/inspects semaphore pend queues.
+//   event queue or manipulates/inspects semaphore pend queues.  For
+//   mutexes and timers changing BASEPRI provides sufficient locking.
 
 static u32 MOS_USED Scheduler(u32 sp) {
     EVENT(SCHEDULER_ENTRY, 0);
@@ -514,15 +517,11 @@ void MosAdvanceTickCount(u32 ticks) {
 }
 
 u64 MosGetCycleCount(void) {
-    u64 tmp = Tick.count;
+    asm volatile ( "cpsid if " );
+    if (SysTick->CTRL & SysTick_CTRL_COUNTFLAG_Msk) Tick.count++;
+    s64 tmp = Tick.count;
     u32 val = SysTick->VAL;
-    asm volatile ( "dmb" );
-    // Detect rollover condition
-    if (tmp != Tick.count) {
-        // If first or second rolled over, take third sample
-        tmp = Tick.count;
-        val = SysTick->VAL;
-    }
+    asm volatile ( "cpsie if " );
     return (tmp * CyclesPerTick) - val;
 }
 
@@ -608,10 +607,11 @@ static s32 IdleThreadEntry(s32 arg) {
     MOS_UNUSED(arg);
     while (1) {
         // TODO: KEEP_TICKS_RUNNING ?
-        bool tick_wait = false;
         s32 tmr_ticks_rem = 0x7fffffff;
         u32 tick_interval = MaxTickInterval;
+        u32 load = 0;
         asm volatile ( "cpsid i" );
+        // Figure out how long to wait
         if (!MosIsListEmpty(&TimerQueue)) {
             if (((MosListElm *)TimerQueue.next)->type == ELM_THREAD) {
                 Thread * thd = container_of(TimerQueue.next, Thread, tmr_e);
@@ -624,35 +624,34 @@ static s32 IdleThreadEntry(s32 arg) {
         if (tmr_ticks_rem != 0x7fffffff) {
             if (tmr_ticks_rem < MaxTickInterval)
                 tick_interval = tmr_ticks_rem;
-            tick_wait = true;
-            SysTick->LOAD = tick_interval * CyclesPerTick - 1;
+            load = tick_interval * CyclesPerTick - 1;
+            SysTick->LOAD = load;
             SysTick->VAL = 0;
         }
         if (SleepHook) (*SleepHook)();
         asm volatile (
             "dsb\n\t"
             "wfi\n\t"
+            "cpsid if\n\t"
         );
         if (WakeHook) (*WakeHook)();
-        if (tick_wait) {
-            u32 load = SysTick->LOAD;
-            u32 val = SysTick->VAL;
-            u32 ctrl = SysTick->CTRL;
-
-            if (ctrl & SysTick_CTRL_COUNTFLAG_Msk) {
-                Tick.count += (tick_interval - 1);
+        if (load) {
+            if (SysTick->CTRL & SysTick_CTRL_COUNTFLAG_Msk) {
+                // If counter rolled over then account for all ticks
+                //   except one (which will be incremented in SysTick)
+                Tick.count += tick_interval;
                 SysTick->LOAD = CyclesPerTick - 1;
                 SysTick->VAL = 0;
             } else {
-                u32 adj = (load - val) / CyclesPerTick;
+                // Interrupt was early so account for elapsed ticks
+                u32 adj = (load - SysTick->VAL) / CyclesPerTick;
                 SysTick->LOAD = load - (adj * CyclesPerTick);
                 SysTick->VAL = 0;
                 SysTick->LOAD = CyclesPerTick - 1;
                 Tick.count += adj;
             }
-            SysTick->CTRL = SYSTICK_CTRL_ENABLE;
         }
-        asm volatile ( "cpsie i\n\t"
+        asm volatile ( "cpsie if\n\t"
                        "dsb\n\t"
                        "isb\n\t" );
     }

@@ -84,11 +84,13 @@ static void DisplayHistogram(u32 cnt) {
 
 void EXTI0_IRQHandler(void) {
     MosGiveSem(&TestSem);
+    TestHisto[33] = MosGetCycleCount() >> 32;
     TestHisto[0]++;
 }
 
 void EXTI1_IRQHandler(void) {
     if (MosTrySendToQueue(&TestQueue, 1)) TestHisto[0]++;
+    TestHisto[33] = MosGetCycleCount() >> 32;
 }
 
 void EventCallback(MosEvent evt, u32 val) {
