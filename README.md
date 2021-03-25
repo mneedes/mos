@@ -7,7 +7,7 @@ MOS was originally developed on a SGS-Thomson STM32F4Discovery and has also been
 
 Design Goals:
 * RTOS: Hard priorities and bounded execution
-* Short critical sections: Interrupts are disabled for very short sections, BASEPRI is instead used for scheduler locking-allowing high priority interrupts to interrupt scheduler.
+* Short critical sections: Interrupts are disabled for short sections, BASEPRI is instead used for scheduler locking-allowing high priority interrupts to interrupt scheduler.
 * Simple configuration with low use of conditional compilation.
 * Tick reduction (_i.e.:_ the so-called "tickless" operation)
 * Small code size (_e.g.:_ mos/kernel.c compiled size is ~5KB)
@@ -28,12 +28,14 @@ Included Optional Modules:
 
 Supported toolchains / architectures:
 * GCC
-* ARM M3/M4/M7
-* M4F/M7F (hardware floating point using lazy stacking)
+* ARM M3/M4/M7 (Arch v7-M)
+* ARM M4F/M7F (Arch v7-M with hardware floating point using lazy stacking)
+* ARM M23/M33/M55 (Arch v8-M) Non-Secure (No TrustZone (yet))
 
 Future
-* C++ bindings
+* TrustZone support
 * M0/M0+/M1
+* C++ bindings
 
 Features it probably WILL NEVER have:
 * MPU support
