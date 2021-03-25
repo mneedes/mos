@@ -192,7 +192,6 @@ static bool ThreadTests(void) {
     u32 exp_iter = test_time / pri_test_delay;
     bool tests_all_pass = true;
     bool test_pass;
-#if 1
     //
     // Highest priorities must starve lowest
     //
@@ -276,7 +275,6 @@ static bool ThreadTests(void) {
     //
     // Set and Restore errno
     //
-#endif
     //
     // Dynamic threads
     //
@@ -309,7 +307,6 @@ static bool ThreadTests(void) {
         MosPrint(" Failed\n");
         tests_all_pass = false;
     }
-#if 1
     //
     // Kill Thread using Default Handler
     //
@@ -362,7 +359,6 @@ static bool ThreadTests(void) {
         MosPrint(" Failed\n");
         tests_all_pass = false;
     }
-#if 1
     //
     // Thread exception handler
     //
@@ -376,7 +372,6 @@ static bool ThreadTests(void) {
         MosPrint(" Failed\n");
         tests_all_pass = false;
     }
-#endif
     //
     // Assertion test
     //
@@ -415,7 +410,6 @@ static bool ThreadTests(void) {
             MosPrint(" Failed\n");
             tests_all_pass = false;
         }
-#if 1
         test_pass = true;
         MosPrint("Exception in FP thread\n");
         ClearHistogram();
@@ -427,9 +421,7 @@ static bool ThreadTests(void) {
             MosPrint(" Failed\n");
             tests_all_pass = false;
         }
-#endif
     }
-#endif
     return tests_all_pass;
 }
 
@@ -1907,6 +1899,15 @@ static s32 StackPrintThread(s32 arg) {
     return TEST_PASS;
 }
 
+#if (__ARM_ARCH_8M_MAIN__ == 1U) || (defined(__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE >= 3))
+
+static s32 StackOverflowThread(s32 arg) {
+    MosSetStopArg(MosGetThread(), TEST_PASS_HANDLER + 1);
+    return StackOverflowThread(arg);
+}
+
+#endif
+
 static bool MiscTests(void) {
     bool tests_all_pass = true;
     bool test_pass;
@@ -1916,7 +1917,7 @@ static bool MiscTests(void) {
     test_pass = true;
     MosPrint("Misc Test 1: Stack and 64-bit print alignment\n");
     for (u32 ix = 0; ix < 8; ix++) {
-        MosInitAndRunThread(Threads[1], 3, StackPrintThread, 1, Stacks[2], DFT_STACK_SIZE + ix);
+        MosInitAndRunThread(Threads[1], 3, StackPrintThread, 1, Stacks[1], DFT_STACK_SIZE + ix);
         if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
     }
     if (test_pass) MosPrint(" Passed\n");
@@ -1928,7 +1929,7 @@ static bool MiscTests(void) {
     // Stack Stats
     //
     test_pass = true;
-    MosPrint("Misc Test 2: Stack stats\n");
+    MosPrint("Misc Test: Stack stats\n");
     {
         u32 size = 0, usage = 0, max_usage = 0;
         MosGetStackStats(MosGetThread(), &size, &usage, &max_usage);
@@ -1940,11 +1941,25 @@ static bool MiscTests(void) {
         MosPrint(" Failed\n");
         tests_all_pass = false;
     }
+#if (__ARM_ARCH_8M_MAIN__ == 1U) || (defined(__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE >= 3))
+    //
+    // PSPLIM tests
+    //
+    test_pass = true;
+    MosPrint("Misc Test: PSPLIM\n");
+    MosInitAndRunThread(Threads[1], 2, StackOverflowThread, 0, Stacks[2], DFT_STACK_SIZE);
+    if (MosWaitForThreadStop(Threads[1]) != TEST_PASS_HANDLER + 1) test_pass = false;
+    if (test_pass) MosPrint(" Passed\n");
+    else {
+        MosPrint(" Failed\n");
+        tests_all_pass = false;
+    }
+#endif
     //
     // MosSNPrintf
     //
     test_pass = true;
-    MosPrint("Misc Test 3: MosSNPrintf()\n");
+    MosPrint("Misc Test: MosSNPrintf()\n");
     char * dummy = "bummy_dummy_mummy_";
     char buf[128];
     if (MosSNPrintf(buf, 32, "%s%s%s", dummy, dummy, dummy) != 31) test_pass = false;
@@ -1990,7 +2005,7 @@ static bool MiscTests(void) {
     // String tests
     //
     test_pass = true;
-    MosPrint("Misc Test 4: strtod()\n");
+    MosPrint("Misc Test: strtod()\n");
     double exp = 1.87554603778e-18;
     double diff = exp / 10.0;
     char * str3p0 = "1.87554603778e-18";
@@ -2232,7 +2247,7 @@ static s32 TestShell(s32 arg) {
 
 int InitTestBench() {
     NVIC_EnableIRQ(EXTI0_IRQn);
-    NVIC_EnableIRQ(EXTI1_IRQn);
+    NVIC_EnableIRQ(EXTI10_IRQn);
 
     //DWT->CYCCNT -> COOL, High resolution timer built-in
 

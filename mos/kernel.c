@@ -28,6 +28,12 @@
   #define ENABLE_FP_CONTEXT_SAVE    false
 #endif
 
+#if (__ARM_ARCH_8M_MAIN__ == 1U) || (defined(__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE >= 3))
+  #define ENABLE_SPLIM_SUPPORT      true
+#else
+  #define ENABLE_SPLIM_SUPPORT      false
+#endif
+
 #define NO_SUCH_THREAD       NULL
 #define STACK_CANARY         0xca5eca11
 
@@ -368,6 +374,9 @@ static u32 MOS_USED Scheduler(u32 sp) {
         if (!MosIsLastElement(&RunQueues[run_thd->pri], &run_thd->run_e))
             MosMoveToEndOfList(&RunQueues[run_thd->pri], &run_thd->run_e);
     } else run_thd = &IdleThread;
+    if (ENABLE_SPLIM_SUPPORT) {
+        asm volatile ( "MSR psplim, %0" : : "r" (run_thd->stack_bottom) );
+    }
     // Set next thread ID and errno and return its stack pointer
     RunningThread = run_thd;
     *ErrNo = RunningThread->err_no;
@@ -375,7 +384,7 @@ static u32 MOS_USED Scheduler(u32 sp) {
     return (u32)RunningThread->sp;
 }
 
-#if (ENABLE_FP_CONTEXT_SAVE == 1)
+#if (ENABLE_FP_CONTEXT_SAVE == true)
 
 void MOS_NAKED PendSV_Handler(void) {
     // Floating point context switch (lazy stacking)
