@@ -35,7 +35,7 @@
 #endif
 
 #define NO_SUCH_THREAD       NULL
-#define STACK_CANARY         0xca5eca11
+#define STACK_FILL_VALUE     0xca5eca11
 
 /* The parameter is really used, but tell compiler it is unused to reject warnings */
 #define MOS_USED_PARAM(x)    MOS_UNUSED(x)
@@ -223,21 +223,27 @@ static s32 DefaultStopHandler(s32 arg) {
 static void InitThread(Thread * thd, MosThreadPriority pri,
                        MosThreadEntry * entry, s32 arg,
                        u8 * stack_bottom, u32 stack_size) {
-    // Initialize Stack, placing canary at bottom and top.
     u8 * sp = stack_bottom;
-    *((u32 *)sp) = STACK_CANARY;
     // Ensure 8-byte alignment for ARM / varargs compatibility.
     sp = (u8 *) ((u32)(sp + stack_size - sizeof(u32)) & 0xfffffff8);
-    *((u32 *)sp) = STACK_CANARY;
-    StackFrame * sf = (StackFrame *) sp;
-    sf--;
-    // Set Thumb Mode
+    // Place canary value at top and fill out initial frame
+    *((u32 *)sp) = STACK_FILL_VALUE;
+    StackFrame * sf = (StackFrame *)sp - 1;
     sf->PSR = 0x01000000;
     sf->PC = (u32)entry;
     sf->LR = (u32)ThreadExit;
     sf->R12 = 0;
     sf->HWSAVE[0] = arg;
     sf->LR_EXC = 0xfffffffd;
+    // Either fill lower stack OR just place canary value at bottom
+    if (MOS_STACK_USAGE_MONITOR) {
+        u32 * fill = (u32 *)sf - 1;
+        for (; fill >= (u32 *)stack_bottom; fill--) {
+            *fill = STACK_FILL_VALUE;
+        }
+    } else {
+        *((u32 *)stack_bottom) = STACK_FILL_VALUE;
+    }
     // Initialize context and state
     thd->sp = (u32)sf;
     thd->err_no = 0;
@@ -355,7 +361,7 @@ static u32 MOS_USED Scheduler(u32 sp) {
                 SetThreadState(thd, THREAD_RUNNABLE);
             } else asm volatile ( "cpsie if" );
         } else {
-            asm volatile ("cpsie if");
+            asm volatile ( "cpsie if" );
             break;
         }
     }
@@ -452,10 +458,10 @@ void MOS_USED FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 lr) {
         s32 num_words = 16;
         if (use_psp && RunningThread != NO_SUCH_THREAD) {
             u8 * sp2 = RunningThread->stack_bottom;
-            if (*((u32 *)sp2) != STACK_CANARY)
+            if (*((u32 *)sp2) != STACK_FILL_VALUE)
                 (*PrintfHook)("!!! Thread Stack corruption (bottom) !!!\n");
             sp2 = (u8 *) ((u32)(sp2 + RunningThread->stack_size - sizeof(u32)) & 0xfffffff8);
-            if (*((u32 *)sp2) != STACK_CANARY)
+            if (*((u32 *)sp2) != STACK_FILL_VALUE)
                 (*PrintfHook)("!!! Thread Stack corruption (top) !!!\n");
             s32 rem_words = ((u32 *) sp2) - sp;
             if (rem_words < 64) num_words = rem_words;
@@ -771,11 +777,19 @@ void MosGetStackStats(MosThread * _thd, u32 * stack_size, u32 * stack_usage, u32
     Thread * thd = (Thread *)_thd;
     SetBasePri(IntPriMaskLow);
     *stack_size = thd->stack_size;
+    u8 * stack_top = thd->stack_bottom + *stack_size;
     if (thd == RunningThread)
-        *stack_usage = MosGetStackDepth(thd->stack_bottom + *stack_size);
+        *stack_usage = MosGetStackDepth(stack_top);
     else
-        *stack_usage = (thd->stack_bottom + *stack_size) - (u8 *)thd->sp;
-    *max_stack_usage = 0;
+        *stack_usage = stack_top - (u8 *)thd->sp;
+    if (MOS_STACK_USAGE_MONITOR) {
+        u32 * check = (u32 *)thd->stack_bottom;
+        while (*check++ == STACK_FILL_VALUE);
+        *max_stack_usage = stack_top - (u8 *)check + 4;
+    }
+    else {
+        *max_stack_usage = *stack_usage;
+    }
     SetBasePri(0);
 }
 

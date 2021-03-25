@@ -33,8 +33,7 @@
 #define MOS_FP_CONTEXT_SWITCHING    true
 
 // Monitor maximum stack usage on context switches
-//  Adds some CPU overhead if enabled.
-#define MOS_STACK_USAGE_MONITOR     false
+#define MOS_STACK_USAGE_MONITOR     true
 
 // Keep tick interrupt running at slowest rate to maintain
 // time even when there are no timer events scheduled.
