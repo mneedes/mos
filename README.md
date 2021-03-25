@@ -3,7 +3,7 @@ MOS, or Maintainable RTOS, is a simple and lightweight RTOS micro-kernel for ARM
 
 It is a work in progress and is intended for "fun personal projects."
 
-MOS was originally developed on a SGS-Thomson STM32F4Discovery and has also been tested on the STM32F767ZI Nucleo-144 board.  The HAL layer example should work immediately with the STM32F4Discovery or for similar boards with minimal modifications.
+MOS was originally developed on a SGS-Thomson STM32F4Discovery and has been tested on the STM32F767ZI Nucleo-144 and STM32L562 Discovery Kit.  The HAL layer example should work immediately with the STM32F4Discovery or for similar boards with minimal modifications.
 
 Design Goals:
 * RTOS: Hard priorities and bounded execution
