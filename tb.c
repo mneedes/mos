@@ -84,13 +84,13 @@ static void DisplayHistogram(u32 cnt) {
 
 void EXTI0_IRQHandler(void) {
     MosGiveSem(&TestSem);
-    TestHisto[33] = MosGetCycleCount() >> 32;
+    TestHisto[15] = MosGetCycleCount() >> 32;
     TestHisto[0]++;
 }
 
 void EXTI1_IRQHandler(void) {
     if (MosTrySendToQueue(&TestQueue, 1)) TestHisto[0]++;
-    TestHisto[33] = MosGetCycleCount() >> 32;
+    TestHisto[15] = MosGetCycleCount() >> 32;
 }
 
 void EventCallback(MosEvent evt, u32 val) {
@@ -1925,10 +1925,26 @@ static bool MiscTests(void) {
         tests_all_pass = false;
     }
     //
+    // Stack Stats
+    //
+    test_pass = true;
+    MosPrint("Misc Test 2: Stack stats\n");
+    {
+        u32 size = 0, usage = 0, max_usage = 0;
+        MosGetStackStats(MosGetThread(), &size, &usage, &max_usage);
+        MosPrintf("Stack: size: %u usage: %u max_usage: %u\n", size, usage, max_usage);
+        if (size != MosGetStackSize(MosGetThread())) test_pass = false;
+    }
+    if (test_pass) MosPrint(" Passed\n");
+    else {
+        MosPrint(" Failed\n");
+        tests_all_pass = false;
+    }
+    //
     // MosSNPrintf
     //
     test_pass = true;
-    MosPrint("Misc Test 2: MosSNPrintf()\n");
+    MosPrint("Misc Test 3: MosSNPrintf()\n");
     char * dummy = "bummy_dummy_mummy_";
     char buf[128];
     if (MosSNPrintf(buf, 32, "%s%s%s", dummy, dummy, dummy) != 31) test_pass = false;
@@ -1974,7 +1990,7 @@ static bool MiscTests(void) {
     // String tests
     //
     test_pass = true;
-    MosPrint("Misc Test 3: strtod()\n");
+    MosPrint("Misc Test 4: strtod()\n");
     double exp = 1.87554603778e-18;
     double diff = exp / 10.0;
     char * str3p0 = "1.87554603778e-18";

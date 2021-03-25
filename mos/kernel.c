@@ -20,12 +20,12 @@
 
 #if (MOS_FP_CONTEXT_SWITCHING == true)
   #if (__FPU_USED == 1U)
-    #define ENABLE_FP_CONTEXT_SAVE    1
+    #define ENABLE_FP_CONTEXT_SAVE    true
   #else
-    #define ENABLE_FP_CONTEXT_SAVE    0
+    #define ENABLE_FP_CONTEXT_SAVE    false
   #endif
 #else
-  #define ENABLE_FP_CONTEXT_SAVE    0
+  #define ENABLE_FP_CONTEXT_SAVE    false
 #endif
 
 #define NO_SUCH_THREAD       NULL
@@ -508,14 +508,6 @@ u32 MosGetTickCount(void) {
     return Tick.lower;
 }
 
-void MosAdvanceTickCount(u32 ticks) {
-    if (ticks) {
-        asm volatile ( "cpsid if " );
-        Tick.count += ticks;
-        asm volatile ( "cpsie if " );
-    }
-}
-
 u64 MosGetCycleCount(void) {
     asm volatile ( "cpsid if " );
     if (SysTick->CTRL & SysTick_CTRL_COUNTFLAG_Msk) Tick.count++;
@@ -523,6 +515,14 @@ u64 MosGetCycleCount(void) {
     u32 val = SysTick->VAL;
     asm volatile ( "cpsie if " );
     return (tmp * CyclesPerTick) - val;
+}
+
+void MosAdvanceTickCount(u32 ticks) {
+    if (ticks) {
+        asm volatile ( "cpsid if " );
+        Tick.count += ticks;
+        asm volatile ( "cpsie if " );
+    }
 }
 
 static void MOS_USED SetTimeout(u32 ticks) {
@@ -669,12 +669,12 @@ void MosInit(void) {
     // Enable Bus, Memory and Usage Faults in general
     SCB->SHCSR |= (SCB_SHCSR_BUSFAULTENA_Msk | SCB_SHCSR_MEMFAULTENA_Msk |
                    SCB_SHCSR_USGFAULTENA_Msk);
-#if (ENABLE_FP_CONTEXT_SAVE == 1)
-    // Ensure lazy stacking is enabled (for floating point)
-    FPU->FPCCR |= (FPU_FPCCR_ASPEN_Msk | FPU_FPCCR_LSPEN_Msk);
-#else
-    FPU->FPCCR &= ~(FPU_FPCCR_ASPEN_Msk | FPU_FPCCR_LSPEN_Msk);
-#endif
+    if (ENABLE_FP_CONTEXT_SAVE) {
+        // Ensure lazy stacking is enabled (for floating point)
+        FPU->FPCCR |= (FPU_FPCCR_ASPEN_Msk | FPU_FPCCR_LSPEN_Msk);
+    } else {
+        FPU->FPCCR &= ~(FPU_FPCCR_ASPEN_Msk | FPU_FPCCR_LSPEN_Msk);
+    }
     // Save errno pointer for use during context switch
     ErrNo = __errno();
     // Set up timers with tick-reduction
@@ -756,6 +756,18 @@ void MOS_ISR_SAFE MosYieldThread(void) {
 
 MosThread * MosGetThread(void) {
     return (MosThread *)RunningThread;
+}
+
+void MosGetStackStats(MosThread * _thd, u32 * stack_size, u32 * stack_usage, u32 * max_stack_usage) {
+    Thread * thd = (Thread *)_thd;
+    SetBasePri(IntPriMaskLow);
+    *stack_size = thd->stack_size;
+    if (thd == RunningThread)
+        *stack_usage = MosGetStackDepth(thd->stack_bottom + *stack_size);
+    else
+        *stack_usage = (thd->stack_bottom + *stack_size) - (u8 *)thd->sp;
+    *max_stack_usage = 0;
+    SetBasePri(0);
 }
 
 u8 * MosGetStackBottom(MosThread * _thd) {

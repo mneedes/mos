@@ -123,11 +123,11 @@ MOS_ISR_SAFE void MosEnableInterrupts(void);
 
 // Time and Delays
 
-u32 MosGetTickCount(void);
-void MosAdvanceTickCount(u32 ticks);
-
+MOS_ISR_SAFE u32 MosGetTickCount(void);
 // For high-resolution time
-u64 MosGetCycleCount(void);
+MOS_ISR_SAFE u64 MosGetCycleCount(void);
+
+void MosAdvanceTickCount(u32 ticks);
 
 // Delay thread a number of ticks, zero yields thread.
 void MosDelayThread(u32 ticks);
@@ -147,6 +147,18 @@ void MosResetTimer(MosTimer * timer);
 // Can use MosYieldThread() for cooperative multitasking
 MOS_ISR_SAFE void MosYieldThread(void);
 MosThread * MosGetThread(void);
+
+// To get the current stack depth of current thread
+static MOS_INLINE u32 MosGetStackDepth(u8 * top) {
+    u32 sp;
+    asm volatile (
+        "mrs %0, psp"
+                : "=r" (sp)
+    );
+    return ((u32) top) - sp;
+}
+
+void MosGetStackStats(MosThread * thd, u32 * stack_size, u32 * stack_usage, u32 * max_stack_usage);
 u8 * MosGetStackBottom(MosThread * thd);
 u32 MosGetStackSize(MosThread * thd);
 void MosSetStack(MosThread * thd, u8 * stack_bottom, u32 stack_size);
@@ -222,18 +234,9 @@ bool MosReceiveFromQueueOrTO(MosQueue * queue, u32 * data, u32 ticks);
 #define MosAssert(c) { if (!(c)) MosAssertAt(__FILE__, __LINE__); }
 void MosAssertAt(char * file, u32 line);
 
-static MOS_INLINE u32 MosGetStackDepth(u8 * top) {
-    u32 sp;
-    asm volatile (
-        "mrs %0, psp"
-                : "=r" (sp)
-    );
-    return ((u32) top) - sp;
-}
-
 // Induces a divide by zero fault
 static MOS_INLINE void MosCrash(void) {
-    // Requires divide by zero faults are enabled (see MosInit()).
+    // Requires that divide by zero faults are enabled (see MosInit()).
     asm volatile (
         "mov r0, #0\n\t"
         "udiv r1, r1, r0\n\t"
