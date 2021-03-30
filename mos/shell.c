@@ -11,6 +11,7 @@
 #include <string.h>
 
 #include <mos/kernel.h>
+#include <mos/queue.h>
 #include <mos/hal.h>
 #include <mos/trace.h>
 #include <mos/internal/trace.h>

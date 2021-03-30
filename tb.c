@@ -14,6 +14,7 @@
 
 #include <mos/kernel.h>
 #include <mos/heap.h>
+#include <mos/queue.h>
 #include <mos/slab.h>
 #include <mos/thread_heap.h>
 #include <mos/format_string.h>
@@ -472,10 +473,14 @@ static s32 ThreadTimerTestBusyThread(s32 arg) {
     return TEST_PASS;
 }
 
+static bool MOS_ISR_SAFE ThreadTimerCallback(MosTimer * tmr) {
+    return MosTrySendToQueue(&TestQueue, tmr->msg);
+}
+
 static s32 MessageTimerTestThread(s32 arg) {
     MosInitQueue(&TestQueue, queue, count_of(queue));
     MosTimer self_timer;
-    MosInitTimer(&self_timer, &TestQueue);
+    MosInitTimer(&self_timer, &ThreadTimerCallback);
     u32 cnt = 0xdeadbeef;
     for (;;) {
         if (MosIsStopRequested()) break;

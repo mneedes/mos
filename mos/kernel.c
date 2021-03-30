@@ -50,9 +50,6 @@
 enum {
     ELM_THREAD,
     ELM_TIMER,
-    //ELM_MUTEX,
-    //ELM_SEM,
-    //ELM_MUX
 };
 
 typedef struct {
@@ -285,7 +282,7 @@ void SysTick_Handler(void) {
             MosTimer * tmr = container_of(elm, MosTimer, tmr_e);
             s32 rem_ticks = (s32)tmr->wake_tick - Tick.lower;
             if (rem_ticks <= 0) {
-                if (MosTrySendToQueue(tmr->q, tmr->msg)) MosRemoveFromList(elm);
+                if ((tmr->callback)(tmr)) MosRemoveFromList(elm);
             } else break;
         }
     }
@@ -576,9 +573,9 @@ void MOS_NAKED MosDelayMicroSec(u32 usec) {
 
 // TimerQueue (work in progress, needs locks etc etc etc)
 
-void MosInitTimer(MosTimer * timer, MosQueue * q) {
+void MosInitTimer(MosTimer * timer, MosTimerCallback * callback) {
     MosInitListElm(&timer->tmr_e, ELM_TIMER);
-    timer->q = q;
+    timer->callback = callback;
 }
 
 static void AddMessageTimer(MosTimer * timer) {
@@ -1409,106 +1406,6 @@ void MOS_NAKED MOS_ISR_SAFE MosRaiseSignal(MosSem * sem, u32 flags) {
         "pop { pc }\n\t"
             : : : "r0", "r1", "r2", "r3"
     );
-}
-
-// Blocking Message Queues
-
-void MosInitQueue(MosQueue * queue, u32 * buf, u32 len) {
-    queue->buf = buf;
-    queue->len = len;
-    queue->head = 0;
-    queue->tail = 0;
-    MosInitSem(&queue->sem_head, 0);
-    MosInitSem(&queue->sem_tail, len);
-}
-
-void MosSendToQueue(MosQueue * queue, u32 data) {
-    // After taking semaphore context has a "license to write one entry,"
-    // but it still must wait if another context is trying to do the same
-    // thing in a thread.
-    MosWaitForSem(&queue->sem_tail);
-    asm volatile ( "cpsid if" );
-    queue->buf[queue->tail] = data;
-    if (++queue->tail >= queue->len) queue->tail = 0;
-    asm volatile (
-        "dmb\n\t"
-        "cpsie if\n\t"
-    );
-    MosIncrementSem(&queue->sem_head);
-}
-
-bool MOS_ISR_SAFE MosTrySendToQueue(MosQueue * queue, u32 data) {
-    // MosTrySendToQueue() and MosTryReceiveFromQueue() are ISR safe since
-    // they do not block and interrupts are locked out when queues are being
-    // manipulated.
-    if (!MosTrySem(&queue->sem_tail)) return false;
-    asm volatile ( "cpsid if" );
-    queue->buf[queue->tail] = data;
-    if (++queue->tail >= queue->len) queue->tail = 0;
-    asm volatile (
-        "dmb\n\t"
-        "cpsie if\n\t"
-    );
-    MosIncrementSem(&queue->sem_head);
-    return true;
-}
-
-bool MosSendToQueueOrTO(MosQueue * queue, u32 data, u32 ticks) {
-    if (MosWaitForSemOrTO(&queue->sem_tail, ticks)) {
-        asm volatile ( "cpsid if" );
-        queue->buf[queue->tail] = data;
-        if (++queue->tail >= queue->len) queue->tail = 0;
-        asm volatile (
-            "dmb\n\t"
-            "cpsie if\n\t"
-        );
-        MosIncrementSem(&queue->sem_head);
-        return true;
-    }
-    return false;
-}
-
-u32 MosReceiveFromQueue(MosQueue * queue) {
-    MosWaitForSem(&queue->sem_head);
-    asm volatile ( "cpsid if" );
-    u32 data = queue->buf[queue->head];
-    if (++queue->head >= queue->len) queue->head = 0;
-    asm volatile (
-        "dmb\n\t"
-        "cpsie if\n\t"
-    );
-    MosIncrementSem(&queue->sem_tail);
-    return data;
-}
-
-bool MOS_ISR_SAFE MosTryReceiveFromQueue(MosQueue * queue, u32 * data) {
-    if (MosTrySem(&queue->sem_head)) {
-        asm volatile ( "cpsid if" );
-        *data = queue->buf[queue->head];
-        if (++queue->head >= queue->len) queue->head = 0;
-        asm volatile (
-            "dmb\n\t"
-            "cpsie if\n\t"
-        );
-        MosIncrementSem(&queue->sem_tail);
-        return true;
-    }
-    return false;
-}
-
-bool MosReceiveFromQueueOrTO(MosQueue * queue, u32 * data, u32 ticks) {
-    if (MosWaitForSemOrTO(&queue->sem_head, ticks)) {
-        asm volatile ( "cpsid if" );
-        *data = queue->buf[queue->head];
-        if (++queue->head >= queue->len) queue->head = 0;
-        asm volatile (
-            "dmb\n\t"
-            "cpsie if\n\t"
-        );
-        MosIncrementSem(&queue->sem_tail);
-        return true;
-    }
-    return false;
 }
 
 void MosAssertAt(char * file, u32 line) {

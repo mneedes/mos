@@ -15,23 +15,6 @@
 #include <mos/defs.h>
 #include <mos/list.h>
 
-// Microkernel Parameters
-typedef struct {
-    char * version;
-    MosThreadPriority thread_pri_hi;
-    MosThreadPriority thread_pri_low;
-    u32 int_pri_hi;
-    u32 int_pri_low;
-    u32 micro_sec_per_tick;
-    bool fp_support_en;
-} MosParams;
-
-// Mos Thread (opaque container)
-typedef struct {
-    u32 rsvd[18];
-    s32 ref_cnt;
-} MosThread;
-
 typedef enum {
     MOS_THREAD_NOT_STARTED,
     MOS_THREAD_RUNNING,
@@ -52,6 +35,34 @@ typedef enum {
     MOS_EVENT_TICK
 } MosEvent;
 
+typedef struct MosTimer MosTimer;
+
+// Callbacks
+typedef s32 (MosThreadEntry)(s32 arg);
+typedef s32 (MosHandler)(s32 arg);
+typedef bool MOS_ISR_SAFE (MosTimerCallback)(MosTimer * tmr);
+typedef void (MosRawPrintfHook)(const char * fmt, ...);
+typedef void (MosSleepHook)(void);
+typedef void (MosWakeHook)(void);
+typedef void (MosEventHook)(MosEvent evt, u32 val);
+
+// Microkernel Parameters
+typedef struct {
+    char * version;
+    MosThreadPriority thread_pri_hi;
+    MosThreadPriority thread_pri_low;
+    u32 int_pri_hi;
+    u32 int_pri_low;
+    u32 micro_sec_per_tick;
+    bool fp_support_en;
+} MosParams;
+
+// Mos Thread (opaque container)
+typedef struct {
+    u32 rsvd[18];
+    s32 ref_cnt;
+} MosThread;
+
 // Blocking mutex supporting recursion
 typedef struct {
     MosThread * owner;
@@ -65,34 +76,16 @@ typedef struct {
     MosList event_e;
 } MosSem;
 
-// Multi-writer / multi-reader blocking FIFO
-typedef struct {
-    MosSem sem_tail;
-    MosSem sem_head;
-    u32 * buf;
-    u32 len;
-    u32 tail;
-    u32 head;
-} MosQueue;
-
-// Timers
-typedef struct {
+typedef struct MosTimer {
     u32 msg;
     u32 wake_tick;
     u32 ticks;
-    MosQueue * q;
+    MosTimerCallback * callback;
     MosListElm tmr_e;
 } MosTimer;
 
-typedef s32 (MosThreadEntry)(s32 arg);
-typedef s32 (MosHandler)(s32 arg);
-typedef void (MosRawPrintfHook)(const char * fmt, ...);
-typedef void (MosSleepHook)(void);
-typedef void (MosWakeHook)(void);
-typedef void (MosEventHook)(MosEvent evt, u32 val);
-
-// Initialize and Run
-// NOTE: SysTick and NVIC priority groups should be set up by HAL before running Init.
+// Initialize and Run Scheduler
+// NOTE: SysTick and NVIC priority groups should be enabled by HAL before running Init.
 void MosInit(void);
 void MosRunScheduler(void);
 
@@ -137,9 +130,9 @@ void MosDelayThread(u32 ticks);
 //   Keep in mind there is an upper limit to usec.
 MOS_ISR_SAFE void MosDelayMicroSec(u32 usec);
 
-// Timers - Write specified message to queue at appointed time
+// Timers - Call specified callback at a period of time
 
-void MosInitTimer(MosTimer * timer, MosQueue * q);
+void MosInitTimer(MosTimer * timer, MosTimerCallback * callback);
 void MosSetTimer(MosTimer * timer, u32 ticks, u32 msg);
 void MosCancelTimer(MosTimer * timer);
 void MosResetTimer(MosTimer * timer);
@@ -220,18 +213,6 @@ MOS_ISR_SAFE void MosRaiseSignal(MosSem * sem, u32 flags);
 #define MosWaitForBinarySemOrTO(sem, ticks) MosWaitForSignalOrTO(sem, ticks)
 #define MosPollForBinarySem(sem) MosPollForSignal(sem)
 #define MosRaiseBinarySem(sem) MosRaiseSignal(sem, 1)
-
-// Blocking Queue
-
-void MosInitQueue(MosQueue * queue, u32 * buf, u32 len);
-void MosSendToQueue(MosQueue * queue, u32 data);
-MOS_ISR_SAFE bool MosTrySendToQueue(MosQueue * queue, u32 data);
-// Returns false on timeout, true if sent
-bool MosSendToQueueOrTO(MosQueue * queue, u32 data, u32 ticks);
-u32 MosReceiveFromQueue(MosQueue * queue);
-MOS_ISR_SAFE bool MosTryReceiveFromQueue(MosQueue * queue, u32 * data);
-// Returns false on timeout, true if received
-bool MosReceiveFromQueueOrTO(MosQueue * queue, u32 * data, u32 ticks);
 
 #define MosAssert(c) { if (!(c)) MosAssertAt(__FILE__, __LINE__); }
 void MosAssertAt(char * file, u32 line);
