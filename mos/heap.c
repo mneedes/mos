@@ -87,7 +87,7 @@ void MosInitHeap(MosHeap * heap, u8 * _bot, u32 heap_size, u32 alignment) {
 void * MosAlloc(MosHeap * heap, u32 size) {
     if (size < MIN_PAYLOAD_SIZE) size = MIN_PAYLOAD_SIZE;
     size = MOS_ALIGN32(size + sizeof(Link), heap->align_mask);
-    MosTakeMutex(&heap->mtx);
+    MosLockMutex(&heap->mtx);
     Block * block;
     {
         // First-fit search: max(min_size, size) + link_size needs to fit
@@ -101,7 +101,7 @@ void * MosAlloc(MosHeap * heap, u32 size) {
             }
         }
         if (elm == &heap->fl) {
-            MosGiveMutex(&heap->mtx);
+            MosUnlockMutex(&heap->mtx);
             return NULL;
         }
         // Remove chosen block from free-list
@@ -132,23 +132,23 @@ void * MosAlloc(MosHeap * heap, u32 size) {
     }
     if (heap->bytes_free < heap->min_bytes_free)
         heap->min_bytes_free = heap->bytes_free;
-    MosGiveMutex(&heap->mtx);
+    MosUnlockMutex(&heap->mtx);
     return (void *) ((u8 *) block + sizeof(Link));
 }
 
 void * MosReAlloc(MosHeap * heap, void * _block, u32 _new_size) {
     if (!_block) return MosAlloc(heap, _new_size);
-    MosTakeMutex(&heap->mtx);
+    MosLockMutex(&heap->mtx);
     Block * block = (Block *) ((u8 *) _block - sizeof(Link));
     // Check for canary value and double-free
     if (block->link.canary != HEAP_CANARY_VALUE) {
         heap->dead_canary_cnt++;
-        MosGiveMutex(&heap->mtx);
+        MosUnlockMutex(&heap->mtx);
         return NULL;
     }
     if (!(block->link.size & 0x1)) {
         heap->double_free_cnt++;
-        MosGiveMutex(&heap->mtx);
+        MosUnlockMutex(&heap->mtx);
         return NULL;
     }
     u32 new_size = _new_size;
@@ -197,23 +197,23 @@ void * MosReAlloc(MosHeap * heap, void * _block, u32 _new_size) {
         }
         _block = new_block;
     }
-    MosGiveMutex(&heap->mtx);
+    MosUnlockMutex(&heap->mtx);
     return _block;
 }
 
 void MosFree(MosHeap * heap, void * _block) {
     if (!_block) return;
     Block * block = (Block *) ((u8 *) _block - sizeof(Link));
-    MosTakeMutex(&heap->mtx);
+    MosLockMutex(&heap->mtx);
     // Check for canary value and double-free
     if (block->link.canary != HEAP_CANARY_VALUE) {
         heap->dead_canary_cnt++;
-        MosGiveMutex(&heap->mtx);
+        MosUnlockMutex(&heap->mtx);
         return;
     }
     if (!(block->link.size & 0x1)) {
         heap->double_free_cnt++;
-        MosGiveMutex(&heap->mtx);
+        MosUnlockMutex(&heap->mtx);
         return;
     }
     // Unmark allocation bit
@@ -222,7 +222,7 @@ void MosFree(MosHeap * heap, void * _block) {
     Block * next = (Block *) ((u8 *) block + block->link.size);
     if (next->link.canary != HEAP_CANARY_VALUE) {
         heap->dead_canary_cnt++;
-        MosGiveMutex(&heap->mtx);
+        MosUnlockMutex(&heap->mtx);
         return;
     }
     heap->bytes_free += block->link.size;
@@ -259,6 +259,6 @@ void MosFree(MosHeap * heap, void * _block) {
     next->link.size_p = block->link.size;
     // Add block to free-list
     MosAddToFrontOfList(&heap->fl, &block->fl_e);
-    MosGiveMutex(&heap->mtx);
+    MosUnlockMutex(&heap->mtx);
 }
 

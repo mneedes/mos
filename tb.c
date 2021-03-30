@@ -83,7 +83,7 @@ static void DisplayHistogram(u32 cnt) {
 }
 
 void EXTI0_IRQHandler(void) {
-    MosGiveSem(&TestSem);
+    MosIncrementSem(&TestSem);
     TestHisto[15] = MosGetCycleCount() >> 32;
     TestHisto[0]++;
 }
@@ -135,21 +135,21 @@ static s32 KillTestHandler(s32 arg) {
 static s32 KillTestThread(s32 arg) {
     if (arg) {
         MosSetStopHandler(MosGetThread(), KillTestHandler, TEST_PASS_HANDLER);
-        // Take mutex a couple times... need to release it in handler
-        MosTakeMutex(&TestMutex);
-        MosTakeMutex(&TestMutex);
+        // Lock mutex a couple times... need to release it in handler
+        MosLockMutex(&TestMutex);
+        MosLockMutex(&TestMutex);
     } else MosSetStopArg(MosGetThread(), TEST_PASS_HANDLER);
     MosLogTrace(TRACE_INFO, "KillTestThread: Blocking\n");
-    MosTakeSem(&TestSem);
+    MosWaitForSem(&TestSem);
     return TEST_FAIL;
 }
 
 static s32 KillSelfTestThread(s32 arg) {
     if (arg) {
         MosSetStopHandler(MosGetThread(), KillTestHandler, TEST_PASS_HANDLER);
-        // Take mutex a couple times... need to release it in handler
-        MosTakeMutex(&TestMutex);
-        MosTakeMutex(&TestMutex);
+        // Lock mutex a couple times... need to release it in handler
+        MosLockMutex(&TestMutex);
+        MosLockMutex(&TestMutex);
     } else MosSetStopArg(MosGetThread(), TEST_PASS_HANDLER);
     MosLogTrace(TRACE_INFO, "KillSelfTestThread: Killing Self\n");
     MosKillThread(MosGetThread());
@@ -680,7 +680,7 @@ static s32 SemTestPendIRQ(s32 arg) {
 
 static s32 SemTestThreadTx(s32 arg) {
     for (;;) {
-        MosGiveSem(&TestSem);
+        MosIncrementSem(&TestSem);
         TestHisto[arg]++;
         MosDelayThread(sem_test_delay);
         if (MosIsStopRequested()) break;
@@ -690,7 +690,7 @@ static s32 SemTestThreadTx(s32 arg) {
 
 static s32 SemTestThreadTxFast(s32 arg) {
     for (;;) {
-        MosGiveSem(&TestSem);
+        MosIncrementSem(&TestSem);
         MosDelayMicroSec(10);
         TestHisto[arg]++;
         if (MosIsStopRequested()) break;
@@ -700,7 +700,7 @@ static s32 SemTestThreadTxFast(s32 arg) {
 
 static s32 SemTestThreadRx(s32 arg) {
     for (;;) {
-        MosTakeSem(&TestSem);
+        MosWaitForSem(&TestSem);
         TestHisto[arg]++;
         if (MosIsStopRequested()) break;
     }
@@ -709,7 +709,7 @@ static s32 SemTestThreadRx(s32 arg) {
 
 static s32 SemTestThreadRxTimeout(s32 arg) {
     for (;;) {
-        if (MosTakeSemOrTO(&TestSem, sem_test_delay / 2 + 2)) {
+        if (MosWaitForSemOrTO(&TestSem, sem_test_delay / 2 + 2)) {
             TestHisto[arg]++;
         } else {
             TestHisto[arg + 1]++;
@@ -796,7 +796,7 @@ static bool SemTests(void) {
     MosRequestThreadStop(Threads[1]);
     MosRequestThreadStop(Threads[2]);
     MosRequestThreadStop(Threads[3]);
-    MosGiveSem(&TestSem);  // Unblock thread to stop
+    MosIncrementSem(&TestSem);  // Unblock thread to stop
     if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[3]) != TEST_PASS) test_pass = false;
@@ -822,7 +822,7 @@ static bool SemTests(void) {
     MosRequestThreadStop(Threads[1]);
     MosRequestThreadStop(Threads[2]);
     MosRequestThreadStop(Threads[3]);
-    MosGiveSem(&TestSem); // Unblock thread to stop
+    MosIncrementSem(&TestSem); // Unblock thread to stop
     if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[3]) != TEST_PASS) test_pass = false;
@@ -835,7 +835,7 @@ static bool SemTests(void) {
         tests_all_pass = false;
     }
     //
-    // Take Sem with Timeouts
+    // Sem with Timeouts
     //
     test_pass = true;
     MosPrint("Sem Test 3\n");
@@ -862,7 +862,7 @@ static bool SemTests(void) {
         tests_all_pass = false;
     }
     //
-    //  Take lots of semaphores
+    //  Lots of semaphores
     //
     test_pass = true;
     MosPrint("Sem Test 4\n");
@@ -876,7 +876,7 @@ static bool SemTests(void) {
     MosRequestThreadStop(Threads[3]);
     MosDelayThread(5);
     MosRequestThreadStop(Threads[1]);
-    MosGiveSem(&TestSem);  // Unblock thread to stop
+    MosIncrementSem(&TestSem);  // Unblock thread to stop
     if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[3]) != TEST_PASS) test_pass = false;
@@ -1208,7 +1208,7 @@ static const u32 mux_test_delay = 50;
 
 static s32 MuxTestThreadTx(s32 arg) {
     for (;;) {
-        if (arg == 0) MosGiveSem(&TestSem);
+        if (arg == 0) MosIncrementSem(&TestSem);
         else if (arg == 1) MosSendToQueue(&TestQueue, 1);
         TestHisto[arg]++;
         MosDelayThread(mux_test_delay);
@@ -1341,14 +1341,14 @@ static bool MuxTests(void) {
 static s32 MutexRecursion(u32 depth) {
     const u32 max_test_depth = 4;
     TestStatus status = TEST_PASS;
-    MosTakeMutex(&TestMutex);
+    MosLockMutex(&TestMutex);
     if (TestMutex.depth != depth) {
         status = TEST_FAIL;
     } else if (depth < max_test_depth) {
         if (MutexRecursion(depth + 1) == TEST_FAIL)
             status = TEST_FAIL;
     }
-    MosGiveMutex(&TestMutex);
+    MosUnlockMutex(&TestMutex);
     return status;
 }
 
@@ -1365,7 +1365,7 @@ static s32 MutexTestThread(s32 arg) {
                 MosDelayThread(5);
             }
         }
-        MosTakeMutex(&TestMutex);
+        MosLockMutex(&TestMutex);
         if (TestFlag == 1) {
             status = TEST_FAIL;
             goto EXIT_MTT;
@@ -1379,11 +1379,11 @@ static s32 MutexTestThread(s32 arg) {
         }
         TestHisto[arg]++;
         TestFlag = 0;
-        MosGiveMutex(&TestMutex);
+        MosUnlockMutex(&TestMutex);
     }
 EXIT_MTT:
     TestFlag = 0;
-    MosGiveMutex(&TestMutex);
+    MosUnlockMutex(&TestMutex);
     return status;
 }
 
@@ -1404,12 +1404,12 @@ static s32 MutexTryTestThread(s32 arg) {
             }
             TestHisto[arg]++;
             TestFlag = 0;
-            MosGiveMutex(&TestMutex);
+            MosUnlockMutex(&TestMutex);
         }
     }
 EXIT_MTT:
     TestFlag = 0;
-    MosGiveMutex(&TestMutex);
+    MosUnlockMutex(&TestMutex);
     return status;
 }
 
@@ -2166,11 +2166,11 @@ static CmdStatus RunCmd(char * cmd_buf_in) {
     } else if (strcmp(argv[0], "h") == 0 || strcmp(argv[0], "history") == 0) {
         for (s32 ix = CmdMaxIx; ix > 0; ix--) {
             u32 hist_cmd_ix = CalcOffsetCmdIx(CmdIx, CmdMaxIx, -ix);
-            MosTakeTraceMutex();
+            MosLockTraceMutex();
             MosPrintf("%2d: ", -ix);
             MosPrint(CmdBuffers[hist_cmd_ix]);
             MosPrint("\n");
-            MosGiveTraceMutex();
+            MosUnlockTraceMutex();
         }
         return CMD_OK_NO_HISTORY;
     } else if (argv[0][0] == '\0') {
@@ -2247,7 +2247,7 @@ static s32 TestShell(s32 arg) {
 
 int InitTestBench() {
     NVIC_EnableIRQ(EXTI0_IRQn);
-    NVIC_EnableIRQ(EXTI10_IRQn);
+    NVIC_EnableIRQ(EXTI1_IRQn);
 
     //DWT->CYCCNT -> COOL, High resolution timer built-in
 

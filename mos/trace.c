@@ -20,15 +20,15 @@
 #define MOS_PRINT_BUFFER_SIZE   128
 
 u32 MosTraceMask = 0;
-static MosMutex PrintMutex;
+static MosMutex TraceMutex;
 
 static char PrintBuffer[MOS_PRINT_BUFFER_SIZE];
 static char RawPrintBuffer[MOS_PRINT_BUFFER_SIZE];
 
 void _MosPrintCh(char ch) {
-    MosTakeMutex(&PrintMutex);
+    MosLockMutex(&TraceMutex);
     HalSendToTxUART(ch);
-    MosGiveMutex(&PrintMutex);
+    MosUnlockMutex(&TraceMutex);
 }
 
 u32 _MosPrint(char * str) {
@@ -50,25 +50,25 @@ static void MosRawPrintfCallback(const char * fmt, ...) {
 
 void MosInitTrace(u32 mask, bool enable_raw_printf_hook) {
     MosTraceMask = mask;
-    MosInitMutex(&PrintMutex);
+    MosInitMutex(&TraceMutex);
     if (enable_raw_printf_hook)
         MosRegisterRawPrintfHook(MosRawPrintfCallback);
 }
 
 s32 MosPrint(char * str) {
-    MosTakeMutex(&PrintMutex);
+    MosLockMutex(&TraceMutex);
     s32 cnt = _MosPrint(str);
-    MosGiveMutex(&PrintMutex);
+    MosUnlockMutex(&TraceMutex);
     return cnt;
 }
 
 s32 MosPrintf(const char * fmt, ...) {
     va_list args;
     va_start(args, fmt);
-    MosTakeMutex(&PrintMutex);
+    MosLockMutex(&TraceMutex);
     s32 cnt = MosVSNPrintf(PrintBuffer, MOS_PRINT_BUFFER_SIZE, fmt, args);
     _MosPrint(PrintBuffer);
-    MosGiveMutex(&PrintMutex);
+    MosUnlockMutex(&TraceMutex);
     va_end(args);
     return cnt;
 }
@@ -76,18 +76,18 @@ s32 MosPrintf(const char * fmt, ...) {
 void MosLogTraceMessage(char * id, const char * fmt, ...) {
     va_list args;
     va_start(args, fmt);
-    MosTakeMutex(&PrintMutex);
+    MosLockMutex(&TraceMutex);
     _MosPrint(id);
     MosVSNPrintf(PrintBuffer, MOS_PRINT_BUFFER_SIZE, fmt, args);
     _MosPrint(PrintBuffer);
-    MosGiveMutex(&PrintMutex);
+    MosUnlockMutex(&TraceMutex);
     va_end(args);
 }
 
 void MosLogHexDumpMessage(char * id, char * name,
                           const void * addr, mos_size size) {
     const u8 * restrict data = (const u8 *) addr;
-    MosTakeMutex(&PrintMutex);
+    MosLockMutex(&TraceMutex);
     _MosPrint(id);
     _MosPrint(name);
     _MosPrint("\n");
@@ -112,17 +112,17 @@ void MosLogHexDumpMessage(char * id, char * name,
         *buf++ = '\0';
         _MosPrint(PrintBuffer);
     }
-    MosGiveMutex(&PrintMutex);
+    MosUnlockMutex(&TraceMutex);
 }
 
-void MosTakeTraceMutex(void) {
-    MosTakeMutex(&PrintMutex);
+void MosLockTraceMutex(void) {
+    MosLockMutex(&TraceMutex);
 }
 
 bool MosTryTraceMutex(void) {
-    return MosTryMutex(&PrintMutex);
+    return MosTryMutex(&TraceMutex);
 }
 
-void MosGiveTraceMutex(void) {
-    MosGiveMutex(&PrintMutex);
+void MosUnlockTraceMutex(void) {
+    MosUnlockMutex(&TraceMutex);
 }

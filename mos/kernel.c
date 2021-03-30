@@ -1041,7 +1041,7 @@ static void MOS_USED BlockOnMutex(MosMutex * mtx) {
     SetBasePri(0);
 }
 
-void MOS_NAKED MosTakeMutex(MosMutex * mtx) {
+void MOS_NAKED MosLockMutex(MosMutex * mtx) {
     MOS_USED_PARAM(mtx);
     asm volatile (
         "ldr r1, _ThreadID\n\t"
@@ -1129,7 +1129,7 @@ static void MOS_USED YieldOnMutex(MosMutex * mtx) {
     SetBasePri(0);
 }
 
-void MOS_NAKED MosGiveMutex(MosMutex * mtx) {
+void MOS_NAKED MosUnlockMutex(MosMutex * mtx) {
     MOS_USED_PARAM(mtx);
     asm volatile (
         "ldr r1, [r0, #4]\n\t"
@@ -1154,7 +1154,7 @@ void MOS_NAKED MosGiveMutex(MosMutex * mtx) {
 void MosRestoreMutex(MosMutex * mtx) {
     if (mtx->owner == (void *)RunningThread) {
         mtx->depth = 1;
-        MosGiveMutex(mtx);
+        MosUnlockMutex(mtx);
     }
 }
 
@@ -1188,7 +1188,7 @@ static void MOS_USED BlockOnSem(MosSem * sem) {
     asm volatile ( "cpsie if" );
 }
 
-void MOS_NAKED MosTakeSem(MosSem * sem) {
+void MOS_NAKED MosWaitForSem(MosSem * sem) {
     MOS_USED_PARAM(sem);
     asm volatile (
         "RetryTS:\n\t"
@@ -1238,7 +1238,7 @@ static bool MOS_USED BlockOnSemOrTO(MosSem * sem) {
     return timeout;
 }
 
-bool MOS_NAKED MosTakeSemOrTO(MosSem * sem, u32 ticks) {
+bool MOS_NAKED MosWaitForSemOrTO(MosSem * sem, u32 ticks) {
     MOS_USED_PARAM(sem);
     MOS_USED_PARAM(ticks);
     asm volatile (
@@ -1304,7 +1304,7 @@ static void MOS_USED MOS_ISR_SAFE YieldOnSem(MosSem * sem) {
     asm volatile ( "cpsie if" );
 }
 
-void MOS_NAKED MOS_ISR_SAFE MosGiveSem(MosSem * sem) {
+void MOS_NAKED MOS_ISR_SAFE MosIncrementSem(MosSem * sem) {
     MOS_USED_PARAM(sem);
     asm volatile (
         "push { lr }\n\t"
@@ -1426,7 +1426,7 @@ void MosSendToQueue(MosQueue * queue, u32 data) {
     // After taking semaphore context has a "license to write one entry,"
     // but it still must wait if another context is trying to do the same
     // thing in a thread.
-    MosTakeSem(&queue->sem_tail);
+    MosWaitForSem(&queue->sem_tail);
     asm volatile ( "cpsid if" );
     queue->buf[queue->tail] = data;
     if (++queue->tail >= queue->len) queue->tail = 0;
@@ -1434,7 +1434,7 @@ void MosSendToQueue(MosQueue * queue, u32 data) {
         "dmb\n\t"
         "cpsie if\n\t"
     );
-    MosGiveSem(&queue->sem_head);
+    MosIncrementSem(&queue->sem_head);
 }
 
 bool MOS_ISR_SAFE MosTrySendToQueue(MosQueue * queue, u32 data) {
@@ -1449,12 +1449,12 @@ bool MOS_ISR_SAFE MosTrySendToQueue(MosQueue * queue, u32 data) {
         "dmb\n\t"
         "cpsie if\n\t"
     );
-    MosGiveSem(&queue->sem_head);
+    MosIncrementSem(&queue->sem_head);
     return true;
 }
 
 bool MosSendToQueueOrTO(MosQueue * queue, u32 data, u32 ticks) {
-    if (MosTakeSemOrTO(&queue->sem_tail, ticks)) {
+    if (MosWaitForSemOrTO(&queue->sem_tail, ticks)) {
         asm volatile ( "cpsid if" );
         queue->buf[queue->tail] = data;
         if (++queue->tail >= queue->len) queue->tail = 0;
@@ -1462,14 +1462,14 @@ bool MosSendToQueueOrTO(MosQueue * queue, u32 data, u32 ticks) {
             "dmb\n\t"
             "cpsie if\n\t"
         );
-        MosGiveSem(&queue->sem_head);
+        MosIncrementSem(&queue->sem_head);
         return true;
     }
     return false;
 }
 
 u32 MosReceiveFromQueue(MosQueue * queue) {
-    MosTakeSem(&queue->sem_head);
+    MosWaitForSem(&queue->sem_head);
     asm volatile ( "cpsid if" );
     u32 data = queue->buf[queue->head];
     if (++queue->head >= queue->len) queue->head = 0;
@@ -1477,7 +1477,7 @@ u32 MosReceiveFromQueue(MosQueue * queue) {
         "dmb\n\t"
         "cpsie if\n\t"
     );
-    MosGiveSem(&queue->sem_tail);
+    MosIncrementSem(&queue->sem_tail);
     return data;
 }
 
@@ -1490,14 +1490,14 @@ bool MOS_ISR_SAFE MosTryReceiveFromQueue(MosQueue * queue, u32 * data) {
             "dmb\n\t"
             "cpsie if\n\t"
         );
-        MosGiveSem(&queue->sem_tail);
+        MosIncrementSem(&queue->sem_tail);
         return true;
     }
     return false;
 }
 
 bool MosReceiveFromQueueOrTO(MosQueue * queue, u32 * data, u32 ticks) {
-    if (MosTakeSemOrTO(&queue->sem_head, ticks)) {
+    if (MosWaitForSemOrTO(&queue->sem_head, ticks)) {
         asm volatile ( "cpsid if" );
         *data = queue->buf[queue->head];
         if (++queue->head >= queue->len) queue->head = 0;
@@ -1505,7 +1505,7 @@ bool MosReceiveFromQueueOrTO(MosQueue * queue, u32 * data, u32 ticks) {
             "dmb\n\t"
             "cpsie if\n\t"
         );
-        MosGiveSem(&queue->sem_tail);
+        MosIncrementSem(&queue->sem_tail);
         return true;
     }
     return false;

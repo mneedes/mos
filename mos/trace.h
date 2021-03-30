@@ -48,8 +48,8 @@ void MosLogHexDumpMessage(char * id, char * name,
                           const void * addr, mos_size size);
 
 // Callers can use mutex for multi-line prints
-void MosTakeTraceMutex(void);
+void MosLockTraceMutex(void);
 bool MosTryTraceMutex(void);
-void MosGiveTraceMutex(void);
+void MosUnlockTraceMutex(void);
 
 #endif

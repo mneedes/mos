@@ -28,7 +28,7 @@ static u32 pulse_counter;
 
 void EXTI15_10_IRQHandler(void) {
 	__HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_13);
-	MosGiveSem(&pulse_sem);
+	MosIncrementSem(&pulse_sem);
 }
 
 static s32 HalPulseReceiverStopHandler(s32 arg) {
@@ -44,7 +44,7 @@ static s32 HalPulseReceiverThread(s32 arg) {
     NVIC_SetPriority(EXTI15_10_IRQn, 0);
     NVIC_EnableIRQ(EXTI15_10_IRQn);
     for (;;) {
-    	MosTakeSem(&pulse_sem);
+    	MosWaitForSem(&pulse_sem);
         pulse_counter++;
         if ((pulse_counter % (1 << 12)) == 0) {
             MosPrintf("Pulses: %08x\n", pulse_counter);

@@ -118,6 +118,8 @@ static MOS_INLINE u32 MOS_ISR_SAFE MosGetIRQNumber(void) {
     return irq;
 }
 
+// Nestable disable and enable interrupt methods, must be
+// used in a balanced fashion like a recursive mutex.
 MOS_ISR_SAFE void MosDisableInterrupts(void);
 MOS_ISR_SAFE void MosEnableInterrupts(void);
 
@@ -185,9 +187,9 @@ void MosSetStopArg(MosThread * thd, s32 arg);
 // Blocking Recursive Mutex with priority inheritance
 
 void MosInitMutex(MosMutex * mtx);
-void MosTakeMutex(MosMutex * mtx);
+void MosLockMutex(MosMutex * mtx);
 bool MosTryMutex(MosMutex * mtx);
-void MosGiveMutex(MosMutex * mtx);
+void MosUnlockMutex(MosMutex * mtx);
 // Release mutex if owned (useful in kill handlers)
 void MosRestoreMutex(MosMutex * mtx);
 bool MosIsMutexOwner(MosMutex * mtx);
@@ -199,10 +201,10 @@ void MosInitSem(MosSem * sem, u32 start_value);
 //   (1) Counting Semaphore
 
 // Returns false on timeout, true if taken
-void MosTakeSem(MosSem * sem);
-bool MosTakeSemOrTO(MosSem * sem, u32 ticks);
+void MosWaitForSem(MosSem * sem);
+bool MosWaitForSemOrTO(MosSem * sem, u32 ticks);
 MOS_ISR_SAFE bool MosTrySem(MosSem * sem);
-MOS_ISR_SAFE void MosGiveSem(MosSem * sem);
+MOS_ISR_SAFE void MosIncrementSem(MosSem * sem);
 
 //   (2) Signal (ganged 32-bit binary semaphores)
 //       zero is returned for timeout / no poll
@@ -214,10 +216,10 @@ MOS_ISR_SAFE void MosRaiseSignal(MosSem * sem, u32 flags);
 
 //   (3) Binary semaphore is a 1-bit signal
 
-#define MosTakeBinarySem(sem) MosWaitForSignal(sem)
-#define MosTakeBinarySemOrTO(sem, ticks) MosWaitForSignalOrTO(sem, ticks)
-#define MosTryBinarySem(sem) MosPollForSignal(sem)
-#define MosGiveBinarySem(sem) MosRaiseSignal(sem, 1)
+#define MosWaitForBinarySem(sem) MosWaitForSignal(sem)
+#define MosWaitForBinarySemOrTO(sem, ticks) MosWaitForSignalOrTO(sem, ticks)
+#define MosPollForBinarySem(sem) MosPollForSignal(sem)
+#define MosRaiseBinarySem(sem) MosRaiseSignal(sem, 1)
 
 // Blocking Queue
 

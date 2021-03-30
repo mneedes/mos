@@ -36,42 +36,42 @@ void MosInitCmdList(MosCmdList * cmd_list) {
 }
 
 void MosAddCmd(MosCmdList * cmd_list, MosCmd * cmd) {
-    MosTakeMutex(&cmd_list->mtx);
+    MosLockMutex(&cmd_list->mtx);
     MosInitList(&cmd->list);
     MosAddToList(&cmd_list->list, &cmd->list);
-    MosGiveMutex(&cmd_list->mtx);
+    MosUnlockMutex(&cmd_list->mtx);
 }
 
 void MosRemoveCmd(MosCmdList * cmd_list, MosCmd * cmd) {
-    MosTakeMutex(&cmd_list->mtx);
+    MosLockMutex(&cmd_list->mtx);
     MosRemoveFromList(&cmd->list);
-    MosGiveMutex(&cmd_list->mtx);
+    MosUnlockMutex(&cmd_list->mtx);
 }
 
 MosCmd * MosFindCmd(MosCmdList * cmd_list, char * name) {
-    MosTakeMutex(&cmd_list->mtx);
+    MosLockMutex(&cmd_list->mtx);
     MosList * list = &cmd_list->list;
     for (MosList * elm = list->next; elm != list; elm = elm->next) {
         MosCmd * cmd = container_of(elm, MosCmd, list);
         if (strcmp(name, cmd->name) == 0) {
-            MosGiveMutex(&cmd_list->mtx);
+            MosUnlockMutex(&cmd_list->mtx);
             return cmd;
         }
     }
-    MosGiveMutex(&cmd_list->mtx);
+    MosUnlockMutex(&cmd_list->mtx);
     return NULL;
 }
 
 void MosPrintCmdHelp(MosCmdList * cmd_list) {
     MosList * list = &cmd_list->list;
-    MosTakeMutex(&cmd_list->mtx);
-    MosTakeTraceMutex();
+    MosLockMutex(&cmd_list->mtx);
+    MosLockTraceMutex();
     for (MosList * elm = list->next; elm != list; elm = elm->next) {
         MosCmd * cmd = container_of(elm, MosCmd, list);
         MosPrintf("%s %s: %s\n", cmd->name, cmd->usage, cmd->desc);
     }
-    MosGiveTraceMutex();
-    MosGiveMutex(&cmd_list->mtx);
+    MosUnlockTraceMutex();
+    MosUnlockMutex(&cmd_list->mtx);
 }
 
 MosCmdResult MosGetNextCmd(char * prompt, char * cmd, u32 max_cmd_len) {
@@ -82,14 +82,14 @@ MosCmdResult MosGetNextCmd(char * prompt, char * cmd, u32 max_cmd_len) {
     };
     static u32 buf_ix = 0;
     static bool last_ch_was_arrow = false;
-    MosTakeTraceMutex();
+    MosLockTraceMutex();
     if (buf_ix) {
         for (u32 ix = 0; ix < buf_ix; ix++) _MosPrint("\b \b");
     } else if (prompt && !last_ch_was_arrow) {
         _MosPrint(prompt);
     }
     buf_ix = _MosPrint(cmd);
-    MosGiveTraceMutex();
+    MosUnlockTraceMutex();
     last_ch_was_arrow = false;
     u32 state = KEY_NORMAL;
     while (1) {

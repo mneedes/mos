@@ -30,13 +30,13 @@ bool MosAllocThread(MosThread ** _thd, u32 stack_size) {
         return false;
     }
     MosSetStack(thd, stack_bottom, stack_size);
-    MosTakeMutex(&ThreadMutex);
+    MosLockMutex(&ThreadMutex);
     if (*_thd == NULL) {
         thd->ref_cnt = 1;
         *_thd = thd;
         rtn = true;
     } else FreeThread(thd);
-    MosGiveMutex(&ThreadMutex);
+    MosUnlockMutex(&ThreadMutex);
     return rtn;
 }
 
@@ -55,27 +55,27 @@ MosAllocAndRunThread(MosThread ** _thd, MosThreadPriority pri,
 bool MosIncThreadRefCount(MosThread ** _thd) {
     if (!ThreadHeap) return false;
     bool rtn = false;
-    MosTakeMutex(&ThreadMutex);
+    MosLockMutex(&ThreadMutex);
     MosThread * thd = *_thd;
     if (thd != NULL) {
         thd->ref_cnt++;
         rtn = true;
     }
-    MosGiveMutex(&ThreadMutex);
+    MosUnlockMutex(&ThreadMutex);
     return rtn;
 }
 
 bool MosDecThreadRefCount(MosThread ** _thd) {
     if (!ThreadHeap) return false;
     bool rtn = false;
-    MosTakeMutex(&ThreadMutex);
+    MosLockMutex(&ThreadMutex);
     MosThread * thd = *_thd;
     if (thd != NULL && --thd->ref_cnt <= 0) {
         *_thd = NULL;
         FreeThread(thd);
         rtn = true;
     }
-    MosGiveMutex(&ThreadMutex);
+    MosUnlockMutex(&ThreadMutex);
     return rtn;
 }
 
