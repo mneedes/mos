@@ -17,12 +17,6 @@
 
 #include <bsp/hal_tb.h>
 
-typedef enum {
-    TEST_PASS        = 0xba5eba11,
-    TEST_FAIL        = 0xdeadbeef,
-} TestStatus;
-
-
 static MosSem pulse_sem;
 static u32 pulse_counter;
 
@@ -36,7 +30,7 @@ void EXTI1_IRQHandler(void) {
 
 void HalTestsInit(void) {
     NVIC_EnableIRQ(EXTI0_IRQn);
-    NVIC_EnableIRQ(EXTI1_IRQn);
+    NVIC_EnableIRQ(EXTI10_IRQn);
 }
 
 void HalTestsTriggerInterrupt(u32 num) {
@@ -45,7 +39,7 @@ void HalTestsTriggerInterrupt(u32 num) {
         NVIC_SetPendingIRQ(EXTI0_IRQn);
         break;
     case 1:
-        NVIC_SetPendingIRQ(EXTI1_IRQn);
+        NVIC_SetPendingIRQ(EXTI10_IRQn);
         break;
     default:
         break;
@@ -65,16 +59,17 @@ static s32 HalPulseReceiverStopHandler(s32 arg) {
 }
 
 static s32 HalPulseReceiverThread(s32 arg) {
+    MOS_UNUSED(arg);
     pulse_counter = 0;
     MosInitSem(&pulse_sem, 0);
-    MosSetStopHandler(MosGetThread(), HalPulseReceiverStopHandler, TEST_PASS);
+    MosSetStopHandler(MosGetThreadPtr(), HalPulseReceiverStopHandler, TEST_PASS);
     // Set interrupt to high priority (higher than scheduler at least)
 #if 0
     NVIC_SetPriority(EXTI15_10_IRQn, 0);
     NVIC_EnableIRQ(EXTI15_10_IRQn);
 #endif
     for (;;) {
-    	MosTakeSem(&pulse_sem);
+    	MosWaitForSem(&pulse_sem);
         pulse_counter++;
         if ((pulse_counter % (1 << 12)) == 0) {
             MosPrintf("Pulses: %08x\n", pulse_counter);

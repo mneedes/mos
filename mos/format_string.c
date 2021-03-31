@@ -127,7 +127,7 @@ s32 MosVSNPrintf(char * restrict buffer, mos_size sz,
     s32 buf_rem = (s32) sz - 1;
     bool do_numeric, is_signed, is_upper, in_arg = false;
     u8 base, long_cnt, min_digits;
-    char pad_char;
+    char pad_char = ' ';
     for (ch = fmt; *ch != '\0'; ch++) {
         if (!in_arg) {
             if (*ch == '%') {
@@ -220,13 +220,13 @@ s32 MosVSNPrintf(char * restrict buffer, mos_size sz,
                     s32 arg32 = va_arg(args, s32);
                     char tmp32[11];
                     u32 cnt = MosItoa(tmp32, arg32, base, is_upper,
-                                       min_digits, pad_char, is_signed);
+                                      min_digits, pad_char, is_signed);
                     WriteBuf(&out, tmp32, cnt, &buf_rem);
                 } else {
                     s64 arg64 = va_arg(args, s64);
                     char tmp64[22];
                     u32 cnt = MosItoa64(tmp64, arg64, base, is_upper,
-                                         min_digits, pad_char, is_signed);
+                                        min_digits, pad_char, is_signed);
                     WriteBuf(&out, tmp64, cnt, &buf_rem);
                 }
             }

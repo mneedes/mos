@@ -32,13 +32,6 @@
 #define TEST_SHELL_THREAD_ID     0
 #define PIGEON_THREAD_ID         (MAX_APP_THREADS - 1)
 
-typedef s32 TestStatus;
-enum TestStatus {
-    TEST_PASS         = 0xba5eba11,
-    TEST_PASS_HANDLER = 0xba5eba12,
-    TEST_FAIL         = 0xdeadbeef,
-};
-
 // Test thread stacks and heap
 static MosThread StaticThreads[MAX_APP_THREADS];
 static MosThread * Threads[MAX_APP_THREADS];
@@ -156,6 +149,7 @@ static s32 KillSelfTestThread(s32 arg) {
 }
 
 static s32 ExcTestThread(s32 arg) {
+    MOS_UNUSED(arg);
     MosSetStopArg(MosGetThreadPtr(), TEST_PASS_HANDLER + 1);
     MosDelayThread(50);
     MosCrash();
@@ -1004,6 +998,7 @@ static bool SemTests(void) {
 static const u32 queue_test_delay = 50;
 
 static s32 QueueTestPendIRQ(s32 arg) {
+    MOS_UNUSED(arg);
     for (;;) {
         // Fire Software Interrupt
         HalTestsTriggerInterrupt(1);
@@ -1341,8 +1336,8 @@ static bool MuxTests(void) {
 // Mutex Tests
 //
 
-static s32 MutexRecursion(u32 depth) {
-    const u32 max_test_depth = 4;
+static s32 MutexRecursion(s32 depth) {
+    const s32 max_test_depth = 4;
     TestStatus status = TEST_PASS;
     MosLockMutex(&TestMutex);
     if (TestMutex.depth != depth) {
@@ -1897,6 +1892,7 @@ static bool HeapTests(void) {
 }
 
 static s32 StackPrintThread(s32 arg) {
+    MOS_UNUSED(arg);
     u64 e = 0xdeadbeeffeebdaed;
     MosPrintf("DEADBEEFFEEBDAED == %llX\n", e);
     return TEST_PASS;
@@ -1966,7 +1962,7 @@ static bool MiscTests(void) {
     char * dummy = "bummy_dummy_mummy_";
     char buf[128];
     if (MosSNPrintf(buf, 32, "%s%s%s", dummy, dummy, dummy) != 31) test_pass = false;
-    if (MosSNPrintf(buf, sizeof(buf), "%s", dummy) != strlen(dummy)) test_pass = false;
+    if (MosSNPrintf(buf, sizeof(buf), "%s", dummy) != (s32)strlen(dummy)) test_pass = false;
     if (strcmp(buf, dummy)) test_pass = false;
     if (MosSNPrintf(buf, 11, "%010llx", 0xdeadbee90) != 10) test_pass = false;
     if (strcmp(buf, "0deadbee90")) test_pass = false;
@@ -2008,7 +2004,7 @@ static bool MiscTests(void) {
     // String tests
     //
     test_pass = true;
-    MosPrint("Misc Test: strtod()\n");
+    MosPrint("Misc Test: strtod() library test\n");
     double exp = 1.87554603778e-18;
     double diff = exp / 10.0;
     char * str3p0 = "1.87554603778e-18";
@@ -2081,6 +2077,7 @@ static s32 CmdTest(s32 argc, char * argv[]) {
 static volatile bool PigeonFlag = false;
 
 static s32 PigeonThread(s32 arg) {
+    MOS_UNUSED(arg);
     u32 cnt = 0;
     while (1) {
         u64 last = MosGetCycleCount();
@@ -2095,6 +2092,8 @@ static s32 PigeonThread(s32 arg) {
 }
 
 static s32 CmdPigeon(s32 argc, char * argv[]) {
+    MOS_UNUSED(argc);
+    MOS_UNUSED(argv);
     if (!PigeonFlag) {
         MosThread * thd = Threads[PIGEON_THREAD_ID];
         MosInitAndRunThread(thd, 0, PigeonThread, 0, MosGetStackBottom(thd),
@@ -2109,6 +2108,8 @@ static s32 CmdPigeon(s32 argc, char * argv[]) {
 }
 
 static s32 CmdClearTickHisto(s32 argc, char * argv[]) {
+    MOS_UNUSED(argc);
+    MOS_UNUSED(argv);
     for (u32 ix = 0; ix < MAX_TICK_HISTO_ENTRIES; ix++) TickHisto[ix] = 0;
     SchedCount = 0;
     return CMD_OK;
@@ -2121,9 +2122,9 @@ static MosCmdList CmdList;
 #define MAX_CMD_LINE_SIZE       128
 
 static char CmdBuffers[MAX_CMD_BUFFER_LENGTH][MAX_CMD_LINE_SIZE] = {{ 0 }};
-static u32 CmdIx = 0;
-static u32 CmdMaxIx = 0;
-static u32 CmdHistoryIx = 0;
+static s32 CmdIx = 0;
+static s32 CmdMaxIx = 0;
+static s32 CmdHistoryIx = 0;
 
 // Calculate a valid command index at the offset from the provided index
 static u32 CalcOffsetCmdIx(s32 ix, s32 max_ix, s32 offset) {
@@ -2183,6 +2184,7 @@ static CmdStatus RunCmd(char * cmd_buf_in) {
 }
 
 static s32 TestShell(s32 arg) {
+    MOS_UNUSED(arg);
 
     static MosCmd list_cmds[] = {
         { CmdTest,           "run", "Run Test", "[TEST]", {0} },

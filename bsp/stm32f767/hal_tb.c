@@ -17,12 +17,6 @@
 
 #include <bsp/hal_tb.h>
 
-typedef enum {
-    TEST_PASS        = 0xba5eba11,
-    TEST_FAIL        = 0xdeadbeef,
-} TestStatus;
-
-
 static MosSem pulse_sem;
 static u32 pulse_counter;
 

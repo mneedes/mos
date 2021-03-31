@@ -14,11 +14,6 @@
 #include <mos/trace.h>
 #include <bsp/hal_tb.h>
 
-typedef enum {
-    TEST_PASS        = 0xba5eba11,
-    TEST_FAIL        = 0xdeadbeef,
-} TestStatus;
-
 // GPIOs are mapped to pin 12 through 15 on STM32F4 Discovery
 #define GPIO_BASE   0x40020C00
 #define LED_ON(x)   (MOS_VOL_U32(GPIO_BASE + 24) = (1 << (12 + (x))))

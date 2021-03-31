@@ -9,6 +9,14 @@
 
 #include <bsp_hal.h>
 
+typedef s32 TestStatus;
+enum TestStatus {
+    TEST_DUMMY        = -1,
+    TEST_PASS         = 0x7a5eba11,
+    TEST_PASS_HANDLER = 0x7a5eba12,
+    TEST_FAIL         = 0x7eadbeef,
+};
+
 void MOS_ISR_SAFE IRQ0_Callback(void);
 void MOS_ISR_SAFE IRQ1_Callback(void);
 

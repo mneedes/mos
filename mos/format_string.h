@@ -16,6 +16,8 @@ u32 MosItoa(char * restrict out, s32 input, u16 base, bool is_upper,
 u32 MosItoa64(char * restrict out, s64 input, u16 base, bool is_upper,
               u16 min_digits, char pad_char, bool is_signed);
 
+// Like C vsnprintf()/vsnprintf() EXCEPT that it will always return number of
+//   actual characters printed rather than what would have been printed.
 s32 MosVSNPrintf(char * dest, mos_size size, const char * fmt, va_list arg);
 s32 MosSNPrintf(char * dest, mos_size size, const char * fmt, ...);
 

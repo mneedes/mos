@@ -43,7 +43,7 @@
 #define MOS_ALIGNED(x)         __attribute__((aligned(x)))
 #define MOS_ISR_SAFE
 
-#define MOS_UNUSED(x)          (void)(x);
+#define MOS_UNUSED(x)          (void)(x)
 
 #define MOS_STACK_ALIGNMENT    8
 #define MOS_STACK_ALIGNED      MOS_ALIGNED(MOS_STACK_ALIGNMENT)
