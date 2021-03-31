@@ -9,6 +9,11 @@
 
 #include <bsp_hal.h>
 
+void MOS_ISR_SAFE IRQ0_Callback(void);
+void MOS_ISR_SAFE IRQ1_Callback(void);
+
+void HalTestsInit(void);
+void HalTestsTriggerInterrupt(u32 num);
 bool HalTests(int argc, char * argv[]);
 
 #endif

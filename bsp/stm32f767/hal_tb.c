@@ -39,7 +39,7 @@ static s32 HalPulseReceiverStopHandler(s32 arg) {
 static s32 HalPulseReceiverThread(s32 arg) {
     pulse_counter = 0;
     MosInitSem(&pulse_sem, 0);
-    MosSetStopHandler(MosGetThread(), HalPulseReceiverStopHandler, TEST_PASS);
+    MosSetStopHandler(MosGetThreadPtr(), HalPulseReceiverStopHandler, TEST_PASS);
     // Set interrupt to high priority (higher than scheduler at least)
     NVIC_SetPriority(EXTI15_10_IRQn, 0);
     NVIC_EnableIRQ(EXTI15_10_IRQn);
@@ -54,6 +54,32 @@ static s32 HalPulseReceiverThread(s32 arg) {
 }
 
 static MosThread * thread = { 0 };
+
+void EXTI0_IRQHandler(void) {
+    IRQ0_Callback();
+}
+
+void EXTI1_IRQHandler(void) {
+    IRQ1_Callback();
+}
+
+void HalTestsInit(void) {
+    NVIC_EnableIRQ(EXTI0_IRQn);
+    NVIC_EnableIRQ(EXTI1_IRQn);
+}
+
+void HalTestsTriggerInterrupt(u32 num) {
+    switch (num) {
+    case 0:
+        NVIC_SetPendingIRQ(EXTI0_IRQn);
+        break;
+    case 1:
+        NVIC_SetPendingIRQ(EXTI1_IRQn);
+        break;
+    default:
+        break;
+    }
+}
 
 bool HalTests(int argc, char * argv[]) {
 	if (argc == 0) {

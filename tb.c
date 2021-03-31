@@ -83,15 +83,13 @@ static void DisplayHistogram(u32 cnt) {
         MosPrintf(" Histo[%u] = %u\n", ix, TestHisto[ix]);
 }
 
-void EXTI0_IRQHandler(void) {
+void MOS_ISR_SAFE IRQ0_Callback(void) {
     MosIncrementSem(&TestSem);
-    TestHisto[15] = MosGetCycleCount() >> 32;
     TestHisto[0]++;
 }
 
-void EXTI1_IRQHandler(void) {
+void MOS_ISR_SAFE IRQ1_Callback(void) {
     if (MosTrySendToQueue(&TestQueue, 1)) TestHisto[0]++;
-    TestHisto[15] = MosGetCycleCount() >> 32;
 }
 
 void EventCallback(MosEvent evt, u32 val) {
@@ -135,11 +133,11 @@ static s32 KillTestHandler(s32 arg) {
 
 static s32 KillTestThread(s32 arg) {
     if (arg) {
-        MosSetStopHandler(MosGetThread(), KillTestHandler, TEST_PASS_HANDLER);
+        MosSetStopHandler(MosGetThreadPtr(), KillTestHandler, TEST_PASS_HANDLER);
         // Lock mutex a couple times... need to release it in handler
         MosLockMutex(&TestMutex);
         MosLockMutex(&TestMutex);
-    } else MosSetStopArg(MosGetThread(), TEST_PASS_HANDLER);
+    } else MosSetStopArg(MosGetThreadPtr(), TEST_PASS_HANDLER);
     MosLogTrace(TRACE_INFO, "KillTestThread: Blocking\n");
     MosWaitForSem(&TestSem);
     return TEST_FAIL;
@@ -147,25 +145,25 @@ static s32 KillTestThread(s32 arg) {
 
 static s32 KillSelfTestThread(s32 arg) {
     if (arg) {
-        MosSetStopHandler(MosGetThread(), KillTestHandler, TEST_PASS_HANDLER);
+        MosSetStopHandler(MosGetThreadPtr(), KillTestHandler, TEST_PASS_HANDLER);
         // Lock mutex a couple times... need to release it in handler
         MosLockMutex(&TestMutex);
         MosLockMutex(&TestMutex);
-    } else MosSetStopArg(MosGetThread(), TEST_PASS_HANDLER);
+    } else MosSetStopArg(MosGetThreadPtr(), TEST_PASS_HANDLER);
     MosLogTrace(TRACE_INFO, "KillSelfTestThread: Killing Self\n");
-    MosKillThread(MosGetThread());
+    MosKillThread(MosGetThreadPtr());
     return TEST_FAIL;
 }
 
 static s32 ExcTestThread(s32 arg) {
-    MosSetStopArg(MosGetThread(), TEST_PASS_HANDLER + 1);
+    MosSetStopArg(MosGetThreadPtr(), TEST_PASS_HANDLER + 1);
     MosDelayThread(50);
     MosCrash();
     return TEST_FAIL;
 }
 
 static s32 AssertTestThread(s32 arg) {
-    MosSetStopArg(MosGetThread(), TEST_PASS_HANDLER);
+    MosSetStopArg(MosGetThreadPtr(), TEST_PASS_HANDLER);
     MosAssert(arg == 0x1234);
     return TEST_FAIL;
 }
@@ -177,7 +175,7 @@ static s32 FPTestThread(s32 arg) {
         x = x + 1.0;
         if (arg > 1 && (TestHisto[arg] == 1000)) {
             // Create an integer div-by-0 exception in FP thread
-            MosSetStopArg(MosGetThread(), TEST_PASS_HANDLER + 1);
+            MosSetStopArg(MosGetThreadPtr(), TEST_PASS_HANDLER + 1);
             volatile u32 y = (20 / (arg - 2));
             (void)y;
             return TEST_FAIL;
@@ -675,7 +673,7 @@ static const u32 sem_test_delay = 50;
 static s32 SemTestPendIRQ(s32 arg) {
     for (;;) {
         // Fire Software Interrupt
-        NVIC_SetPendingIRQ(EXTI0_IRQn);
+        HalTestsTriggerInterrupt(0);
         TestHisto[arg]++;
         MosDelayThread(sem_test_delay);
         if (MosIsStopRequested()) break;
@@ -1008,7 +1006,7 @@ static const u32 queue_test_delay = 50;
 static s32 QueueTestPendIRQ(s32 arg) {
     for (;;) {
         // Fire Software Interrupt
-        NVIC_SetPendingIRQ(EXTI1_IRQn);
+        HalTestsTriggerInterrupt(1);
         MosDelayThread(queue_test_delay);
         if (MosIsStopRequested()) break;
     }
@@ -1907,7 +1905,7 @@ static s32 StackPrintThread(s32 arg) {
 #if (__ARM_ARCH_8M_MAIN__ == 1U) || (defined(__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE >= 3))
 
 static s32 StackOverflowThread(s32 arg) {
-    MosSetStopArg(MosGetThread(), TEST_PASS_HANDLER + 1);
+    MosSetStopArg(MosGetThreadPtr(), TEST_PASS_HANDLER + 1);
     return StackOverflowThread(arg);
 }
 
@@ -1937,9 +1935,9 @@ static bool MiscTests(void) {
     MosPrint("Misc Test: Stack stats\n");
     {
         u32 size = 0, usage = 0, max_usage = 0;
-        MosGetStackStats(MosGetThread(), &size, &usage, &max_usage);
+        MosGetStackStats(MosGetThreadPtr(), &size, &usage, &max_usage);
         MosPrintf("Stack: size: %u usage: %u max_usage: %u\n", size, usage, max_usage);
-        if (size != MosGetStackSize(MosGetThread())) test_pass = false;
+        if (size != MosGetStackSize(MosGetThreadPtr())) test_pass = false;
     }
     if (test_pass) MosPrint(" Passed\n");
     else {
@@ -2251,8 +2249,7 @@ static s32 TestShell(s32 arg) {
 }
 
 int InitTestBench() {
-    NVIC_EnableIRQ(EXTI0_IRQn);
-    NVIC_EnableIRQ(EXTI1_IRQn);
+    HalTestsInit();
 
     //DWT->CYCCNT -> COOL, High resolution timer built-in
 

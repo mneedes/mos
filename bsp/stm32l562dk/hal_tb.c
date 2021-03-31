@@ -26,6 +26,32 @@ typedef enum {
 static MosSem pulse_sem;
 static u32 pulse_counter;
 
+void EXTI0_IRQHandler(void) {
+    IRQ0_Callback();
+}
+
+void EXTI1_IRQHandler(void) {
+    IRQ1_Callback();
+}
+
+void HalTestsInit(void) {
+    NVIC_EnableIRQ(EXTI0_IRQn);
+    NVIC_EnableIRQ(EXTI1_IRQn);
+}
+
+void HalTestsTriggerInterrupt(u32 num) {
+    switch (num) {
+    case 0:
+        NVIC_SetPendingIRQ(EXTI0_IRQn);
+        break;
+    case 1:
+        NVIC_SetPendingIRQ(EXTI1_IRQn);
+        break;
+    default:
+        break;
+    }
+}
+
 #if 0
 void EXTI15_10_IRQHandler(void) {
 	__HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_13);

@@ -26,6 +26,32 @@ typedef enum {
 
 static u32 pulse_counter = 0;
 
+void EXTI0_IRQHandler(void) {
+    IRQ0_Callback();
+}
+
+void EXTI1_IRQHandler(void) {
+    IRQ1_Callback();
+}
+
+void HalTestsInit(void) {
+    NVIC_EnableIRQ(EXTI0_IRQn);
+    NVIC_EnableIRQ(EXTI1_IRQn);
+}
+
+void HalTestsTriggerInterrupt(u32 num) {
+    switch (num) {
+    case 0:
+        NVIC_SetPendingIRQ(EXTI0_IRQn);
+        break;
+    case 1:
+        NVIC_SetPendingIRQ(EXTI1_IRQn);
+        break;
+    default:
+        break;
+    }
+}
+
 static s32 HalRandomPulseThread(s32 arg) {
     pulse_counter = 0;
     for (u32 ix = 0; ix < arg; ix++) {

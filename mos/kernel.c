@@ -766,7 +766,7 @@ void MOS_ISR_SAFE MosYieldThread(void) {
     asm volatile ( "isb" );
 }
 
-MosThread * MosGetThread(void) {
+MosThread * MosGetThreadPtr(void) {
     return (MosThread *)RunningThread;
 }
 

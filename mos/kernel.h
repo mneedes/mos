@@ -141,7 +141,7 @@ void MosResetTimer(MosTimer * timer);
 
 // Can use MosYieldThread() for cooperative multitasking
 MOS_ISR_SAFE void MosYieldThread(void);
-MosThread * MosGetThread(void);
+MosThread * MosGetThreadPtr(void);
 
 // To get the current stack depth of current thread
 static MOS_INLINE u32 MosGetStackDepth(u8 * top) {
