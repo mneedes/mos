@@ -25,7 +25,7 @@ void EXTI15_10_IRQHandler(void) {
 	MosIncrementSem(&pulse_sem);
 }
 
-static s32 HalPulseReceiverStopHandler(s32 arg) {
+static s32 HalPulseReceiverTermHandler(s32 arg) {
     MosPrintf("Total Received Pulses: %08x\n", pulse_counter);
     return arg;
 }
@@ -33,7 +33,7 @@ static s32 HalPulseReceiverStopHandler(s32 arg) {
 static s32 HalPulseReceiverThread(s32 arg) {
     pulse_counter = 0;
     MosInitSem(&pulse_sem, 0);
-    MosSetStopHandler(MosGetThreadPtr(), HalPulseReceiverStopHandler, TEST_PASS);
+    MosSetTermHandler(MosGetThreadPtr(), HalPulseReceiverTermHandler, TEST_PASS);
     // Set interrupt to high priority (higher than scheduler at least)
     NVIC_SetPriority(EXTI15_10_IRQn, 0);
     NVIC_EnableIRQ(EXTI15_10_IRQn);

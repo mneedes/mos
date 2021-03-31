@@ -91,8 +91,8 @@ typedef struct Thread {
     u8 stop_request;
     u8 timed_out;
     s32 rtn_val;
-    MosHandler * stop_handler;
-    s32 stop_arg;
+    MosThreadEntry * term_handler;
+    s32 term_arg;
     u8 * stack_bottom;
     u32 stack_size;
     const char * name;
@@ -188,6 +188,8 @@ static MOS_INLINE void SetRunningThreadStateAndYield(ThreadState state) {
     SetBasePri(0);
 }
 
+// ThreadExit is invoked when a thread stops (returns from its natural entry point)
+//   or after its termination handler returns (kill or exception)
 static void ThreadExit(s32 rtn_val) {
     SetBasePri(IntPriMaskLow);
     RunningThread->rtn_val = rtn_val;
@@ -213,7 +215,10 @@ static void ThreadExit(s32 rtn_val) {
     MosAssert(0);
 }
 
-static s32 DefaultStopHandler(s32 arg) {
+// Default handler when thread is killed or terminates via exception
+//   A thread that stops by returning from its initial entry point
+//   will NOT invoke a termination handler.
+static s32 DefaultTermHandler(s32 arg) {
     return arg;
 }
 
@@ -247,8 +252,8 @@ static void InitThread(Thread * thd, MosThreadPriority pri,
     thd->pri = pri;
     thd->nom_pri = pri;
     thd->stop_request = false;
-    thd->stop_handler = DefaultStopHandler;
-    thd->stop_arg = 0;
+    thd->term_handler = DefaultTermHandler;
+    thd->term_arg = 0;
     thd->stack_bottom = stack_bottom;
     thd->stack_size = stack_size;
     thd->name = "";
@@ -312,7 +317,7 @@ static u32 MOS_USED Scheduler(u32 sp) {
         if (MosIsOnList(&RunningThread->tmr_e.link))
             MosRemoveFromList(&RunningThread->tmr_e.link);
         InitThread(RunningThread, RunningThread->pri,
-                   RunningThread->stop_handler, RunningThread->stop_arg,
+                   RunningThread->term_handler, RunningThread->term_arg,
                    RunningThread->stack_bottom, RunningThread->stack_size);
         SetThreadState(RunningThread, THREAD_RUNNABLE);
     } else if (RunningThread->state & THREAD_WAIT_FOR_TICK) {
@@ -980,8 +985,8 @@ void MosKillThread(MosThread * _thd) {
         //   to stop at its original run priority.
         SetBasePri(IntPriMaskLow);
         MosThreadPriority pri = thd->pri;
-        MosHandler * stop_handler = thd->stop_handler;
-        s32 stop_arg = thd->stop_arg;
+        MosThreadEntry * stop_handler = thd->term_handler;
+        s32 stop_arg = thd->term_arg;
         u8 * stack_bottom = thd->stack_bottom;
         u32 stack_size = thd->stack_size;
         SetBasePri(0);
@@ -990,18 +995,18 @@ void MosKillThread(MosThread * _thd) {
     }
 }
 
-void MosSetStopHandler(MosThread * _thd, MosHandler * handler, s32 arg) {
+void MosSetTermHandler(MosThread * _thd, MosThreadEntry * entry, s32 arg) {
     Thread * thd = (Thread *)_thd;
     SetBasePri(IntPriMaskLow);
-    if (handler) thd->stop_handler = handler;
-    else thd->stop_handler = DefaultStopHandler;
-    thd->stop_arg = arg;
+    if (entry) thd->term_handler = entry;
+    else thd->term_handler = DefaultTermHandler;
+    thd->term_arg = arg;
     SetBasePri(0);
 }
 
-void MosSetStopArg(MosThread * _thd, s32 arg) {
+void MosSetTermArg(MosThread * _thd, s32 arg) {
     Thread * thd = (Thread *)_thd;
-    thd->stop_arg = arg;
+    thd->term_arg = arg;
 }
 
 void MosInitMutex(MosMutex * mtx) {

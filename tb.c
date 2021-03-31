@@ -126,11 +126,11 @@ static s32 KillTestHandler(s32 arg) {
 
 static s32 KillTestThread(s32 arg) {
     if (arg) {
-        MosSetStopHandler(MosGetThreadPtr(), KillTestHandler, TEST_PASS_HANDLER);
+        MosSetTermHandler(MosGetThreadPtr(), KillTestHandler, TEST_PASS_HANDLER);
         // Lock mutex a couple times... need to release it in handler
         MosLockMutex(&TestMutex);
         MosLockMutex(&TestMutex);
-    } else MosSetStopArg(MosGetThreadPtr(), TEST_PASS_HANDLER);
+    } else MosSetTermArg(MosGetThreadPtr(), TEST_PASS_HANDLER);
     MosLogTrace(TRACE_INFO, "KillTestThread: Blocking\n");
     MosWaitForSem(&TestSem);
     return TEST_FAIL;
@@ -138,11 +138,11 @@ static s32 KillTestThread(s32 arg) {
 
 static s32 KillSelfTestThread(s32 arg) {
     if (arg) {
-        MosSetStopHandler(MosGetThreadPtr(), KillTestHandler, TEST_PASS_HANDLER);
+        MosSetTermHandler(MosGetThreadPtr(), KillTestHandler, TEST_PASS_HANDLER);
         // Lock mutex a couple times... need to release it in handler
         MosLockMutex(&TestMutex);
         MosLockMutex(&TestMutex);
-    } else MosSetStopArg(MosGetThreadPtr(), TEST_PASS_HANDLER);
+    } else MosSetTermArg(MosGetThreadPtr(), TEST_PASS_HANDLER);
     MosLogTrace(TRACE_INFO, "KillSelfTestThread: Killing Self\n");
     MosKillThread(MosGetThreadPtr());
     return TEST_FAIL;
@@ -150,14 +150,14 @@ static s32 KillSelfTestThread(s32 arg) {
 
 static s32 ExcTestThread(s32 arg) {
     MOS_UNUSED(arg);
-    MosSetStopArg(MosGetThreadPtr(), TEST_PASS_HANDLER + 1);
+    MosSetTermArg(MosGetThreadPtr(), TEST_PASS_HANDLER + 1);
     MosDelayThread(50);
     MosCrash();
     return TEST_FAIL;
 }
 
 static s32 AssertTestThread(s32 arg) {
-    MosSetStopArg(MosGetThreadPtr(), TEST_PASS_HANDLER);
+    MosSetTermArg(MosGetThreadPtr(), TEST_PASS_HANDLER);
     MosAssert(arg == 0x1234);
     return TEST_FAIL;
 }
@@ -169,7 +169,7 @@ static s32 FPTestThread(s32 arg) {
         x = x + 1.0;
         if (arg > 1 && (TestHisto[arg] == 1000)) {
             // Create an integer div-by-0 exception in FP thread
-            MosSetStopArg(MosGetThreadPtr(), TEST_PASS_HANDLER + 1);
+            MosSetTermArg(MosGetThreadPtr(), TEST_PASS_HANDLER + 1);
             volatile u32 y = (20 / (arg - 2));
             (void)y;
             return TEST_FAIL;
@@ -1901,7 +1901,7 @@ static s32 StackPrintThread(s32 arg) {
 #if (__ARM_ARCH_8M_MAIN__ == 1U) || (defined(__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE >= 3))
 
 static s32 StackOverflowThread(s32 arg) {
-    MosSetStopArg(MosGetThreadPtr(), TEST_PASS_HANDLER + 1);
+    MosSetTermArg(MosGetThreadPtr(), TEST_PASS_HANDLER + 1);
     return StackOverflowThread(arg);
 }
 

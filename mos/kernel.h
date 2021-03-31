@@ -39,7 +39,6 @@ typedef struct MosTimer MosTimer;
 
 // Callbacks
 typedef s32 (MosThreadEntry)(s32 arg);
-typedef s32 (MosHandler)(s32 arg);
 typedef bool MOS_ISR_SAFE (MosTimerCallback)(MosTimer * tmr);
 typedef void (MosRawPrintfHook)(const char * fmt, ...);
 typedef void (MosSleepHook)(void);
@@ -153,10 +152,12 @@ static MOS_INLINE u32 MosGetStackDepth(u8 * top) {
     return ((u32) top) - sp;
 }
 
+// Thread stack methods
 void MosGetStackStats(MosThread * thd, u32 * stack_size, u32 * stack_usage, u32 * max_stack_usage);
 u8 * MosGetStackBottom(MosThread * thd);
 u32 MosGetStackSize(MosThread * thd);
 void MosSetStack(MosThread * thd, u8 * stack_bottom, u32 stack_size);
+
 void MosSetThreadName(MosThread * thd, const char * name);
 bool MosInitThread(MosThread * thd, MosThreadPriority pri, MosThreadEntry * entry,
                    s32 arg, u8 * stack_bottom, u32 stack_size);
@@ -164,18 +165,33 @@ bool MosRunThread(MosThread * thd);
 bool MosInitAndRunThread(MosThread * thd, MosThreadPriority pri,
                          MosThreadEntry * entry, s32 arg, u8 * stack_bottom,
                          u32 stack_size);
+
+// Obtain thread state and priority
 MosThreadState MosGetThreadState(MosThread * thd, s32 * rtn_val);
 MosThreadPriority MosGetThreadPriority(MosThread * thd);
+
+// Change thread priority
 void MosChangeThreadPriority(MosThread * thd, MosThreadPriority pri);
+
+// For requesting normal thread stop.  Note that normal thread stop does NOT result
+// in the invocation of the termination handler.
 void MosRequestThreadStop(MosThread * thd);
+// A thread can poll for stop requests so it may return naturally from its initial
+// entry point.
 bool MosIsStopRequested(void);
+// Waits for thread stop or termination.  If a thread terminates abnormally this is
+// invoked AFTER the termination handler.
 s32 MosWaitForThreadStop(MosThread * thd);
 bool MosWaitForThreadStopOrTO(MosThread * thd, s32 * rtn_val, u32 ticks);
-// Forcible stop, works on blocked threads.
+
+// Forcible stop, works on blocked threads, results in invocation of termination handler.
 void MosKillThread(MosThread * thd);
-// Handler to run if thread is killed.  Thread can set own handler and argument.
-void MosSetStopHandler(MosThread * thd, MosHandler * handler, s32 arg);
-void MosSetStopArg(MosThread * thd, s32 arg);
+// Sets handler to run if thread is killed or dies via exception.  Thread can set its own
+// termination handler entry and/or argument.  If entry is null it will use the default
+// termination handler.  Another thread can use the return value from MosWaitForThreadStop()
+// to detect abnormal termination of a thread.
+void MosSetTermHandler(MosThread * thd, MosThreadEntry * entry, s32 arg);
+void MosSetTermArg(MosThread * thd, s32 arg);
 
 // Blocking Recursive Mutex with priority inheritance
 
