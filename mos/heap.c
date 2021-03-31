@@ -38,13 +38,13 @@ enum {
     MIN_PAYLOAD_SIZE  = sizeof(MosList)
 };
 
-typedef struct __attribute__((packed)) {
+typedef struct {
     u32 canary;
     u32 size_p;
     u32 size;
 } Link;
 
-typedef struct __attribute__((packed)) {
+typedef struct {
     Link link;
     union { // <--  Alignment guaranteed here
         MosList fl_e;
@@ -53,6 +53,8 @@ typedef struct __attribute__((packed)) {
 } Block;
 
 void MosInitHeap(MosHeap * heap, u8 * _bot, u32 heap_size, u32 alignment) {
+    MosAssert(sizeof(Link) == 12);
+    MosAssert(sizeof(Block) == 20);
     // Alignment must be a power of 2, and at a minimum should be
     //   the pointer size. Smallest block must fit a Link, the free-list
     //   link and satisfy alignment requirements of payload.
