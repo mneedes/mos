@@ -199,7 +199,7 @@ void MosInitMutex(MosMutex * mtx);
 void MosLockMutex(MosMutex * mtx);
 bool MosTryMutex(MosMutex * mtx);
 void MosUnlockMutex(MosMutex * mtx);
-// Release mutex if owned (useful in kill handlers)
+// Release mutex if owned (useful in termination handlers)
 void MosRestoreMutex(MosMutex * mtx);
 bool MosIsMutexOwner(MosMutex * mtx);
 

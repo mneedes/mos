@@ -9,10 +9,53 @@
 static const char LowerCaseDigits[] = "0123456789abcdef";
 static const char UpperCaseDigits[] = "0123456789ABCDEF";
 
-u32 MosItoa64(char * restrict out, s64 in, u16 base, bool is_upper,
-              u16 min_digits, char pad_char, bool is_signed) {
+// TODO: Properly handle %width.precision
+// TODO: Floating point rounding
+// TODO: Floating point has trailing .0
+
+u32 MosDtoa(char * restrict out, double in, u16 prec) {
+    u64 * _in_p = (u64 *) &in;
+    u64 _in = *_in_p;
+    // First evaluate special values (e.g.: NaN / Inf)
+    u32 pfx = (u32) (_in >> 32);
+    if ((pfx & 0x7ff7ffff) == 0x7ff00000) {
+        u32 sfx = (u32) (_in & 0xffffffff);
+        if (sfx == 0x0) {
+            if (pfx == 0xfff00000) {
+                out[0] = '-'; out[1] = 'I';
+                out[2] = 'n'; out[3] = 'f';
+                return 4;
+            } else if (pfx == 0x7ff00000) {
+                out[0] = '+'; out[1] = 'I';
+                out[2] = 'n'; out[3] = 'f';
+                return 4;
+            }
+        } else if (sfx == 0x1) {
+            if (pfx == 0x7ff00000 || pfx == 0x7ff80000) {
+                out[0] = 'N'; out[1] = 'a'; out[2] = 'N';
+                return 3;
+            }
+        }
+	}
+    // Integer part
+    s32 int_part = (s32) in;
+    in -= (double) int_part;
+    if (int_part < 0) in = -in;
+    u32 cnt = MosItoa(out, int_part, 10, false, 0, '0', true);
+    out += cnt;
+    // Fractional part
+    *out++ = '.';
+    u64 val = 1;
+    for (u32 ix = 0; ix < prec; ix++) val *= 10;
+    in *= (double)val;
+    int_part = (s32) in;
+    cnt += MosItoa(out, int_part, 10, false, 0, '0', false);
+    return cnt + 1;
+}
+
+u32 MosLLtoa(char * restrict out, s64 in, u16 base, bool is_upper,
+             u16 min_digits, char pad_char, bool is_signed) {
     u64 adj = (u64) in;
-    u32 cnt = 0;
     u8 shift = 0;
     switch (base) {
     case 2:
@@ -25,6 +68,7 @@ u32 MosItoa64(char * restrict out, s64 in, u16 base, bool is_upper,
         shift = 4;
         break;
     }
+    s32 cnt = 0;
     if (shift) {
         const char * restrict digits = LowerCaseDigits;
         if (is_upper) digits = UpperCaseDigits;
@@ -51,7 +95,7 @@ u32 MosItoa64(char * restrict out, s64 in, u16 base, bool is_upper,
     // Pad to minimum number of digits
     for (; cnt < min_digits; cnt++) *out++ = pad_char;
     // Reverse digit order in place
-    for (u32 idx = 0; idx < ((cnt + 1) >> 1); idx++) {
+    for (s32 idx = 0; idx < ((cnt + 1) >> 1); idx++) {
         char tmp = out[idx - cnt];
         out[idx - cnt] = out[-idx - 1];
         out[-idx - 1] = tmp;
@@ -74,7 +118,7 @@ u32 MosItoa(char * restrict out, s32 in, u16 base, bool is_upper,
         shift = 4;
         break;
     }
-    u32 cnt = 0;
+    s32 cnt = 0;
     if (shift) {
         const char * restrict digits = LowerCaseDigits;
         if (is_upper) digits = UpperCaseDigits;
@@ -101,7 +145,7 @@ u32 MosItoa(char * restrict out, s32 in, u16 base, bool is_upper,
     // Pad to minimum number of digits
     for (; cnt < min_digits; cnt++) *out++ = pad_char;
     // Reverse digit order in place
-    for (u32 idx = 0; idx < ((cnt + 1) >> 1); idx++) {
+    for (s32 idx = 0; idx < ((cnt + 1) >> 1); idx++) {
         char tmp = out[idx - cnt];
         out[idx - cnt] = out[-idx - 1];
         out[-idx - 1] = tmp;
@@ -195,16 +239,21 @@ s32 MosVSNPrintf(char * restrict buffer, mos_size sz,
                 is_signed = false;
                 is_upper = true;
                 break;
-            case 'p':
-            {
+            case 'f': {
+                double argD = (double) va_arg(args, double);
+                char tmpD[25];
+                u32 cnt = MosDtoa(tmpD, argD, min_digits);
+                WriteBuf(&out, tmpD, cnt, &buf_rem);
+                break;
+            }
+            case 'p': {
                 s32 arg32 = (u32) va_arg(args, u32 *);
                 char tmp32[8];
                 u32 cnt = MosItoa(tmp32, arg32, 16, false, 8, '0', false);
                 WriteBuf(&out, tmp32, cnt, &buf_rem);
                 break;
             }
-            case 'P':
-            {
+            case 'P': {
                 s32 arg32 = (u32) va_arg(args, u32 *);
                 char tmp32[8];
                 u32 cnt = MosItoa(tmp32, arg32, 16, true, 8, '0', false);
@@ -225,7 +274,7 @@ s32 MosVSNPrintf(char * restrict buffer, mos_size sz,
                 } else {
                     s64 arg64 = va_arg(args, s64);
                     char tmp64[22];
-                    u32 cnt = MosItoa64(tmp64, arg64, base, is_upper,
+                    u32 cnt = MosLLtoa(tmp64, arg64, base, is_upper,
                                         min_digits, pad_char, is_signed);
                     WriteBuf(&out, tmp64, cnt, &buf_rem);
                 }
