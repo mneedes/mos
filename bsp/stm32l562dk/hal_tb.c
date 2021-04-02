@@ -24,7 +24,7 @@ void EXTI0_IRQHandler(void) {
     IRQ0_Callback();
 }
 
-void EXTI1_IRQHandler(void) {
+void EXTI10_IRQHandler(void) {
     IRQ1_Callback();
 }
 

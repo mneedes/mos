@@ -1555,161 +1555,11 @@ static bool HeapTests(void) {
     bool tests_all_pass = true;
     bool test_pass;
     MosHeap TestHeapDesc;
-    //u32 rem;
-
-#if 0
-    //
-    // Allocate and Free of blocks with reserved block sizes
-    //
-    test_pass = true;
-    MosPrint("Heap Test 1: Reserved block sizes\n");
-    MosInitHeap(&TestHeapDesc, TestHeap, sizeof(TestHeap), 3);
-    if (TestHeapDesc.max_bs != 0) test_pass = false;
-    MosReserveBlockSize(&TestHeapDesc, 128);
-    if (TestHeapDesc.max_bs != 128) test_pass = false;
-    MosReserveBlockSize(&TestHeapDesc, 16);
-    if (TestHeapDesc.max_bs != 128) test_pass = false;
-    MosReserveBlockSize(&TestHeapDesc, 256);
-    if (TestHeapDesc.max_bs != 256) test_pass = false;
-    {
-        u32 * blocks[10];
-        // Start off with a double-free for good measure
-        blocks[0] = MosAlloc(&TestHeapDesc, 4);
-        MosFree(&TestHeapDesc, blocks[0]);
-        MosFree(&TestHeapDesc, blocks[0]);
-        for (u32 ix = 0; ix < count_of(blocks); ix++) {
-            blocks[ix] = MosAlloc(&TestHeapDesc, 4);
-            if (blocks[ix] == NULL) test_pass = false;
-            if ((u32)blocks[ix] % MOS_HEAP_ALIGNMENT != 0) test_pass = false;
-            *(blocks[ix]) = ix + 1;
-        }
-        for (u32 ix = 0; ix < count_of(blocks); ix++) {
-            MosFree(&TestHeapDesc, blocks[ix]);
-        }
-        for (u32 ix = 0; ix < count_of(blocks); ix++) {
-            blocks[ix] = MosAlloc(&TestHeapDesc, 4);
-            if (blocks[ix] == NULL) test_pass = false;
-            if ((u32)blocks[ix] % MOS_HEAP_ALIGNMENT != 0) test_pass = false;
-            *(blocks[ix]) = ix;
-        }
-        for (u32 ix = 0; ix < count_of(blocks); ix++) {
-            blocks[ix] = MosReAlloc(&TestHeapDesc, blocks[ix], 8);
-            if (blocks[ix] == NULL) test_pass = false;
-            if ((u32)blocks[ix] % MOS_HEAP_ALIGNMENT != 0) test_pass = false;
-        }
-        for (u32 ix = 0; ix < count_of(blocks); ix++) {
-            if (*blocks[ix] != ix) test_pass = false;
-        }
-        for (u32 ix = 0; ix < count_of(blocks); ix++) {
-            blocks[ix] = MosReAlloc(&TestHeapDesc, blocks[ix], 32);
-            if (blocks[ix] == NULL) test_pass = false;
-            if ((u32)blocks[ix] % MOS_HEAP_ALIGNMENT != 0) test_pass = false;
-        }
-        for (u32 ix = 0; ix < count_of(blocks); ix++) {
-            if (*blocks[ix] != ix) test_pass = false;
-        }
-    }
-    if (test_pass) MosPrint(" Passed\n");
-    else {
-        MosPrint(" Failed\n");
-        tests_all_pass = false;
-    }
-    //
-    // Allocate and Free of odd sized blocks
-    //
-    test_pass = true;
-    MosPrint("Heap Test 2: Odd blocks\n");
-    MosInitHeap(&TestHeapDesc, TestHeap, sizeof(TestHeap), 3);
-    MosReserveBlockSize(&TestHeapDesc, 64);
-    MosReserveBlockSize(&TestHeapDesc, 128);
-    MosReserveBlockSize(&TestHeapDesc, 256);
-    const u16 num_blocks = 5;
-    void * blocks[num_blocks];
-    rem = TestHeapDesc.bot - TestHeapDesc.pit + 16;
-    MosPrintf("  Starting: %u bytes\n", rem);
-    // Start off with a double-free for good measure
-    blocks[0] = MosAlloc(&TestHeapDesc, 257);
-    MosFree(&TestHeapDesc, blocks[0]);
-    MosFree(&TestHeapDesc, blocks[0]);
-    if (TestHeapDesc.max_bs != 256) test_pass = false;
-    for (u32 ix = 0; ix < num_blocks; ix++) {
-        blocks[ix] = MosAlloc(&TestHeapDesc, 257);
-        if (blocks[ix] == NULL) test_pass = false;
-        if ((u32)blocks[ix] % MOS_HEAP_ALIGNMENT != 0) test_pass = false;
-        if (!MosIsListEmpty(&TestHeapDesc.osl)) test_pass = false;
-    }
-    rem = TestHeapDesc.bot - TestHeapDesc.pit + 16;
-    MosPrintf(" Remaining: %u bytes\n", rem);
-    if (rem != sizeof(TestHeap) - (264 + 16) * num_blocks - 3 * 24)
-        test_pass = false;
-    for (u32 ix = 0; ix < num_blocks; ix++) {
-        MosFree(&TestHeapDesc, blocks[ix]);
-        if (MosIsListEmpty(&TestHeapDesc.osl)) test_pass = false;
-    }
-    for (u32 ix = 0; ix < num_blocks; ix++) {
-        if (MosIsListEmpty(&TestHeapDesc.osl)) test_pass = false;
-        blocks[ix] = MosAlloc(&TestHeapDesc, 257);
-        if (blocks[ix] == NULL) test_pass = false;
-        if ((u32)blocks[ix] % MOS_HEAP_ALIGNMENT != 0) test_pass = false;
-    }
-    if (!MosIsListEmpty(&TestHeapDesc.osl)) test_pass = false;
-    rem = TestHeapDesc.bot - TestHeapDesc.pit + 16;
-    MosPrintf(" Remaining: %u bytes\n", rem);
-    if (rem != sizeof(TestHeap) - (264 + 16) * num_blocks - 3 * 24)
-        test_pass = false;
-    if (test_pass) MosPrint(" Passed\n");
-    else {
-        MosPrint(" Failed\n");
-        tests_all_pass = false;
-    }
-    //
-    // Allocation of several odd size blocks of differing sizes
-    //
-    test_pass = true;
-    MosPrint("Heap Test 3: Odd blocks Only - different sizes\n");
-    MosInitHeap(&TestHeapDesc, TestHeap, sizeof(TestHeap), 0);
-    if (MosAllocBlock(&TestHeapDesc, 16) != NULL) test_pass = false;
-    for (u32 ix = 0; ix < num_blocks; ix++) {
-        blocks[ix] = MosAlloc(&TestHeapDesc, 57 << ix);
-        if (blocks[ix] == NULL) test_pass = false;
-        if ((u32)blocks[ix] % MOS_HEAP_ALIGNMENT != 0) test_pass = false;
-        if (!MosIsListEmpty(&TestHeapDesc.osl)) test_pass = false;
-    }
-    for (u32 ix = 0; ix < num_blocks; ix++) {
-        // ReAlloc with 0 to free
-        if (MosReAlloc(&TestHeapDesc, blocks[ix], 0) != NULL) test_pass = false;
-        if (MosIsListEmpty(&TestHeapDesc.osl)) test_pass = false;
-    }
-    if (MosAllocBlock(&TestHeapDesc, 32) != NULL) test_pass = false;
-    if (test_pass) MosPrint(" Passed\n");
-    else {
-        MosPrint(" Failed\n");
-        tests_all_pass = false;
-    }
-    //
-    // Allocate and Free of short-lived blocks
-    //    NOTE:  Uses TestThread Heap !
-    //
-    test_pass = true;
-    MosPrint("Heap Test 4: Short-lived blocks\n");
-    u8 * fun[8];
-    for (u32 ix = 0; ix < count_of(fun); ix++) {
-        fun[ix] = MosAllocShortLived(&TestThreadHeapDesc, 64);
-    }
-    for (u32 ix = 0; ix < count_of(fun); ix++) {
-        MosFree(&TestThreadHeapDesc, fun[ix]);
-    }
-    if (test_pass) MosPrint(" Passed\n");
-    else {
-        MosPrint(" Failed\n");
-        tests_all_pass = false;
-    }
-#endif
     //
     // Slabs 1
     //
     test_pass = true;
-    MosPrint("Heap Test 4: Slabs\n");
+    MosPrint("Heap Test 1: Slabs\n");
     {
         const u32 alignment = 4;
         const u32 block_size = 20;
@@ -1754,7 +1604,7 @@ static bool HeapTests(void) {
     // Slabs 2
     //
     test_pass = true;
-    MosPrint("Heap Test 5: Slabs 2\n");
+    MosPrint("Heap Test 2: Slabs 2\n");
     {
         const u32 alignment = 32;
         const u32 block_size = 64;
@@ -1798,7 +1648,7 @@ static bool HeapTests(void) {
     // Reallocation
     //
     test_pass = true;
-    MosPrint("Heap Test 6: Reallocation\n");
+    MosPrint("Heap Test 3: Reallocation\n");
     u32 alignment = 8;
     MosInitHeap(&TestHeapDesc, TestHeap, sizeof(TestHeap), alignment);
     u8 * fun[8];
@@ -1867,7 +1717,7 @@ static bool HeapTests(void) {
     // Exhaustion
     //
     test_pass = true;
-    MosPrint("Heap Test 7: Exhaustion\n");
+    MosPrint("Heap Test 4: Exhaustion\n");
     {
         const u32 bs1 = 64;
         u32 ctr = 0;
@@ -1901,7 +1751,7 @@ static s32 StackPrintThread(s32 arg) {
 
 #if (__ARM_ARCH_8M_MAIN__ == 1U) || (defined(__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE >= 3))
 
-static s32 StackOverflowThread(s32 arg) {
+static s32 MOS_OPT(0) StackOverflowThread(s32 arg) {
     MosSetTermArg(MosGetThreadPtr(), TEST_PASS_HANDLER + 1);
     return StackOverflowThread(arg);
 }
