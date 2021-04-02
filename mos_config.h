@@ -5,7 +5,7 @@
 //  "License") included under this distribution.
 
 //
-// MOS Configuration File
+// MOS Configuration File (PK Edition)
 //    MOS is intended to be easy to maintain, so rather than providing tons
 //    of options here and cluttering the code with #ifdefs, instead consider
 //    modifying the microkernel itself to suit system requirements.

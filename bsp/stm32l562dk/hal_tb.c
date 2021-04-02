@@ -62,7 +62,7 @@ static s32 HalPulseReceiverThread(s32 arg) {
     MOS_UNUSED(arg);
     pulse_counter = 0;
     MosInitSem(&pulse_sem, 0);
-    MosSetTermHandler(MosGetThreadPtr(), HalPulseReceiverTermHandler, TEST_PASS);
+    (void)HalPulseReceiverTermHandler;
     // Set interrupt to high priority (higher than scheduler at least)
 #if 0
     NVIC_SetPriority(EXTI15_10_IRQn, 0);
@@ -95,7 +95,7 @@ bool HalTests(int argc, char * argv[]) {
 		if (thread == NULL) {
 			success = false;
 		} else {
-            MosKillThread(thread);
+		    // KillThread
             if (MosWaitForThreadStop(thread) != TEST_PASS) success = false;
             MosDecThreadRefCount(&thread);
             MosPrint("Hal Pulse Receiver Test STOP\n");

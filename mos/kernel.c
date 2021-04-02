@@ -5,18 +5,11 @@
 //  "License") included under this distribution.
 
 //
-//  MOS Microkernel
+//  MOS Microkernel (PK Edition)
 //
 
 #include <bsp_hal.h>
 #include <mos/kernel.h>
-#include <errno.h>
-
-// TODO: multi-level priority inheritance / multiple mutexes at the same time
-// TODO: Waiting on multiple semaphores
-// TODO: Change wait queue position on priority change
-// TODO: Hooks for other timers such as LPTIM ?
-// TODO: External tick compensation
 
 #if (MOS_FP_CONTEXT_SWITCHING == true)
   #if (__FPU_USED == 1U)
@@ -70,17 +63,14 @@ typedef enum {
     THREAD_RUNNABLE,
     THREAD_WAIT_FOR_MUTEX,
     THREAD_WAIT_FOR_SEM,
-    THREAD_WAIT_ON_MUX,
     THREAD_WAIT_FOR_STOP,
     THREAD_WAIT_FOR_TICK = 16,
     THREAD_WAIT_FOR_SEM_OR_TICK = THREAD_WAIT_FOR_SEM + 16,
-    THREAD_WAIT_ON_MUX_OR_TICK = THREAD_WAIT_ON_MUX + 16,
     THREAD_WAIT_FOR_STOP_OR_TICK = THREAD_WAIT_FOR_STOP + 16,
 } ThreadState;
 
 typedef struct Thread {
     u32 sp;
-    error_t err_no;
     ThreadState state;
     MosList run_e;
     MosList stop_q;
@@ -91,8 +81,6 @@ typedef struct Thread {
     u8 stop_request;
     u8 timed_out;
     s32 rtn_val;
-    MosThreadEntry * term_handler;
-    s32 term_arg;
     u8 * stack_bottom;
     u32 stack_size;
     const char * name;
@@ -110,7 +98,7 @@ typedef union {
 // Parameters
 static u8 IntPriMaskLow;
 static MosParams Params = {
-   .version = MOS_TO_STR(MOS_VERSION),
+   .version = MOS_TO_STR(MOS_VERSION) "pk",
    .thread_pri_hi = 0,
    .thread_pri_low = MOS_MAX_THREAD_PRIORITIES - 1,
    .int_pri_hi = 0,
@@ -128,7 +116,6 @@ static MosEventHook * EventHook = DummyEventHook;
 
 // Threads and Events
 static Thread * RunningThread = NO_SUCH_THREAD;
-static error_t * ErrNo;
 static Thread IdleThread;
 static MosList RunQueues[MOS_MAX_THREAD_PRIORITIES];
 static MosList ISREventQueue;
@@ -248,12 +235,9 @@ static void InitThread(Thread * thd, MosThreadPriority pri,
     }
     // Initialize context and state
     thd->sp = (u32)sf;
-    thd->err_no = 0;
     thd->pri = pri;
     thd->nom_pri = pri;
     thd->stop_request = false;
-    thd->term_handler = DefaultTermHandler;
-    thd->term_arg = 0;
     thd->stack_bottom = stack_bottom;
     thd->stack_size = stack_size;
     thd->name = "";
@@ -283,12 +267,6 @@ void SysTick_Handler(void) {
                 thd->timed_out = 1;
                 SetThreadState(thd, THREAD_RUNNABLE);
             } else break;
-        } else {
-            MosTimer * tmr = container_of(elm, MosTimer, tmr_e);
-            s32 rem_ticks = (s32)tmr->wake_tick - Tick.lower;
-            if (rem_ticks <= 0) {
-                if ((tmr->callback)(tmr)) MosRemoveFromList(elm);
-            } else break;
         }
     }
     YieldThread();
@@ -304,10 +282,9 @@ void SysTick_Handler(void) {
 
 static u32 MOS_USED Scheduler(u32 sp) {
     EVENT(SCHEDULER_ENTRY, 0);
-    // Save SP and ErrNo context
+    // Save SP context
     if (RunningThread != NO_SUCH_THREAD) {
         RunningThread->sp = sp;
-        RunningThread->err_no = *ErrNo;
     } else RunningThread = &IdleThread;
     // Update Running Thread state
     //   Threads can't directly kill themselves, so do it here.
@@ -317,7 +294,7 @@ static u32 MOS_USED Scheduler(u32 sp) {
         if (MosIsOnList(&RunningThread->tmr_e.link))
             MosRemoveFromList(&RunningThread->tmr_e.link);
         InitThread(RunningThread, RunningThread->pri,
-                   RunningThread->term_handler, RunningThread->term_arg,
+                   DefaultTermHandler, MOS_PK_EXCEPTION_RTN_VAL,
                    RunningThread->stack_bottom, RunningThread->stack_size);
         SetThreadState(RunningThread, THREAD_RUNNABLE);
     } else if (RunningThread->state & THREAD_WAIT_FOR_TICK) {
@@ -325,13 +302,10 @@ static u32 MOS_USED Scheduler(u32 sp) {
         s32 rem_ticks = (s32)RunningThread->wake_tick - Tick.lower;
         MosList * elm;
         for (elm = TimerQueue.next; elm != &TimerQueue; elm = elm->next) {
-            s32 wake_tick;
+            s32 wake_tick = 0;
             if (((MosListElm *)elm)->type == ELM_THREAD) {
                 Thread * thd = container_of(elm, Thread, tmr_e);
                 wake_tick = (s32)thd->wake_tick;
-            } else {
-                MosTimer * tmr = container_of(elm, MosTimer, tmr_e);
-                wake_tick = (s32)tmr->wake_tick;
             }
             s32 tmr_rem_ticks = wake_tick - Tick.lower;
             if (rem_ticks <= tmr_rem_ticks) break;
@@ -387,7 +361,6 @@ static u32 MOS_USED Scheduler(u32 sp) {
     }
     // Set next thread ID and errno and return its stack pointer
     RunningThread = run_thd;
-    *ErrNo = RunningThread->err_no;
     EVENT(SCHEDULER_EXIT, 0);
     return (u32)RunningThread->sp;
 }
@@ -443,7 +416,7 @@ void MOS_USED FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 lr) {
         if (fault_no == 2 && (cfsr & 0x400)) fault_no = 4;
         (*PrintfHook)("\n*** %s Fault %s", fault_type[fault_no],
                           in_isr ? "IN ISR " : "");
-        if (RunningThread == NO_SUCH_THREAD) (*PrintfHook)("(Before MOS Run) ***\n");
+        if (RunningThread == NO_SUCH_THREAD) (*PrintfHook)("(Pre-Scheduler) ***\n");
         else if (RunningThread->name && RunningThread->name[0] != '\0')
             (*PrintfHook)("(Thread %s) ***\n", RunningThread->name);
         else
@@ -576,50 +549,6 @@ void MOS_NAKED MosDelayMicroSec(u32 usec) {
     );
 }
 
-// TimerQueue (work in progress, needs locks etc etc etc)
-
-void MosInitTimer(MosTimer * timer, MosTimerCallback * callback) {
-    MosInitListElm(&timer->tmr_e, ELM_TIMER);
-    timer->callback = callback;
-}
-
-static void AddMessageTimer(MosTimer * timer) {
-    MosList * tmr;
-    SetBasePri(IntPriMaskLow);
-    u32 tick_count = MosGetTickCount();
-    timer->wake_tick = tick_count + timer->ticks;
-    for (tmr = TimerQueue.next; tmr != &TimerQueue; tmr = tmr->next) {
-        if (((MosListElm *)tmr)->type == ELM_THREAD) {
-            Thread * thd = container_of(tmr, Thread, tmr_e);
-            s32 tmr_rem_ticks = (s32)thd->wake_tick - tick_count;
-            if ((s32)timer->ticks <= tmr_rem_ticks) break;
-        } else {
-            MosTimer * tmr_tmr = container_of(tmr, MosTimer, tmr_e);
-            s32 tmr_rem_ticks = (s32)tmr_tmr->wake_tick - tick_count;
-            if ((s32)timer->ticks <= tmr_rem_ticks) break;
-        }
-    }
-    MosAddToListBefore(tmr, &timer->tmr_e.link);
-    SetBasePri(0);
-}
-
-void MosSetTimer(MosTimer * timer, u32 ticks, u32 msg) {
-    timer->ticks = ticks;
-    timer->msg = msg;
-    AddMessageTimer(timer);
-}
-
-void MosCancelTimer(MosTimer * timer) {
-    SetBasePri(IntPriMaskLow);
-    MosRemoveFromList(&timer->tmr_e.link);
-    SetBasePri(0);
-}
-
-void MosResetTimer(MosTimer * timer) {
-    MosCancelTimer(timer);
-    AddMessageTimer(timer);
-}
-
 static s32 IdleThreadEntry(s32 arg) {
     MOS_UNUSED(arg);
     while (1) {
@@ -633,9 +562,6 @@ static s32 IdleThreadEntry(s32 arg) {
             if (((MosListElm *)TimerQueue.next)->type == ELM_THREAD) {
                 Thread * thd = container_of(TimerQueue.next, Thread, tmr_e);
                 tmr_ticks_rem = (s32)thd->wake_tick - Tick.lower;
-            } else {
-                MosTimer * tmr = container_of(TimerQueue.next, MosTimer, tmr_e);
-                tmr_ticks_rem = (s32)tmr->wake_tick - Tick.lower;
             }
         }
         if (tmr_ticks_rem != 0x7fffffff) {
@@ -692,8 +618,6 @@ void MosInit(void) {
     } else {
         FPU->FPCCR &= ~(FPU_FPCCR_ASPEN_Msk | FPU_FPCCR_LSPEN_Msk);
     }
-    // Save errno pointer for use during context switch
-    ErrNo = __errno();
     // Set up timers with tick-reduction
     CyclesPerTick = SysTick->LOAD + 1;
     MaxTickInterval = ((1 << 24) - 1) / CyclesPerTick;
@@ -826,30 +750,8 @@ bool MosInitThread(MosThread * _thd, MosThreadPriority pri,
                    MosThreadEntry * entry, s32 arg,
                    u8 * stack_bottom, u32 stack_size) {
     Thread * thd = (Thread *)_thd;
-    if (thd == RunningThread) return false;
-    // Stop thread if running
-    SetBasePri(IntPriMaskLow);
-    ThreadState state = thd->state;
-    switch (state) {
-    case THREAD_UNINIT:
-    case THREAD_INIT:
-        MosInitList(&thd->stop_q);
-        // fall through
-    case THREAD_STOPPED:
-        MosInitList(&thd->run_e);
-        MosInitListElm(&thd->tmr_e, ELM_THREAD);
-        break;
-    default:
-        // This will run if thread is killed, stop queue
-        //   is processed only after kill handler returns.
-        if (MosIsOnList(&thd->tmr_e.link))
-            MosRemoveFromList(&thd->tmr_e.link);
-        // Lock because thread might be on semaphore pend queue
-        asm volatile ( "cpsid if" );
-        MosRemoveFromList(&thd->run_e);
-        asm volatile ( "cpsie if" );
-        break;
-    }
+    MosInitList(&thd->stop_q);
+    MosInitListElm(&thd->tmr_e, ELM_THREAD);
     SetThreadState(thd, THREAD_UNINIT);
     SetBasePri(0);
     InitThread(thd, pri, entry, arg, stack_bottom, stack_size);
@@ -972,41 +874,6 @@ bool MosWaitForThreadStopOrTO(MosThread * _thd, s32 * rtn_val, u32 ticks) {
     if (RunningThread->timed_out) return false;
     *rtn_val = thd->rtn_val;
     return true;
-}
-
-void MosKillThread(MosThread * _thd) {
-    Thread * thd = (Thread *)_thd;
-    if (thd == RunningThread) {
-        SetRunningThreadStateAndYield(THREAD_TIME_TO_STOP);
-        // Not reachable
-        MosAssert(0);
-    } else {
-        // Snapshot the arguments, run thread stop handler, allowing thread
-        //   to stop at its original run priority.
-        SetBasePri(IntPriMaskLow);
-        MosThreadPriority pri = thd->pri;
-        MosThreadEntry * stop_handler = thd->term_handler;
-        s32 stop_arg = thd->term_arg;
-        u8 * stack_bottom = thd->stack_bottom;
-        u32 stack_size = thd->stack_size;
-        SetBasePri(0);
-        MosInitAndRunThread((MosThread *) thd, pri, stop_handler, stop_arg,
-                                stack_bottom, stack_size);
-    }
-}
-
-void MosSetTermHandler(MosThread * _thd, MosThreadEntry * entry, s32 arg) {
-    Thread * thd = (Thread *)_thd;
-    SetBasePri(IntPriMaskLow);
-    if (entry) thd->term_handler = entry;
-    else thd->term_handler = DefaultTermHandler;
-    thd->term_arg = arg;
-    SetBasePri(0);
-}
-
-void MosSetTermArg(MosThread * _thd, s32 arg) {
-    Thread * thd = (Thread *)_thd;
-    thd->term_arg = arg;
 }
 
 void MosInitMutex(MosMutex * mtx) {
@@ -1151,17 +1018,6 @@ void MOS_NAKED MosUnlockMutex(MosMutex * mtx) {
         "bx lr\n\t"
             : : : "r0", "r1", "r2", "r3"
     );
-}
-
-void MosRestoreMutex(MosMutex * mtx) {
-    if (mtx->owner == (void *)RunningThread) {
-        mtx->depth = 1;
-        MosUnlockMutex(mtx);
-    }
-}
-
-bool MosIsMutexOwner(MosMutex * mtx) {
-    return (mtx->owner == (void *)RunningThread);
 }
 
 void MosInitSem(MosSem * sem, u32 start_value) {

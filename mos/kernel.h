@@ -5,7 +5,7 @@
 //  "License") included under this distribution.
 
 //
-//  MOS Microkernel
+//  MOS Microkernel (PK Edition)
 //
 
 #ifndef _MOS_KERNEL_H_
@@ -14,6 +14,9 @@
 #include "mos_config.h"
 #include <mos/defs.h>
 #include <mos/list.h>
+
+// PK edition returns a fixed value for threads with exceptions and assertions
+#define MOS_PK_EXCEPTION_RTN_VAL       ((s32)0xdeaddead)
 
 typedef enum {
     MOS_THREAD_NOT_STARTED,
@@ -35,11 +38,8 @@ typedef enum {
     MOS_EVENT_TICK
 } MosEvent;
 
-typedef struct MosTimer MosTimer;
-
 // Callbacks
 typedef s32 (MosThreadEntry)(s32 arg);
-typedef bool MOS_ISR_SAFE (MosTimerCallback)(MosTimer * tmr);
 typedef void (MosRawPrintfHook)(const char * fmt, ...);
 typedef void (MosSleepHook)(void);
 typedef void (MosWakeHook)(void);
@@ -58,7 +58,7 @@ typedef struct {
 
 // Mos Thread (opaque container)
 typedef struct {
-    u32 rsvd[18];
+    u32 rsvd[15];
     s32 ref_cnt;
 } MosThread;
 
@@ -74,14 +74,6 @@ typedef struct {
     MosList pend_q;
     MosList event_e;
 } MosSem;
-
-typedef struct MosTimer {
-    u32 msg;
-    u32 wake_tick;
-    u32 ticks;
-    MosTimerCallback * callback;
-    MosListElm tmr_e;
-} MosTimer;
 
 // Initialize and Run Scheduler
 // NOTE: SysTick and NVIC priority groups should be enabled by HAL before running Init.
@@ -128,13 +120,6 @@ void MosDelayThread(u32 ticks);
 // For short delays, e.g.: useful for bit-banging.
 //   Keep in mind there is an upper limit to usec.
 MOS_ISR_SAFE void MosDelayMicroSec(u32 usec);
-
-// Timers - Call specified callback at a period of time
-
-void MosInitTimer(MosTimer * timer, MosTimerCallback * callback);
-void MosSetTimer(MosTimer * timer, u32 ticks, u32 msg);
-void MosCancelTimer(MosTimer * timer);
-void MosResetTimer(MosTimer * timer);
 
 // Thread Functions
 
@@ -184,24 +169,12 @@ bool MosIsStopRequested(void);
 s32 MosWaitForThreadStop(MosThread * thd);
 bool MosWaitForThreadStopOrTO(MosThread * thd, s32 * rtn_val, u32 ticks);
 
-// Forcible stop, works on blocked threads, results in invocation of termination handler.
-void MosKillThread(MosThread * thd);
-// Sets handler to run if thread is killed or dies via exception.  Thread can set its own
-// termination handler entry and/or argument.  If entry is null it will use the default
-// termination handler.  Another thread can use the return value from MosWaitForThreadStop()
-// to detect abnormal termination of a thread.
-void MosSetTermHandler(MosThread * thd, MosThreadEntry * entry, s32 arg);
-void MosSetTermArg(MosThread * thd, s32 arg);
-
 // Blocking Recursive Mutex with priority inheritance
 
 void MosInitMutex(MosMutex * mtx);
 void MosLockMutex(MosMutex * mtx);
 bool MosTryMutex(MosMutex * mtx);
 void MosUnlockMutex(MosMutex * mtx);
-// Release mutex if owned (useful in termination handlers)
-void MosRestoreMutex(MosMutex * mtx);
-bool MosIsMutexOwner(MosMutex * mtx);
 
 // Blocking Semaphores (intended for signaling)
 
