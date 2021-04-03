@@ -49,7 +49,7 @@
 // Element types for heterogeneous lists
 enum {
     ELM_THREAD,
-    ELM_TIMER,
+    ELM_TIMER
 };
 
 typedef struct {
@@ -63,19 +63,20 @@ typedef struct {
 } StackFrame;
 
 typedef enum {
-    THREAD_UNINIT = 0,
+    THREAD_STATE_BASE_MASK = 0xffffff00,
+    THREAD_STATE_BASE = 0xba55ba00,
+    THREAD_STATE_TICK = 16,
+    THREAD_UNINIT = THREAD_STATE_BASE,
     THREAD_INIT,
     THREAD_STOPPED,
     THREAD_TIME_TO_STOP,
     THREAD_RUNNABLE,
     THREAD_WAIT_FOR_MUTEX,
     THREAD_WAIT_FOR_SEM,
-    THREAD_WAIT_ON_MUX,
     THREAD_WAIT_FOR_STOP,
-    THREAD_WAIT_FOR_TICK = 16,
-    THREAD_WAIT_FOR_SEM_OR_TICK = THREAD_WAIT_FOR_SEM + 16,
-    THREAD_WAIT_ON_MUX_OR_TICK = THREAD_WAIT_ON_MUX + 16,
-    THREAD_WAIT_FOR_STOP_OR_TICK = THREAD_WAIT_FOR_STOP + 16,
+    THREAD_WAIT_FOR_TICK = THREAD_STATE_BASE + THREAD_STATE_TICK,
+    THREAD_WAIT_FOR_SEM_OR_TICK = THREAD_WAIT_FOR_SEM + THREAD_STATE_TICK,
+    THREAD_WAIT_FOR_STOP_OR_TICK = THREAD_WAIT_FOR_STOP + THREAD_STATE_TICK,
 } ThreadState;
 
 typedef struct Thread {
@@ -190,7 +191,7 @@ static MOS_INLINE void SetRunningThreadStateAndYield(ThreadState state) {
 
 // ThreadExit is invoked when a thread stops (returns from its natural entry point)
 //   or after its termination handler returns (kill or exception)
-static void ThreadExit(s32 rtn_val) {
+static s32 ThreadExit(s32 rtn_val) {
     SetBasePri(IntPriMaskLow);
     RunningThread->rtn_val = rtn_val;
     SetThreadState(RunningThread, THREAD_STOPPED);
@@ -213,13 +214,7 @@ static void ThreadExit(s32 rtn_val) {
     SetBasePri(0);
     // Not reachable
     MosAssert(0);
-}
-
-// Default handler when thread is killed or terminates via exception
-//   A thread that stops by returning from its initial entry point
-//   will NOT invoke a termination handler.
-static s32 DefaultTermHandler(s32 arg) {
-    return arg;
+    return 0;
 }
 
 static void InitThread(Thread * thd, MosThreadPriority pri,
@@ -252,7 +247,7 @@ static void InitThread(Thread * thd, MosThreadPriority pri,
     thd->pri = pri;
     thd->nom_pri = pri;
     thd->stop_request = false;
-    thd->term_handler = DefaultTermHandler;
+    thd->term_handler = ThreadExit;
     thd->term_arg = 0;
     thd->stack_bottom = stack_bottom;
     thd->stack_size = stack_size;
@@ -320,7 +315,7 @@ static u32 MOS_USED Scheduler(u32 sp) {
                    RunningThread->term_handler, RunningThread->term_arg,
                    RunningThread->stack_bottom, RunningThread->stack_size);
         SetThreadState(RunningThread, THREAD_RUNNABLE);
-    } else if (RunningThread->state & THREAD_WAIT_FOR_TICK) {
+    } else if (RunningThread->state & THREAD_STATE_TICK) {
         // Update running thread timer state (insertion sort in timer queue)
         s32 rem_ticks = (s32)RunningThread->wake_tick - Tick.lower;
         MosList * elm;
@@ -443,7 +438,7 @@ void MOS_USED FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 lr) {
         if (fault_no == 2 && (cfsr & 0x400)) fault_no = 4;
         (*PrintfHook)("\n*** %s Fault %s", fault_type[fault_no],
                           in_isr ? "IN ISR " : "");
-        if (RunningThread == NO_SUCH_THREAD) (*PrintfHook)("(Before MOS Run) ***\n");
+        if (RunningThread == NO_SUCH_THREAD) (*PrintfHook)("(Pre-Scheduler) ***\n");
         else if (RunningThread->name && RunningThread->name[0] != '\0')
             (*PrintfHook)("(Thread %s) ***\n", RunningThread->name);
         else
@@ -576,14 +571,14 @@ void MOS_NAKED MosDelayMicroSec(u32 usec) {
     );
 }
 
-// TimerQueue (work in progress, needs locks etc etc etc)
+// Timers
 
 void MosInitTimer(MosTimer * timer, MosTimerCallback * callback) {
     MosInitListElm(&timer->tmr_e, ELM_TIMER);
     timer->callback = callback;
 }
 
-static void AddMessageTimer(MosTimer * timer) {
+static void AddTimer(MosTimer * timer) {
     MosList * tmr;
     SetBasePri(IntPriMaskLow);
     u32 tick_count = MosGetTickCount();
@@ -603,10 +598,10 @@ static void AddMessageTimer(MosTimer * timer) {
     SetBasePri(0);
 }
 
-void MosSetTimer(MosTimer * timer, u32 ticks, u32 msg) {
+void MosSetTimer(MosTimer * timer, u32 ticks, u32 arg) {
     timer->ticks = ticks;
-    timer->msg = msg;
-    AddMessageTimer(timer);
+    timer->arg = arg;
+    AddTimer(timer);
 }
 
 void MosCancelTimer(MosTimer * timer) {
@@ -617,7 +612,7 @@ void MosCancelTimer(MosTimer * timer) {
 
 void MosResetTimer(MosTimer * timer) {
     MosCancelTimer(timer);
-    AddMessageTimer(timer);
+    AddTimer(timer);
 }
 
 static s32 IdleThreadEntry(s32 arg) {
@@ -827,10 +822,12 @@ bool MosInitThread(MosThread * _thd, MosThreadPriority pri,
                    u8 * stack_bottom, u32 stack_size) {
     Thread * thd = (Thread *)_thd;
     if (thd == RunningThread) return false;
-    // Stop thread if running
     SetBasePri(IntPriMaskLow);
-    ThreadState state = thd->state;
-    switch (state) {
+    // Detect uninitialized thread state variable
+    if ((thd->state & THREAD_STATE_BASE_MASK) != THREAD_STATE_BASE)
+        thd->state = THREAD_UNINIT;
+    // Check thread state
+    switch (thd->state) {
     case THREAD_UNINIT:
     case THREAD_INIT:
         MosInitList(&thd->stop_q);
@@ -840,6 +837,7 @@ bool MosInitThread(MosThread * _thd, MosThreadPriority pri,
         MosInitListElm(&thd->tmr_e, ELM_THREAD);
         break;
     default:
+        // Forcibly stop thread if running
         // This will run if thread is killed, stop queue
         //   is processed only after kill handler returns.
         if (MosIsOnList(&thd->tmr_e.link))
@@ -991,7 +989,7 @@ void MosKillThread(MosThread * _thd) {
         u32 stack_size = thd->stack_size;
         SetBasePri(0);
         MosInitAndRunThread((MosThread *) thd, pri, stop_handler, stop_arg,
-                                stack_bottom, stack_size);
+                            stack_bottom, stack_size);
     }
 }
 
@@ -999,7 +997,7 @@ void MosSetTermHandler(MosThread * _thd, MosThreadEntry * entry, s32 arg) {
     Thread * thd = (Thread *)_thd;
     SetBasePri(IntPriMaskLow);
     if (entry) thd->term_handler = entry;
-    else thd->term_handler = DefaultTermHandler;
+    else thd->term_handler = ThreadExit;
     thd->term_arg = arg;
     SetBasePri(0);
 }

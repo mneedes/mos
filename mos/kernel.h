@@ -76,9 +76,9 @@ typedef struct {
 } MosSem;
 
 typedef struct MosTimer {
-    u32 msg;
-    u32 wake_tick;
+    u32 arg;
     u32 ticks;
+    u32 wake_tick;
     MosTimerCallback * callback;
     MosListElm tmr_e;
 } MosTimer;

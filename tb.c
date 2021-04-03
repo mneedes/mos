@@ -466,13 +466,14 @@ static s32 ThreadTimerTestBusyThread(s32 arg) {
     return TEST_PASS;
 }
 
+static MosTimer self_timer;
+
 static bool MOS_ISR_SAFE ThreadTimerCallback(MosTimer * tmr) {
-    return MosTrySendToQueue(&TestQueue, tmr->msg);
+    return MosTrySendToQueue(&TestQueue, tmr->arg);
 }
 
 static s32 MessageTimerTestThread(s32 arg) {
     MosInitQueue(&TestQueue, queue, count_of(queue));
-    MosTimer self_timer;
     MosInitTimer(&self_timer, &ThreadTimerCallback);
     u32 cnt = 0xdeadbeef;
     for (;;) {
@@ -485,6 +486,35 @@ static s32 MessageTimerTestThread(s32 arg) {
     }
     return TEST_PASS;
 }
+
+#if 0
+
+static bool MOS_ISR_SAFE ThreadTimerCallback2(MosTimer * tmr) {
+    // TODO: rescheduling timer in callbacks
+    u32 msg = tmr->arg;
+    MosSetTimer(&self_timer, timer_test_delay, msg + 1);
+    return MosTrySendToQueue(&TestQueue, msg);
+}
+
+static s32 MessageTimerTestThread2(s32 arg) {
+    MosInitQueue(&TestQueue, queue, count_of(queue));
+    MosInitTimer(&self_timer, &ThreadTimerCallback2);
+    MosSetTimer(&self_timer, timer_test_delay, 0);
+    u32 cnt = 0;
+    for (;;) {
+        if (MosIsStopRequested()) {
+            MosCancelTimer(&self_timer);
+            break;
+        }
+        u32 val = MosReceiveFromQueue(&TestQueue);
+        if (val != cnt) return TEST_FAIL;
+        cnt++;
+        TestHisto[arg]++;
+    }
+    return TEST_PASS;
+}
+
+#endif
 
 //
 // Timer Tests
@@ -640,10 +670,10 @@ static bool TimerTests(void) {
         tests_all_pass = false;
     }
     //
-    // Run message timers
+    // User timers 1
     //
     test_pass = true;
-    MosPrint("Message Timer Test 1\n");
+    MosPrint("User Timer Test 1\n");
     ClearHistogram();
     MosInitAndRunThread(Threads[1], 1, MessageTimerTestThread, 0, Stacks[1], DFT_STACK_SIZE);
     MosDelayThread(test_time);
@@ -651,6 +681,20 @@ static bool TimerTests(void) {
     if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
     DisplayHistogram(1);
     if (TestHisto[0] != exp_iter) test_pass = false;
+#if 0
+    //
+    // User timers 2
+    //
+    test_pass = true;
+    MosPrint("User Timer Test 2\n");
+    ClearHistogram();
+    MosInitAndRunThread(Threads[1], 1, MessageTimerTestThread2, 0, Stacks[1], DFT_STACK_SIZE);
+    MosDelayThread(test_time);
+    MosRequestThreadStop(Threads[1]);
+    if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
+    DisplayHistogram(1);
+    if (TestHisto[0] != exp_iter) test_pass = false;
+#endif
     if (test_pass) MosPrint(" Passed\n");
     else {
         MosPrint(" Failed\n");
@@ -1196,142 +1240,6 @@ static bool QueueTests(void) {
     }
     return tests_all_pass;
 }
-
-#if 0
-
-//
-// Mux Testing
-//
-
-static const u32 mux_test_delay = 50;
-
-static s32 MuxTestThreadTx(s32 arg) {
-    for (;;) {
-        if (arg == 0) MosIncrementSem(&TestSem);
-        else if (arg == 1) MosSendToQueue(&TestQueue, 1);
-        TestHisto[arg]++;
-        MosDelayThread(mux_test_delay);
-        if (MosIsStopRequested()) break;
-    }
-    return TEST_PASS;
-}
-
-static s32 MuxTestThreadRx(s32 arg) {
-    MosMuxEntry mux[2];
-    mux[0].type = MOS_WAIT_SEM;
-    mux[0].ptr.sem = &TestSem;
-    mux[1].type = MOS_WAIT_RECV_QUEUE;
-    mux[1].ptr.q = &TestQueue;
-    MosInitMux(&TestMux);
-    MosSetActiveMux(&TestMux, mux, count_of(mux));
-    for (;;) {
-        u32 idx = MosWaitOnMux(&TestMux);
-        if (idx == 0) {
-            if (!MosTrySem(&TestSem)) return TEST_FAIL;
-            TestHisto[arg]++;
-        } else if (idx == 1) {
-            u32 val;
-            if (!MosTryReceiveFromQueue(&TestQueue, &val))
-                return TEST_FAIL;
-            TestHisto[arg + val]++;
-        } else return TEST_FAIL;
-        if (MosIsStopRequested()) break;
-    }
-    return TEST_PASS;
-}
-
-static s32 MuxTestThreadRxTimeout(s32 arg) {
-    MosMuxEntry mux[2];
-    mux[0].type = MOS_WAIT_SEM;
-    mux[0].ptr.sem = &TestSem;
-    mux[1].type = MOS_WAIT_RECV_QUEUE;
-    mux[1].ptr.q = &TestQueue;
-    MosInitMux(&TestMux);
-    MosSetActiveMux(&TestMux, mux, count_of(mux));
-    for (;;) {
-        u32 idx;
-        if (MosWaitOnMuxOrTO(&TestMux, &idx, mux_test_delay / 2 + 2)) {
-            if (idx == 0) {
-                if (!MosTrySem(&TestSem)) return TEST_FAIL;
-                TestHisto[arg]++;
-            } else if (idx == 1) {
-                u32 val;
-                if (!MosTryReceiveFromQueue(&TestQueue, &val))
-                    return TEST_FAIL;
-                TestHisto[arg + val]++;
-            } else return TEST_FAIL;
-        } else {
-            TestHisto[4]++;
-        }
-        if (MosIsStopRequested()) break;
-    }
-    return TEST_PASS;
-}
-
-static bool MuxTests(void) {
-    const u32 test_time = 5000;
-    u32 exp_cnt = test_time / mux_test_delay;
-    bool tests_all_pass = true;
-    bool test_pass;
-    //
-    // Wait on Mux, thread and semaphore
-    //
-    test_pass = true;
-    MosPrint("Mux Test 1\n");
-    ClearHistogram();
-    MosInitSem(&TestSem, 0);
-    MosInitQueue(&TestQueue, queue, count_of(queue));
-    MosInitAndRunThread(Threads[1], 1, MuxTestThreadTx, 0, Stacks[1], DFT_STACK_SIZE);
-    MosInitAndRunThread(Threads[2], 3, MuxTestThreadTx, 1, Stacks[2], DFT_STACK_SIZE);
-    MosInitAndRunThread(Threads[3], 3, MuxTestThreadRx, 2, Stacks[3], DFT_STACK_SIZE);
-    MosDelayThread(test_time);
-    MosRequestThreadStop(Threads[1]);
-    MosRequestThreadStop(Threads[2]);
-    MosRequestThreadStop(Threads[3]);
-    MosSendToQueue(&TestQueue, 2); // Unblock thread to stop
-    if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
-    if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
-    if (MosWaitForThreadStop(Threads[3]) != TEST_PASS) test_pass = false;
-    DisplayHistogram(5);
-    if (TestHisto[2] != TestHisto[0]) test_pass = false;
-    if (TestHisto[3] != TestHisto[1]) test_pass = false;
-    if (TestHisto[4] != 1) test_pass = false;
-    if (test_pass) MosPrint(" Passed\n");
-    else {
-        MosPrint(" Failed\n");
-        tests_all_pass = false;
-    }
-    //
-    // Wait on Mux with Timeout
-    //
-    test_pass = true;
-    MosPrint("Mux Test 2\n");
-    ClearHistogram();
-    MosInitSem(&TestSem, 0);
-    MosInitQueue(&TestQueue, queue, count_of(queue));
-    MosInitAndRunThread(Threads[1], 1, MuxTestThreadTx, 0, Stacks[1], DFT_STACK_SIZE);
-    MosInitAndRunThread(Threads[2], 3, MuxTestThreadTx, 1, Stacks[2], DFT_STACK_SIZE);
-    MosInitAndRunThread(Threads[3], 3, MuxTestThreadRxTimeout, 2, Stacks[3], DFT_STACK_SIZE);
-    MosDelayThread(test_time);
-    MosRequestThreadStop(Threads[1]);
-    MosRequestThreadStop(Threads[2]);
-    MosRequestThreadStop(Threads[3]);
-    if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
-    if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
-    if (MosWaitForThreadStop(Threads[3]) != TEST_PASS) test_pass = false;
-    DisplayHistogram(5);
-    if (TestHisto[2] != TestHisto[0]) test_pass = false;
-    if (TestHisto[3] != TestHisto[1]) test_pass = false;
-    if (TestHisto[4] != exp_cnt + 1) test_pass = false;
-    if (test_pass) MosPrint(" Passed\n");
-    else {
-        MosPrint(" Failed\n");
-        tests_all_pass = false;
-    }
-    return tests_all_pass;
-}
-
-#endif
 
 //
 // Mutex Tests
@@ -1893,9 +1801,6 @@ static s32 CmdTest(s32 argc, char * argv[]) {
             if (TimerTests() == false) test_pass = false;
             if (SemTests() == false) test_pass = false;
             if (QueueTests() == false) test_pass = false;
-#if 0
-            if (MuxTests() == false) test_pass = false;
-#endif
             if (MutexTests() == false) test_pass = false;
             if (HeapTests() == false) test_pass = false;
             if (MiscTests() == false) test_pass = false;
@@ -1907,10 +1812,6 @@ static s32 CmdTest(s32 argc, char * argv[]) {
             test_pass = SemTests();
         } else if (strcmp(argv[1], "queue") == 0) {
             test_pass = QueueTests();
-#if 0
-        } else if (strcmp(argv[1], "mux") == 0) {
-            test_pass = MuxTests();
-#endif
         } else if (strcmp(argv[1], "mutex") == 0) {
             test_pass = MutexTests();
         } else if (strcmp(argv[1], "heap") == 0) {
