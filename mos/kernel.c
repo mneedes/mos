@@ -753,7 +753,6 @@ bool MosInitThread(MosThread * _thd, MosThreadPriority pri,
     MosInitList(&thd->stop_q);
     MosInitListElm(&thd->tmr_e, ELM_THREAD);
     SetThreadState(thd, THREAD_UNINIT);
-    SetBasePri(0);
     InitThread(thd, pri, entry, arg, stack_bottom, stack_size);
     SetThreadState(thd, THREAD_INIT);
     return true;
