@@ -177,7 +177,7 @@ static MOS_INLINE void SetRunningThreadStateAndYield(ThreadState state) {
 
 // ThreadExit is invoked when a thread stops (returns from its natural entry point)
 //   or after its termination handler returns (kill or exception)
-static void ThreadExit(s32 rtn_val) {
+static s32 ThreadExit(s32 rtn_val) {
     SetBasePri(IntPriMaskLow);
     RunningThread->rtn_val = rtn_val;
     SetThreadState(RunningThread, THREAD_STOPPED);
@@ -200,13 +200,7 @@ static void ThreadExit(s32 rtn_val) {
     SetBasePri(0);
     // Not reachable
     MosAssert(0);
-}
-
-// Default handler when thread is killed or terminates via exception
-//   A thread that stops by returning from its initial entry point
-//   will NOT invoke a termination handler.
-static s32 DefaultTermHandler(s32 arg) {
-    return arg;
+    return 0;
 }
 
 static void InitThread(Thread * thd, MosThreadPriority pri,
@@ -294,7 +288,7 @@ static u32 MOS_USED Scheduler(u32 sp) {
         if (MosIsOnList(&RunningThread->tmr_e.link))
             MosRemoveFromList(&RunningThread->tmr_e.link);
         InitThread(RunningThread, RunningThread->pri,
-                   DefaultTermHandler, MOS_PK_EXCEPTION_RTN_VAL,
+                   ThreadExit, MOS_PK_EXCEPTION_RTN_VAL,
                    RunningThread->stack_bottom, RunningThread->stack_size);
         SetThreadState(RunningThread, THREAD_RUNNABLE);
     } else if (RunningThread->state & THREAD_WAIT_FOR_TICK) {
@@ -359,7 +353,7 @@ static u32 MOS_USED Scheduler(u32 sp) {
     if (ENABLE_SPLIM_SUPPORT) {
         asm volatile ( "MSR psplim, %0" : : "r" (run_thd->stack_bottom) );
     }
-    // Set next thread ID and errno and return its stack pointer
+    // Set next thread ID and return its stack pointer
     RunningThread = run_thd;
     EVENT(SCHEDULER_EXIT, 0);
     return (u32)RunningThread->sp;
@@ -552,7 +546,6 @@ void MOS_NAKED MosDelayMicroSec(u32 usec) {
 static s32 IdleThreadEntry(s32 arg) {
     MOS_UNUSED(arg);
     while (1) {
-        // TODO: KEEP_TICKS_RUNNING ?
         s32 tmr_ticks_rem = 0x7fffffff;
         u32 tick_interval = MaxTickInterval;
         u32 load = 0;
@@ -602,13 +595,9 @@ static s32 IdleThreadEntry(s32 arg) {
 }
 
 void MosInit(void) {
-    // Trap Divide By 0 and (optionally) "Unintentional" Unaligned Accesses
-    if (MOS_ENABLE_UNALIGN_FAULTS) {
-        SCB->CCR |= (SCB_CCR_DIV_0_TRP_Msk | SCB_CCR_UNALIGN_TRP_Msk);
-    } else {
-        SCB->CCR |=  (SCB_CCR_DIV_0_TRP_Msk);
-        SCB->CCR &= ~(SCB_CCR_UNALIGN_TRP_Msk);
-    }
+    // Trap Divide By 0
+    SCB->CCR |=  (SCB_CCR_DIV_0_TRP_Msk);
+    SCB->CCR &= ~(SCB_CCR_UNALIGN_TRP_Msk);
     // Enable Bus, Memory and Usage Faults in general
     SCB->SHCSR |= (SCB_SHCSR_BUSFAULTENA_Msk | SCB_SHCSR_MEMFAULTENA_Msk |
                    SCB_SHCSR_USGFAULTENA_Msk);
@@ -712,8 +701,7 @@ void MosGetStackStats(MosThread * _thd, u32 * stack_size, u32 * stack_usage, u32
         u32 * check = (u32 *)thd->stack_bottom;
         while (*check++ == STACK_FILL_VALUE);
         *max_stack_usage = stack_top - (u8 *)check + 4;
-    }
-    else {
+    } else {
         *max_stack_usage = *stack_usage;
     }
     SetBasePri(0);

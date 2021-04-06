@@ -22,10 +22,9 @@
 #define MOS_MICRO_SEC_PER_TICK      1000
 
 // Starting tick count
-//   Set to early rollover to always test rollovers,
+//   Set to early rollover to always test 32-bit rollovers,
 //   Set to one for more intuitive time keeping
-#define MOS_START_TICK_COUNT        0xFFFFFFFFFFFFFF00
-//#define MOS_START_TICK_COUNT      0x0000000000000001
+#define MOS_START_TICK_COUNT        0x0000000000000001
 
 // Enable floating point context switch support
 //  Note that if false, floating point might still work
@@ -35,17 +34,8 @@
 // Monitor maximum stack usage on context switches
 #define MOS_STACK_USAGE_MONITOR     true
 
-// Keep tick interrupt running at slowest rate to maintain
-// time even when there are no timer events scheduled.
-#define MOS_KEEP_TICKS_RUNNING      false
-
 // Enable events (required for MOS profiling)
 #define MOS_ENABLE_EVENTS           false
-
-// Enable "unintentional" alignment faults
-// Recommend true for small from-scratch projects,
-// false for large, pre-existing code bases.
-#define MOS_ENABLE_UNALIGN_FAULTS   false
 
 // Enable breakpoint in exceptions if debugger detected
 #define MOS_BKPT_IN_EXCEPTIONS      false
