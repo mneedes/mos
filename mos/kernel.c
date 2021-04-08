@@ -21,7 +21,7 @@
   #define ENABLE_FP_CONTEXT_SAVE    false
 #endif
 
-#if (__ARM_ARCH_8M_MAIN__ == 1U) || (defined(__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE >= 3))
+#if (defined(__ARM_ARCH_8M_MAIN__) && __ARM_ARCH_8M_MAIN__ == 1U) || (defined(__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE >= 3))
   #define ENABLE_SPLIM_SUPPORT      true
 #else
   #define ENABLE_SPLIM_SUPPORT      false
@@ -37,12 +37,12 @@
     { if (MOS_ENABLE_EVENTS) (*EventHook)((MOS_EVENT_ ## e), (v)); }
 
 #define SYSTICK_CTRL_ENABLE     (SysTick_CTRL_ENABLE_Msk | SysTick_CTRL_TICKINT_Msk | SysTick_CTRL_CLKSOURCE_Msk)
-#define SYSTICK_CTRL_DISABLE    (SysTick_CTRL_ENABLE_Msk | SysTick_CTRL_CLKSOURCE_Msk)
+#define SYSTICK_CTRL_DISABLE    (SysTick_CTRL_CLKSOURCE_Msk)
 
 // Element types for heterogeneous lists
 enum {
     ELM_THREAD,
-    ELM_TIMER,
+    ELM_TIMER
 };
 
 typedef struct {
@@ -72,6 +72,7 @@ typedef enum {
 typedef struct Thread {
     u32 sp;
     ThreadState state;
+    u64 cycle_count;
     MosList run_e;
     MosList stop_q;
     MosListElm tmr_e;
@@ -124,6 +125,7 @@ static u32 IntDisableCount = 0;
 // Timers and Ticks
 static MosList TimerQueue;
 static volatile Ticker MOS_ALIGNED(8) Tick = { .count = MOS_START_TICK_COUNT };
+static u64 MOS_ALIGNED(8) LastCycleCount = 0;
 static s32 MaxTickInterval;
 static u32 CyclesPerTick;
 static u32 MOS_USED CyclesPerMicroSec;
@@ -229,6 +231,7 @@ static void InitThread(Thread * thd, MosThreadPriority pri,
     }
     // Initialize context and state
     thd->sp = (u32)sf;
+    //thd->clocks = 0;
     thd->pri = pri;
     thd->nom_pri = pri;
     thd->stop_request = false;
@@ -280,6 +283,9 @@ static u32 MOS_USED Scheduler(u32 sp) {
     if (RunningThread != NO_SUCH_THREAD) {
         RunningThread->sp = sp;
     } else RunningThread = &IdleThread;
+    u64 cycle_count = MosGetCycleCount();
+    RunningThread->cycle_count += (cycle_count - LastCycleCount);
+    LastCycleCount = cycle_count;
     // Update Running Thread state
     //   Threads can't directly kill themselves, so do it here.
     //   If thread needs to go onto timer queue, do it here.
@@ -546,48 +552,54 @@ void MOS_NAKED MosDelayMicroSec(u32 usec) {
 static s32 IdleThreadEntry(s32 arg) {
     MOS_UNUSED(arg);
     while (1) {
-        s32 tmr_ticks_rem = 0x7fffffff;
-        u32 tick_interval = MaxTickInterval;
-        u32 load = 0;
+        // Disable interrupts and timer
         asm volatile ( "cpsid i" );
+        SysTick->CTRL = SYSTICK_CTRL_DISABLE;
+        if (SysTick->CTRL & SysTick_CTRL_COUNTFLAG_Msk) Tick.count += 1;
         // Figure out how long to wait
+        s32 tick_interval = MaxTickInterval;
         if (!MosIsListEmpty(&TimerQueue)) {
             if (((MosListElm *)TimerQueue.next)->type == ELM_THREAD) {
                 Thread * thd = container_of(TimerQueue.next, Thread, tmr_e);
-                tmr_ticks_rem = (s32)thd->wake_tick - Tick.lower;
+                tick_interval = (s32)thd->wake_tick - Tick.lower;
+                if (tick_interval <= 0) {
+                    tick_interval = 1;
+                } else if (tick_interval > MaxTickInterval) {
+                    tick_interval = MaxTickInterval;
+                }
             }
         }
-        if (tmr_ticks_rem != 0x7fffffff) {
-            if (tmr_ticks_rem < MaxTickInterval)
-                tick_interval = tmr_ticks_rem;
-            load = tick_interval * CyclesPerTick - 1;
+        u32 load = 0;
+        if (tick_interval != 1) {
+            load = (tick_interval - 1) * CyclesPerTick + SysTick->VAL - 1;
             SysTick->LOAD = load;
             SysTick->VAL = 0;
         }
         if (SleepHook) (*SleepHook)();
+        SysTick->CTRL = SYSTICK_CTRL_ENABLE;
         asm volatile (
             "dsb\n\t"
             "wfi\n\t"
-            "cpsid if\n\t"
         );
         if (WakeHook) (*WakeHook)();
         if (load) {
+            SysTick->CTRL = SYSTICK_CTRL_DISABLE;
             if (SysTick->CTRL & SysTick_CTRL_COUNTFLAG_Msk) {
                 // If counter rolled over then account for all ticks
-                //   except one (which will be incremented in SysTick)
-                Tick.count += tick_interval;
                 SysTick->LOAD = CyclesPerTick - 1;
                 SysTick->VAL = 0;
+                Tick.count += tick_interval;
             } else {
                 // Interrupt was early so account for elapsed ticks
-                u32 adj = (load - SysTick->VAL) / CyclesPerTick;
-                SysTick->LOAD = load - (adj * CyclesPerTick);
+                u32 adj_tick_interval = (load - SysTick->VAL) / CyclesPerTick;
+                SysTick->LOAD = SysTick->VAL;
                 SysTick->VAL = 0;
                 SysTick->LOAD = CyclesPerTick - 1;
-                Tick.count += adj;
+                Tick.count += adj_tick_interval; // or adj_tick_interval - 1 ?
             }
+            SysTick->CTRL = SYSTICK_CTRL_ENABLE;
         }
-        asm volatile ( "cpsie if\n\t"
+        asm volatile ( "cpsie i\n\t"
                        "dsb\n\t"
                        "isb\n\t" );
     }

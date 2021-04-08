@@ -26,13 +26,6 @@ typedef enum {
 } MosThreadState;
 
 typedef enum {
-    MOS_WAIT_DISABLED,
-    MOS_WAIT_SEM,
-    MOS_WAIT_RECV_QUEUE,
-    MOS_WAIT_SEND_QUEUE
-} MosWaitType;
-
-typedef enum {
     MOS_EVENT_SCHEDULER_ENTRY,
     MOS_EVENT_SCHEDULER_EXIT,
     MOS_EVENT_TICK
@@ -58,7 +51,7 @@ typedef struct {
 
 // Mos Thread (opaque container)
 typedef struct {
-    u32 rsvd[15];
+    u32 rsvd[17];
     s32 ref_cnt;
 } MosThread;
 

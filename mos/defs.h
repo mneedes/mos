@@ -57,7 +57,7 @@
 #define MOS_ALIGN_PTR(val, mask)       (((mos_size)(val) + (mask)) & ~((mos_size)(mask)))
 #define MOS_ALIGN_PTR_DOWN(val, mask)  (((mos_size)(val)) & ~((mos_size)(mask)))
 
-// Can be used for U32 register reads and writes
+// Can be used for u32 register reads and writes
 #define MOS_VOL_U32(addr)      (*((volatile u32 *)(addr)))
 
 typedef uint8_t     u8;

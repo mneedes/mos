@@ -1572,12 +1572,14 @@ static volatile bool PigeonFlag = false;
 static s32 PigeonThread(s32 arg) {
     MOS_UNUSED(arg);
     u32 cnt = 0;
+    u64 last = MosGetCycleCount();
     while (PigeonFlag) {
-        u64 last = MosGetCycleCount();
         MosDelayThread(1000);
-        u32 dur = MosGetCycleCount() - last;
-        MosPrintf("Incoming ---- .. .. %u %08X.. %lu ------\n", cnt,
-                       MosGetStackDepth(MosGetStackBottom(NULL) + DFT_STACK_SIZE),
+        u64 tmp = MosGetCycleCount();
+        u64 dur = tmp - last;
+        last = tmp;
+        MosPrintf("Incoming ---- .. .. %u %08X.. %llu ------\n", cnt,
+                       MosGetStackDepth(MosGetStackBottom(NULL) + 2*DFT_STACK_SIZE),
                        dur);
         cnt++;
     }
@@ -1593,7 +1595,6 @@ static s32 CmdPigeon(s32 argc, char * argv[]) {
         MosInitAndRunThread(thd, 0, PigeonThread, 0, MosGetStackBottom(thd),
                             MosGetStackSize(thd));
     } else {
-        // TODO: This could run into issue with mutex
         PigeonFlag = 0;
         MosWaitForThreadStop(Threads[PIGEON_THREAD_ID]);
     }
@@ -1759,7 +1760,7 @@ int InitTestBench() {
         return -1;
     }
 
-    if (!MosAllocThread(&Threads[PIGEON_THREAD_ID], DFT_STACK_SIZE)) {
+    if (!MosAllocThread(&Threads[PIGEON_THREAD_ID], 2*DFT_STACK_SIZE)) {
         MosPrint("Thread allocation error\n");
         return -1;
     }
