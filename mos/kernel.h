@@ -23,13 +23,6 @@ typedef enum {
 } MosThreadState;
 
 typedef enum {
-    MOS_WAIT_DISABLED,
-    MOS_WAIT_SEM,
-    MOS_WAIT_RECV_QUEUE,
-    MOS_WAIT_SEND_QUEUE
-} MosWaitType;
-
-typedef enum {
     MOS_EVENT_SCHEDULER_ENTRY,
     MOS_EVENT_SCHEDULER_EXIT,
     MOS_EVENT_TICK

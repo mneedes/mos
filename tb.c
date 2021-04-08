@@ -58,9 +58,6 @@ static volatile u32 SchedCount;
 // Test Sem / Mutex / Mux
 static MosSem TestSem;
 static MosMutex TestMutex;
-#if 0
-static MosMux TestMux;
-#endif
 
 // Test Message Queue
 static u32 queue[4];
@@ -1835,12 +1832,14 @@ static volatile bool PigeonFlag = false;
 static s32 PigeonThread(s32 arg) {
     MOS_UNUSED(arg);
     u32 cnt = 0;
+    u64 last = MosGetCycleCount();
     while (1) {
-        u64 last = MosGetCycleCount();
         MosDelayThread(1000);
-        u32 dur = MosGetCycleCount() - last;
-        MosPrintf("Incoming ---- .. .. %u %08X.. %lu ------\n", cnt,
-                       MosGetStackDepth(MosGetStackBottom(NULL) + DFT_STACK_SIZE),
+        u64 tmp = MosGetCycleCount();
+        u64 dur = tmp - last;
+        last = tmp;
+        MosPrintf("Incoming ---- .. .. %u %08X.. %llu ------\n", cnt,
+                       MosGetStackDepth(MosGetStackBottom(NULL) + 2*DFT_STACK_SIZE),
                        dur);
         cnt++;
     }
@@ -1856,7 +1855,6 @@ static s32 CmdPigeon(s32 argc, char * argv[]) {
                             MosGetStackSize(thd));
         PigeonFlag = 1;
     } else {
-        // TODO: This could run into issue with mutex
         MosKillThread(Threads[PIGEON_THREAD_ID]);
         PigeonFlag = 0;
     }
@@ -2022,7 +2020,7 @@ int InitTestBench() {
         return -1;
     }
 
-    if (!MosAllocThread(&Threads[PIGEON_THREAD_ID], DFT_STACK_SIZE)) {
+    if (!MosAllocThread(&Threads[PIGEON_THREAD_ID], 2*DFT_STACK_SIZE)) {
         MosPrint("Thread allocation error\n");
         return -1;
     }

@@ -28,7 +28,7 @@
   #define ENABLE_FP_CONTEXT_SAVE    false
 #endif
 
-#if (__ARM_ARCH_8M_MAIN__ == 1U) || (defined(__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE >= 3))
+#if (defined(__ARM_ARCH_8M_MAIN__) && __ARM_ARCH_8M_MAIN__ == 1U) || (defined(__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE >= 3))
   #define ENABLE_SPLIM_SUPPORT      true
 #else
   #define ENABLE_SPLIM_SUPPORT      false
@@ -44,7 +44,7 @@
     { if (MOS_ENABLE_EVENTS) (*EventHook)((MOS_EVENT_ ## e), (v)); }
 
 #define SYSTICK_CTRL_ENABLE     (SysTick_CTRL_ENABLE_Msk | SysTick_CTRL_TICKINT_Msk | SysTick_CTRL_CLKSOURCE_Msk)
-#define SYSTICK_CTRL_DISABLE    (SysTick_CTRL_ENABLE_Msk | SysTick_CTRL_CLKSOURCE_Msk)
+#define SYSTICK_CTRL_DISABLE    (SysTick_CTRL_CLKSOURCE_Msk)
 
 // Element types for heterogeneous lists
 enum {
@@ -618,52 +618,57 @@ void MosResetTimer(MosTimer * timer) {
 static s32 IdleThreadEntry(s32 arg) {
     MOS_UNUSED(arg);
     while (1) {
-        // TODO: KEEP_TICKS_RUNNING ?
-        s32 tmr_ticks_rem = 0x7fffffff;
-        u32 tick_interval = MaxTickInterval;
-        u32 load = 0;
+        // Disable interrupts and timer
         asm volatile ( "cpsid i" );
+        SysTick->CTRL = SYSTICK_CTRL_DISABLE;
+        if (SysTick->CTRL & SysTick_CTRL_COUNTFLAG_Msk) Tick.count += 1;
         // Figure out how long to wait
+        s32 tick_interval = MaxTickInterval;
         if (!MosIsListEmpty(&TimerQueue)) {
             if (((MosListElm *)TimerQueue.next)->type == ELM_THREAD) {
                 Thread * thd = container_of(TimerQueue.next, Thread, tmr_e);
-                tmr_ticks_rem = (s32)thd->wake_tick - Tick.lower;
+                tick_interval = (s32)thd->wake_tick - Tick.lower;
             } else {
                 MosTimer * tmr = container_of(TimerQueue.next, MosTimer, tmr_e);
-                tmr_ticks_rem = (s32)tmr->wake_tick - Tick.lower;
+                tick_interval = (s32)tmr->wake_tick - Tick.lower;
+            }
+            if (tick_interval <= 0) {
+                tick_interval = 1;
+            } else if (tick_interval > MaxTickInterval) {
+                tick_interval = MaxTickInterval;
             }
         }
-        if (tmr_ticks_rem != 0x7fffffff) {
-            if (tmr_ticks_rem < MaxTickInterval)
-                tick_interval = tmr_ticks_rem;
-            load = tick_interval * CyclesPerTick - 1;
+        u32 load = 0;
+        if (tick_interval != 1) {
+            load = (tick_interval - 1) * CyclesPerTick + SysTick->VAL - 1;
             SysTick->LOAD = load;
             SysTick->VAL = 0;
         }
         if (SleepHook) (*SleepHook)();
+        SysTick->CTRL = SYSTICK_CTRL_ENABLE;
         asm volatile (
             "dsb\n\t"
             "wfi\n\t"
-            "cpsid if\n\t"
         );
         if (WakeHook) (*WakeHook)();
         if (load) {
+            SysTick->CTRL = SYSTICK_CTRL_DISABLE;
             if (SysTick->CTRL & SysTick_CTRL_COUNTFLAG_Msk) {
                 // If counter rolled over then account for all ticks
-                //   except one (which will be incremented in SysTick)
-                Tick.count += tick_interval;
                 SysTick->LOAD = CyclesPerTick - 1;
                 SysTick->VAL = 0;
+                Tick.count += tick_interval;
             } else {
                 // Interrupt was early so account for elapsed ticks
-                u32 adj = (load - SysTick->VAL) / CyclesPerTick;
-                SysTick->LOAD = load - (adj * CyclesPerTick);
+                u32 adj_tick_interval = (load - SysTick->VAL) / CyclesPerTick;
+                SysTick->LOAD = SysTick->VAL;
                 SysTick->VAL = 0;
                 SysTick->LOAD = CyclesPerTick - 1;
-                Tick.count += adj;
+                Tick.count += adj_tick_interval; // or adj_tick_interval - 1 ?
             }
+            SysTick->CTRL = SYSTICK_CTRL_ENABLE;
         }
-        asm volatile ( "cpsie if\n\t"
+        asm volatile ( "cpsie i\n\t"
                        "dsb\n\t"
                        "isb\n\t" );
     }
@@ -783,8 +788,7 @@ void MosGetStackStats(MosThread * _thd, u32 * stack_size, u32 * stack_usage, u32
         u32 * check = (u32 *)thd->stack_bottom;
         while (*check++ == STACK_FILL_VALUE);
         *max_stack_usage = stack_top - (u8 *)check + 4;
-    }
-    else {
+    } else {
         *max_stack_usage = *stack_usage;
     }
     SetBasePri(0);
