@@ -30,6 +30,10 @@
 #define NULL                   ((void *)0)
 #endif
 
+// Static assert where n is an unique name and c is the condition
+#define MOS_STATIC_ASSERT(n, c)  \
+                               typedef s32 static_assert_##n[(c) ? 0 : -1];
+
 // Symbol / line number to string conversion
 #define MOS_TO_STR_(x)         #x
 #define MOS_TO_STR(x)          MOS_TO_STR_(x)

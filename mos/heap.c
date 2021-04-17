@@ -47,14 +47,15 @@ typedef struct {
 typedef struct {
     Link link;
     union { // <--  Alignment guaranteed here
-        MosList fl_e;
+        MosLink fl_link;
         u8 payload[0];
     };
 } Block;
 
+MOS_STATIC_ASSERT(Link, sizeof(Link) == 12);
+MOS_STATIC_ASSERT(Block, sizeof(Block) == 20);
+
 void MosInitHeap(MosHeap * heap, u8 * _bot, u32 heap_size, u32 alignment) {
-    MosAssert(sizeof(Link) == 12);
-    MosAssert(sizeof(Block) == 20);
     // Alignment must be a power of 2, and at a minimum should be
     //   the pointer size. Smallest block must fit a Link, the free-list
     //   link and satisfy alignment requirements of payload.
@@ -78,7 +79,7 @@ void MosInitHeap(MosHeap * heap, u8 * _bot, u32 heap_size, u32 alignment) {
     heap->min_bytes_free = bot->link.size;
     // Initialize free-list (explicit links)
     MosInitList(&heap->fl);
-    MosAddToList(&heap->fl, &bot->fl_e);
+    MosAddToList(&heap->fl, &bot->fl_link);
     heap->fl_block_cnt = 1;
     // Initialize error counters
     heap->double_free_cnt = 0;
@@ -95,7 +96,7 @@ void * MosAlloc(MosHeap * heap, u32 size) {
         // First-fit search: max(min_size, size) + link_size needs to fit
         MosList * elm;
         for (elm = heap->fl.next; elm != &heap->fl; elm = elm->next) {
-            block = container_of(elm, Block, fl_e);
+            block = container_of(elm, Block, fl_link);
             if (block->link.size >= size) {
                 if (block->link.canary != HEAP_CANARY_VALUE)
                     heap->dead_canary_cnt++;
@@ -122,7 +123,7 @@ void * MosAlloc(MosHeap * heap, u32 size) {
         next_block->link.size_p = size + 1;
         block->link.size = next_block->link.size_p;
         // Add new block to free-list
-        MosAddToList(&heap->fl, &next_block->fl_e);
+        MosAddToList(&heap->fl, &next_block->fl_link);
         heap->bytes_free -= size;
     } else {
         // Use existing block
@@ -162,7 +163,7 @@ void * MosReAlloc(MosHeap * heap, void * _block, u32 _new_size) {
         if (avail + next_block->link.size >= new_size) {
             avail += next_block->link.size;
             // Merge with next
-            MosRemoveFromList(&next_block->fl_e);
+            MosRemoveFromList(&next_block->fl_link);
             heap->fl_block_cnt -= 1;
             heap->bytes_free -= next_block->link.size;
             block->link.size += next_block->link.size;
@@ -184,7 +185,7 @@ void * MosReAlloc(MosHeap * heap, void * _block, u32 _new_size) {
         next_block->link.size_p = new_size + 1;
         block->link.size = next_block->link.size_p;
         // Add new block to free-list
-        MosAddToList(&heap->fl, &next_block->fl_e);
+        MosAddToList(&heap->fl, &next_block->fl_link);
         heap->fl_block_cnt += 1;
     } else if (avail < new_size) {
         // Move
@@ -237,19 +238,19 @@ void MosFree(MosHeap * heap, void * _block) {
         if (prev) {
             // Combine with previous and next
             size_increase += block->link.size + next->link.size;
-            MosRemoveFromList(&prev->fl_e);
-            MosRemoveFromList(&next->fl_e);
+            MosRemoveFromList(&prev->fl_link);
+            MosRemoveFromList(&next->fl_link);
             block = prev;
             heap->fl_block_cnt -= 1;
         } else {
             // Combine with next
             size_increase += next->link.size;
-            MosRemoveFromList(&next->fl_e);
+            MosRemoveFromList(&next->fl_link);
         }
     } else if (prev) {
         // Combine with previous
         size_increase += block->link.size;
-        MosRemoveFromList(&prev->fl_e);
+        MosRemoveFromList(&prev->fl_link);
         block = prev;
     } else {
         // No combination possible
@@ -260,7 +261,7 @@ void MosFree(MosHeap * heap, void * _block) {
     next = (Block *) ((u8 *) block + block->link.size);
     next->link.size_p = block->link.size;
     // Add block to free-list
-    MosAddToFrontOfList(&heap->fl, &block->fl_e);
+    MosAddToFrontOfList(&heap->fl, &block->fl_link);
     MosUnlockMutex(&heap->mtx);
 }
 

@@ -65,7 +65,7 @@ typedef struct {
 typedef struct {
     u32 value;
     MosList pend_q;
-    MosList event_e;
+    MosLink evt_link;
 } MosSem;
 
 typedef struct MosTimer {
@@ -73,7 +73,7 @@ typedef struct MosTimer {
     u32 ticks;
     u32 wake_tick;
     MosTimerCallback * callback;
-    MosListElm tmr_e;
+    MosLinkHet tmr_link;
 } MosTimer;
 
 // Initialize and Run Scheduler

@@ -36,7 +36,7 @@ enum {
 
 typedef struct {
     MosList blk_q;
-    MosList slab_e;
+    MosLink slab_link;
     u32 avail_blocks;
     u8 align_pad_and_blocks[0];
 } Slab;
@@ -44,10 +44,12 @@ typedef struct {
 typedef struct {
     Slab * slab;
     union { // <--  Alignment guaranteed here
-        MosList fl_e;
+        MosLink fl_link;
         u8 payload[0];
     };
 } Block;
+
+MOS_STATIC_ASSERT(Block, sizeof(Block) == 12);
 
 void MosInitPool(MosPool * pool, MosHeap * heap, u32 blocks_per_slab, u32 block_size, u16 alignment) {
     // Alignment must be a power of 2, and at a minimum should be the pointer size.
@@ -81,7 +83,7 @@ u32 MosAddSlabsToPool(MosPool * pool, u32 max_to_add) {
         Slab * slab = MosAlloc(pool->heap, pool->slab_size);
         if (!slab) break;
         MosInitList(&slab->blk_q);
-        MosInitList(&slab->slab_e);
+        MosInitList(&slab->slab_link);
         // Align here
         u8 * buf = (u8 *) slab + sizeof(Slab) + sizeof(Slab *);
         buf = (u8 *) MOS_ALIGN_PTR(buf, pool->align_mask) - sizeof(Slab *);
@@ -89,12 +91,12 @@ u32 MosAddSlabsToPool(MosPool * pool, u32 max_to_add) {
         for (u32 ix = 0; ix < pool->blocks_per_slab; ix++) {
             Block * block = (Block *) buf;
             block->slab = slab;
-            MosAddToList(&slab->blk_q, &block->fl_e);
+            MosAddToList(&slab->blk_q, &block->fl_link);
             buf += pool->block_size;
         }
         slab->avail_blocks = pool->blocks_per_slab;
         asm volatile ( "cpsid if" );
-        MosAddToList(&pool->free_q, &slab->slab_e);
+        MosAddToList(&pool->free_q, &slab->slab_link);
         pool->avail_blocks += pool->blocks_per_slab;
         asm volatile ( "cpsie if" );
     }
@@ -115,7 +117,7 @@ u32 MosFreeUnallocatedSlabs(MosPool * pool, u32 max_to_remove) {
         MosList * elm = pool->free_q.next;
         MosRemoveFromList(elm);
         asm volatile ( "cpsie if" );
-        MosFree(pool->heap, container_of(elm, Slab, slab_e));
+        MosFree(pool->heap, container_of(elm, Slab, slab_link));
         slabs_removed_cnt++;
     }
     return slabs_removed_cnt;
@@ -127,20 +129,20 @@ void * MosAllocFromSlab(MosPool * pool) {
         pool->avail_blocks--;
         Slab * slab;
         if (!MosIsListEmpty(&pool->part_q)) {
-            slab = container_of(pool->part_q.next, Slab, slab_e);
+            slab = container_of(pool->part_q.next, Slab, slab_link);
             if (--slab->avail_blocks == 0) {
-                MosRemoveFromList(&slab->slab_e);
-                MosAddToList(&pool->full_q, &slab->slab_e);
+                MosRemoveFromList(&slab->slab_link);
+                MosAddToList(&pool->full_q, &slab->slab_link);
             }
         } else {
-            slab = container_of(pool->free_q.next, Slab, slab_e);
+            slab = container_of(pool->free_q.next, Slab, slab_link);
             slab->avail_blocks--;
-            MosRemoveFromList(&slab->slab_e);
-            MosAddToList(&pool->part_q, &slab->slab_e);
+            MosRemoveFromList(&slab->slab_link);
+            MosAddToList(&pool->part_q, &slab->slab_link);
         }
         MosList * elm = slab->blk_q.next;
         MosRemoveFromList(elm);
-        Block * block = container_of(elm, Block, fl_e);
+        Block * block = container_of(elm, Block, fl_link);
         asm volatile ( "cpsie if" );
         return &block->payload;
     }
@@ -152,14 +154,14 @@ void MosFreeToSlab(MosPool * pool, void * _block) {
     Block * block = (Block *) ((u32 *) _block - 1);
     asm volatile ( "cpsid if" );
     pool->avail_blocks++;
-    MosAddToList(&block->slab->blk_q, &block->fl_e);
+    MosAddToList(&block->slab->blk_q, &block->fl_link);
     block->slab->avail_blocks++;
     if (block->slab->avail_blocks == 1) {
-        MosRemoveFromList(&block->slab->slab_e);
-        MosAddToList(&pool->part_q, &block->slab->slab_e);
+        MosRemoveFromList(&block->slab->slab_link);
+        MosAddToList(&pool->part_q, &block->slab->slab_link);
     } else if (block->slab->avail_blocks == pool->blocks_per_slab) {
-        MosRemoveFromList(&block->slab->slab_e);
-        MosAddToList(&pool->free_q, &block->slab->slab_e);
+        MosRemoveFromList(&block->slab->slab_link);
+        MosAddToList(&pool->free_q, &block->slab->slab_link);
     }
     asm volatile ( "cpsie if" );
 }
