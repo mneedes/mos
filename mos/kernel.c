@@ -696,39 +696,23 @@ void MosSetThreadName(MosThread * _thd, const char * name) {
     thd->name = name;
 }
 
-bool MosInitThread(MosThread * _thd, MosThreadPriority pri,
-                   MosThreadEntry * entry, s32 arg,
-                   u8 * stack_bottom, u32 stack_size) {
+bool MosInitAndRunThread(MosThread * _thd,  MosThreadPriority pri,
+                         MosThreadEntry * entry, s32 arg, u8 * stack_bottom,
+                         u32 stack_size) {
     Thread * thd = (Thread *)_thd;
     MosInitList(&thd->stop_q);
     MosInitList(&thd->tmr_e);
     SetThreadState(thd, THREAD_UNINIT);
     InitThread(thd, pri, entry, arg, stack_bottom, stack_size);
     SetThreadState(thd, THREAD_INIT);
+    SetBasePri(IntPriMaskLow);
+    SetThreadState(thd, THREAD_RUNNABLE);
+    if (thd != &IdleThread)
+        MosAddToList(&RunQueues[thd->pri], &thd->run_e);
+    if (RunningThread != NO_SUCH_THREAD && thd->pri < RunningThread->pri)
+        YieldThread();
+    SetBasePri(0);
     return true;
-}
-
-bool MosRunThread(MosThread * _thd) {
-    Thread * thd = (Thread *)_thd;
-    if (thd->state == THREAD_INIT) {
-        SetBasePri(IntPriMaskLow);
-        SetThreadState(thd, THREAD_RUNNABLE);
-        if (thd != &IdleThread)
-            MosAddToList(&RunQueues[thd->pri], &thd->run_e);
-        if (RunningThread != NO_SUCH_THREAD && thd->pri < RunningThread->pri)
-            YieldThread();
-        SetBasePri(0);
-        return true;
-    }
-    return false;
-}
-
-bool MosInitAndRunThread(MosThread * _thd,  MosThreadPriority pri,
-                         MosThreadEntry * entry, s32 arg, u8 * stack_bottom,
-                         u32 stack_size) {
-    if (!MosInitThread(_thd, pri, entry, arg, stack_bottom, stack_size))
-        return false;
-    return MosRunThread(_thd);
 }
 
 MosThreadState MosGetThreadState(MosThread * _thd, s32 * rtn_val) {

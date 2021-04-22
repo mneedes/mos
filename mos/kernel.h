@@ -137,9 +137,6 @@ u32 MosGetStackSize(MosThread * thd);
 void MosSetStack(MosThread * thd, u8 * stack_bottom, u32 stack_size);
 
 void MosSetThreadName(MosThread * thd, const char * name);
-bool MosInitThread(MosThread * thd, MosThreadPriority pri, MosThreadEntry * entry,
-                   s32 arg, u8 * stack_bottom, u32 stack_size);
-bool MosRunThread(MosThread * thd);
 bool MosInitAndRunThread(MosThread * thd, MosThreadPriority pri,
                          MosThreadEntry * entry, s32 arg, u8 * stack_bottom,
                          u32 stack_size);
