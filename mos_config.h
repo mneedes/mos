@@ -31,13 +31,4 @@
 //  if confined to a single context.
 #define MOS_FP_CONTEXT_SWITCHING    true
 
-// Monitor maximum stack usage on context switches
-#define MOS_STACK_USAGE_MONITOR     true
-
-// Enable events (required for MOS profiling)
-#define MOS_ENABLE_EVENTS           false
-
-// Enable breakpoint in exceptions if debugger detected
-#define MOS_BKPT_IN_EXCEPTIONS      false
-
 #endif

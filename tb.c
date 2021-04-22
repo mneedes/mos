@@ -1749,8 +1749,6 @@ int InitTestBench() {
 
     //DWT->CYCCNT -> COOL, High resolution timer built-in
 
-    MosRegisterEventHook(EventCallback);
-
     MosInitHeap(&TestThreadHeapDesc, TestThreadHeap, sizeof(TestThreadHeap), MOS_STACK_ALIGNMENT);
     MosInitThreadHeap(&TestThreadHeapDesc);
 

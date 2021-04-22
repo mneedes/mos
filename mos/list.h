@@ -12,20 +12,14 @@
 // Doubly-Linked Lists (idea borrowed from famous OS)
 
 // List descriptor and link*
-//   (*for homogeneous lists)
 typedef struct MosList {
     struct MosList * prev;
     struct MosList * next;
 } MosList;
 
-// List link for heterogeneous lists
-typedef struct {
-    MosList link;
-    u32 type;
-} MosListElm;
+typedef MosList MosLink;
 
 MOS_ISR_SAFE void MosInitList(MosList * list);
-MOS_ISR_SAFE void MosInitListElm(MosListElm * elm, u32 type);
 MOS_ISR_SAFE void MosAddToList(MosList * list, MosList * elm_add);
 static MOS_INLINE MOS_ISR_SAFE void
 MosAddToListBefore(MosList * elm_exist, MosList * elm_add) {
