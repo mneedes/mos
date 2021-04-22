@@ -111,19 +111,6 @@ static s32 PriTestThread(s32 arg) {
     return TEST_PASS;
 }
 
-static s32 ExcTestThread(s32 arg) {
-    MOS_UNUSED(arg);
-    MosPrintf("Running Exception Thread %X\n", arg);
-    MosDelayThread(50);
-    MosCrash();
-    return TEST_FAIL;
-}
-
-static s32 AssertTestThread(s32 arg) {
-    MosAssert(arg == 0x1234);
-    return TEST_FAIL;
-}
-
 static s32 FPTestThread(s32 arg) {
     float x = 0.0;
     for (;;) {
@@ -262,34 +249,6 @@ static bool ThreadTests(void) {
         tests_all_pass = false;
     }
     //
-    // Thread exception handler
-    //
-    test_pass = true;
-    MosPrint("Exception Test\n");
-    ClearHistogram();
-    MosInitAndRunThread(Threads[1], 1, ExcTestThread, 0, Stacks[1], DFT_STACK_SIZE);
-    if (MosWaitForThreadStop(Threads[1]) != MOS_PK_EXCEPTION_RTN_VAL) test_pass = false;
-    if (test_pass) MosPrint(" Passed\n");
-    else {
-        MosPrint(" Failed\n");
-        tests_all_pass = false;
-    }
-    //
-    // Assertion test
-    //
-    test_pass = true;
-    MosPrint("Assertion Test\n");
-    ClearHistogram();
-    MosInitAndRunThread(Threads[1], 1, AssertTestThread, 0, Stacks[1], DFT_STACK_SIZE);
-    if (MosWaitForThreadStop(Threads[1]) != MOS_PK_EXCEPTION_RTN_VAL) test_pass = false;
-    MosInitAndRunThread(Threads[1], 1, AssertTestThread, 0x1234, Stacks[1], DFT_STACK_SIZE);
-    if (MosWaitForThreadStop(Threads[1]) != TEST_FAIL) test_pass = false;
-    if (test_pass) MosPrint(" Passed\n");
-    else {
-        MosPrint(" Failed\n");
-        tests_all_pass = false;
-    }
-    //
     // Try some floating point
     //
     if (MosGetParams()->fp_support_en == true) {
@@ -307,17 +266,6 @@ static bool ThreadTests(void) {
         if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
         if (MosWaitForThreadStop(Threads[3]) != TEST_PASS) test_pass = false;
         DisplayHistogram(3);
-        if (test_pass) MosPrint(" Passed\n");
-        else {
-            MosPrint(" Failed\n");
-            tests_all_pass = false;
-        }
-        test_pass = true;
-        MosPrint("Exception in FP thread\n");
-        ClearHistogram();
-        MosInitAndRunThread(Threads[1], 1, FPTestThread, 2, Stacks[1], DFT_STACK_SIZE);
-        MosSetThreadName(Threads[1], "fp_thread");
-        if (MosWaitForThreadStop(Threads[1]) != MOS_PK_EXCEPTION_RTN_VAL) test_pass = false;
         if (test_pass) MosPrint(" Passed\n");
         else {
             MosPrint(" Failed\n");
@@ -1388,11 +1336,17 @@ static bool HeapTests(void) {
     return tests_all_pass;
 }
 
-static s32 StackPrintThread(s32 arg) {
+static s32 ExcTestThread(s32 arg) {
     MOS_UNUSED(arg);
-    u64 e = 0xdeadbeeffeebdaed;
-    MosPrintf("DEADBEEFFEEBDAED == %llX\n", e);
-    return TEST_PASS;
+    MosPrintf("Running Exception Thread %X\n", arg);
+    MosDelayThread(50);
+    MosCrash();
+    return TEST_FAIL;
+}
+
+static s32 AssertTestThread(s32 arg) {
+    MosAssert(arg == 0x1234);
+    return TEST_FAIL;
 }
 
 #if (__ARM_ARCH_8M_MAIN__ == 1U) || (defined(__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE >= 3))
@@ -1402,6 +1356,67 @@ static s32 MOS_OPT(0) StackOverflowThread(s32 arg) {
 }
 
 #endif
+
+static bool CrashTests(int test_num) {
+    bool test_pass = true;
+    switch (test_num) {
+    case 0:
+        //
+        // Thread exception handler
+        //
+        MosPrint("Exception Test\n");
+        MosInitAndRunThread(Threads[1], 1, ExcTestThread, 0, Stacks[1], DFT_STACK_SIZE);
+        if (MosWaitForThreadStop(Threads[1]) != MOS_PK_EXCEPTION_RTN_VAL) test_pass = false;
+        break;
+    case 1:
+        //
+        // Assertion test
+        //
+        MosPrint("Assertion Test\n");
+        MosInitAndRunThread(Threads[1], 1, AssertTestThread, 0, Stacks[1], DFT_STACK_SIZE);
+        if (MosWaitForThreadStop(Threads[1]) != MOS_PK_EXCEPTION_RTN_VAL) test_pass = false;
+        MosInitAndRunThread(Threads[1], 1, AssertTestThread, 0x1234, Stacks[1], DFT_STACK_SIZE);
+        if (MosWaitForThreadStop(Threads[1]) != TEST_FAIL) test_pass = false;
+        break;
+    case 2:
+        if (MosGetParams()->fp_support_en == true) {
+            //
+            // FP exception test
+            //
+            MosPrint("Exception in FP thread\n");
+            MosInitAndRunThread(Threads[1], 1, FPTestThread, 2, Stacks[1], DFT_STACK_SIZE);
+            MosSetThreadName(Threads[1], "fp_thread");
+            if (MosWaitForThreadStop(Threads[1]) != MOS_PK_EXCEPTION_RTN_VAL) test_pass = false;
+        }
+        break;
+#if (__ARM_ARCH_8M_MAIN__ == 1U) || (defined(__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE >= 3))
+    case 3:
+        //
+        // PSPLIM tests
+        //
+        MosPrint("Crash Test: PSPLIM\n");
+        MosInitAndRunThread(Threads[1], 2, StackOverflowThread, 0, Stacks[2], DFT_STACK_SIZE);
+        if (MosWaitForThreadStop(Threads[1]) != MOS_PK_EXCEPTION_RTN_VAL) test_pass = false;
+
+        break;
+#endif
+    default:
+        MosPrint(" No such test\n");
+        test_pass = false;
+        break;
+    }
+    if (test_pass) MosPrint(" Passed\n");
+    else MosPrint(" Failed\n");
+    return test_pass;
+}
+
+static s32 StackPrintThread(s32 arg) {
+    MOS_UNUSED(arg);
+    u64 e = 0xdeadbeeffeebdaed;
+    MosPrintf("DEADBEEFFEEBDAED == %llX\n", e);
+    return TEST_PASS;
+}
+
 
 static bool MiscTests(void) {
     bool tests_all_pass = true;
@@ -1436,20 +1451,7 @@ static bool MiscTests(void) {
         MosPrint(" Failed\n");
         tests_all_pass = false;
     }
-#if (__ARM_ARCH_8M_MAIN__ == 1U) || (defined(__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE >= 3))
-    //
-    // PSPLIM tests
-    //
-    test_pass = true;
-    MosPrint("Misc Test: PSPLIM\n");
-    MosInitAndRunThread(Threads[1], 2, StackOverflowThread, 0, Stacks[2], DFT_STACK_SIZE);
-    if (MosWaitForThreadStop(Threads[1]) != MOS_PK_EXCEPTION_RTN_VAL) test_pass = false;
-    if (test_pass) MosPrint(" Passed\n");
-    else {
-        MosPrint(" Failed\n");
-        tests_all_pass = false;
-    }
-#endif
+
     //
     // MosSNPrintf
     //
@@ -1562,6 +1564,11 @@ static s32 CmdTest(s32 argc, char * argv[]) {
         } else {
             MosPrint("Tests FAILED\n");
             return CMD_ERR;
+        }
+    } else if (argc == 3) {
+        if (strcmp(argv[1], "crash") == 0) {
+            int num = argv[2][0] - '0';
+            if (num >= 0) test_pass = CrashTests(num);
         }
     }
     return CMD_ERR_NOT_FOUND;

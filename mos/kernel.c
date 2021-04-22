@@ -267,15 +267,13 @@ static u32 MOS_USED Scheduler(u32 sp) {
     RunningThread->cycle_count += (cycle_count - LastCycleCount);
     LastCycleCount = cycle_count;
     // Update Running Thread state
-    if (RunningThread->state & THREAD_WAIT_FOR_TICK) {
+    if (RunningThread->state >= THREAD_WAIT_FOR_TICK) {
         // Update running thread timer state (insertion sort in timer queue)
         s32 rem_ticks = (s32)RunningThread->wake_tick - Tick.lower;
         MosList * elm;
         for (elm = TimerQueue.next; elm != &TimerQueue; elm = elm->next) {
-            s32 wake_tick = 0;
             Thread * thd = container_of(elm, Thread, tmr_e);
-            wake_tick = (s32)thd->wake_tick;
-            s32 tmr_rem_ticks = wake_tick - Tick.lower;
+            s32 tmr_rem_ticks = (s32)thd->wake_tick - Tick.lower;
             if (rem_ticks <= tmr_rem_ticks) break;
         }
         MosAddToListBefore(elm, &RunningThread->tmr_e);
@@ -468,6 +466,7 @@ u64 MosGetCycleCount(void) {
 void MosAdvanceTickCount(u32 ticks) {
     if (ticks) {
         asm volatile ( "cpsid if " );
+        if (SysTick->CTRL & SysTick_CTRL_COUNTFLAG_Msk) Tick.count++;
         Tick.count += ticks;
         asm volatile ( "cpsie if " );
     }
