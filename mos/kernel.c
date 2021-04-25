@@ -16,7 +16,6 @@
 // TODO: Waiting on multiple semaphores
 // TODO: Change wait queue position on priority change
 // TODO: Hooks for other timers such as LPTIM ?
-// TODO: External tick compensation
 
 #if (MOS_FP_CONTEXT_SWITCHING == true)
   #if (__FPU_USED == 1U)
@@ -477,16 +476,19 @@ static void MOS_USED FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 lr) {
         }
         (*PrintfHook)("\n\n");
     }
-    if (RunningThread == NO_SUCH_THREAD || in_isr) {
-        // Hang if fault occurred anywhere but in thread context
-        while (1)
-          ;
+    if (MOS_HANG_ON_EXCEPTIONS) {
+        while (1);
     } else {
-        // Clear CFSR bits
-        SCB->CFSR = cfsr;
-        // Stop thread if fault occurred in thread context
-        SetThreadState(RunningThread, THREAD_TIME_TO_STOP);
-        YieldThread();
+        if (RunningThread == NO_SUCH_THREAD || in_isr) {
+            // Hang if fault occurred anywhere but in thread context
+            while (1);
+        } else {
+            // Clear CFSR bits
+            SCB->CFSR = cfsr;
+            // Stop thread if fault occurred in thread context
+            SetThreadState(RunningThread, THREAD_TIME_TO_STOP);
+            YieldThread();
+        }
     }
 }
 
@@ -812,7 +814,6 @@ u32 MosGetStackSize(MosThread * _thd) {
     return thd->stack_size;
 }
 
-// TODO: Might kick this to internal
 void MosSetStack(MosThread * _thd, u8 * stack_bottom, u32 stack_size) {
     Thread * thd = (Thread *)_thd;
     thd->stack_bottom = stack_bottom;
@@ -1423,6 +1424,5 @@ void MosAssertAt(char * file, u32 line) {
     if (RunningThread != NO_SUCH_THREAD)
         SetRunningThreadStateAndYield(THREAD_TIME_TO_STOP);
     // not always reachable
-    while (1)
-        ;
+    while (1);
 }
