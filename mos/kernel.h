@@ -40,13 +40,13 @@ typedef void (MosEventHook)(MosEvent evt, u32 val);
 
 // Microkernel Parameters
 typedef struct {
-    char * version;
-    MosThreadPriority thread_pri_hi;
-    MosThreadPriority thread_pri_low;
-    u32 int_pri_hi;
-    u32 int_pri_low;
-    u32 micro_sec_per_tick;
-    bool fp_support_en;
+    char              * version;
+    MosThreadPriority   thread_pri_hi;
+    MosThreadPriority   thread_pri_low;
+    u32                 int_pri_hi;
+    u32                 int_pri_low;
+    u32                 micro_sec_per_tick;
+    bool                fp_support_en;
 } MosParams;
 
 // Mos Thread (opaque container)
@@ -58,22 +58,22 @@ typedef struct {
 // Blocking mutex supporting recursion
 typedef struct {
     MosThread * owner;
-    s32 depth;
-    MosList pend_q;
+    s32         depth;
+    MosList     pend_q;
 } MosMutex;
 
 typedef struct {
-    u32 value;
+    u32     value;
     MosList pend_q;
     MosLink evt_link;
 } MosSem;
 
 typedef struct MosTimer {
-    u32 arg;
-    u32 ticks;
-    u32 wake_tick;
+    u32                arg;
+    u32                ticks;
+    u32                wake_tick;
     MosTimerCallback * callback;
-    MosLinkHet tmr_link;
+    MosLinkHet         tmr_link;
 } MosTimer;
 
 // Initialize and Run Scheduler
@@ -216,12 +216,20 @@ u32 MosWaitForSignalOrTO(MosSem * sem, u32 ticks);
 MOS_ISR_SAFE u32 MosPollForSignal(MosSem * sem);
 MOS_ISR_SAFE void MosRaiseSignal(MosSem * sem, u32 flags);
 
-//   (3) Binary semaphore is a 1-bit signal
+//   (3) Binary semaphores are 1-bit signals
 
-#define MosWaitForBinarySem(sem) MosWaitForSignal(sem)
-#define MosWaitForBinarySemOrTO(sem, ticks) MosWaitForSignalOrTO(sem, ticks)
-#define MosPollForBinarySem(sem) MosPollForSignal(sem)
-#define MosRaiseBinarySem(sem) MosRaiseSignal(sem, 1)
+static MOS_INLINE void MosWaitForBinarySem(MosSem * sem) {
+    MosWaitForSignal(sem);
+}
+static MOS_INLINE bool MosWaitForBinarySemOrTO(MosSem * sem, u32 ticks) {
+    return MosWaitForSignalOrTO(sem, ticks);
+}
+MOS_ISR_SAFE static MOS_INLINE bool MosPollForBinarySem(MosSem * sem) {
+    return MosPollForSignal(sem);
+}
+MOS_ISR_SAFE static MOS_INLINE void MosRaiseBinarySem(MosSem * sem) {
+    MosRaiseSignal(sem, 1);
+}
 
 #define MosAssert(c) { if (!(c)) MosAssertAt(__FILE__, __LINE__); }
 void MosAssertAt(char * file, u32 line);

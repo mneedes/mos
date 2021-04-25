@@ -428,7 +428,7 @@ void MOS_NAKED PendSV_Handler(void) {
 
 // TODO: Limit MSP stack dump to end of MSP stack
 // TODO: Dump more registers in general including FP registers ?
-void MOS_USED FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 lr) {
+static void MOS_USED FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 lr) {
     if (MOS_BKPT_IN_EXCEPTIONS) MosHaltIfDebugging();
     char * fault_type[] = {
         "Hard", "Mem", "Bus", "Usage", "Imprecise Bus"
@@ -535,6 +535,7 @@ u64 MosGetCycleCount(void) {
 void MosAdvanceTickCount(u32 ticks) {
     if (ticks) {
         asm volatile ( "cpsid if " );
+        if (SysTick->CTRL & SysTick_CTRL_COUNTFLAG_Msk) Tick.count++;
         Tick.count += ticks;
         asm volatile ( "cpsie if " );
     }
@@ -678,6 +679,7 @@ static s32 IdleThreadEntry(s32 arg) {
     return 0;
 }
 
+// TODO: auto tick startup?
 void MosInit(void) {
     // Trap Divide By 0 and (optionally) "Unintentional" Unaligned Accesses
     if (MOS_ENABLE_UNALIGN_FAULTS) {
