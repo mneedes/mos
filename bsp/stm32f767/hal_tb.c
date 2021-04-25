@@ -31,6 +31,7 @@ static s32 HalPulseReceiverTermHandler(s32 arg) {
 }
 
 static s32 HalPulseReceiverThread(s32 arg) {
+    MOS_UNUSED(arg);
     pulse_counter = 0;
     MosInitSem(&pulse_sem, 0);
     MosSetTermHandler(MosGetThreadPtr(), HalPulseReceiverTermHandler, TEST_PASS);

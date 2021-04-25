@@ -1779,6 +1779,7 @@ static bool MiscTests(void) {
     return tests_all_pass;
 }
 
+#if 0
 typedef enum {
     CMD_ERR_OUT_OF_RANGE = -3,
     CMD_ERR_NOT_FOUND = -2,
@@ -1786,6 +1787,7 @@ typedef enum {
     CMD_OK,
     CMD_OK_NO_HISTORY,
 } CmdStatus;
+#endif
 
 static s32 CmdTest(s32 argc, char * argv[]) {
     bool test_pass = true;
@@ -1869,138 +1871,25 @@ static s32 CmdClearTickHisto(s32 argc, char * argv[]) {
     return CMD_OK;
 }
 
-static MosCmdList CmdList;
-
-#define MAX_CMD_ARGUMENTS       10
 #define MAX_CMD_BUFFER_LENGTH   10
 #define MAX_CMD_LINE_SIZE       128
 
 static char CmdBuffers[MAX_CMD_BUFFER_LENGTH][MAX_CMD_LINE_SIZE] = {{ 0 }};
-static s32 CmdIx = 0;
-static s32 CmdMaxIx = 0;
-static s32 CmdHistoryIx = 0;
-
-// Calculate a valid command index at the offset from the provided index
-static u32 CalcOffsetCmdIx(s32 ix, s32 max_ix, s32 offset) {
-    s32 new_ix = (ix + offset) % (max_ix + 1);
-    if (new_ix < 0) new_ix += (max_ix + 1);
-    return (u32)new_ix;
-}
-
-static CmdStatus RunCmd(char * cmd_buf_in) {
-    u32 argc;
-    char * argv[MAX_CMD_ARGUMENTS];
-    char cmd_buf[MAX_CMD_LINE_SIZE];
-    strncpy(cmd_buf, cmd_buf_in, sizeof(cmd_buf));
-    argc = MosParseCmd(argv, cmd_buf, MAX_CMD_ARGUMENTS);
-    if (argc == 0) return CMD_OK_NO_HISTORY;
-    MosCmd * cmd = MosFindCmd(&CmdList, argv[0]);
-    if (cmd) {
-        return (CmdStatus)cmd->func(argc, argv);
-    } else if (argv[0][0] == '!') {
-        if (argv[0][1] == '!') {
-            if (CmdMaxIx > 0) {
-                u32 run_cmd_ix = CalcOffsetCmdIx(CmdIx, CmdMaxIx, -1);
-                strcpy(CmdBuffers[CmdIx], CmdBuffers[run_cmd_ix]);
-                return (CmdStatus)RunCmd(CmdBuffers[CmdIx]);
-            } else return CMD_ERR_OUT_OF_RANGE;
-        } else if (argv[0][1] == '-') {
-            if (argv[0][2] >= '1' && argv[0][2] <= '9') {
-                s8 offset = argv[0][2] - '0';
-                if (offset <= CmdMaxIx) {
-                    u32 run_cmd_ix = CalcOffsetCmdIx(CmdIx, CmdMaxIx, -offset);
-                    strcpy(CmdBuffers[CmdIx], CmdBuffers[run_cmd_ix]);
-                    return (CmdStatus)RunCmd(CmdBuffers[CmdIx]);
-                } else return CMD_ERR_OUT_OF_RANGE;
-            }
-        }
-    } else if (strcmp(argv[0], "?") == 0 || strcmp(argv[0], "help") == 0) {
-        MosPrintCmdHelp(&CmdList);
-        MosPrint("!!: Repeat prior command\n");
-        MosPrint("!-#: Repeat #th prior command\n");
-        MosPrint("h -or- history: Display command history\n");
-        MosPrint("? -or- help: Display command help\n");\
-        return CMD_OK_NO_HISTORY;
-    } else if (strcmp(argv[0], "h") == 0 || strcmp(argv[0], "history") == 0) {
-        for (s32 ix = CmdMaxIx; ix > 0; ix--) {
-            u32 hist_cmd_ix = CalcOffsetCmdIx(CmdIx, CmdMaxIx, -ix);
-            MosLockTraceMutex();
-            MosPrintf("%2d: ", -ix);
-            MosPrint(CmdBuffers[hist_cmd_ix]);
-            MosPrint("\n");
-            MosUnlockTraceMutex();
-        }
-        return CMD_OK_NO_HISTORY;
-    } else if (argv[0][0] == '\0') {
-        return CMD_OK_NO_HISTORY;
-    }
-    return CMD_ERR_NOT_FOUND;
-}
 
 static s32 TestShell(s32 arg) {
     MOS_UNUSED(arg);
-
-    static MosCmd list_cmds[] = {
+    static MosShell Shell;
+    MosPrintf("Size(cmdbuffers) = %u\n", sizeof(CmdBuffers));
+    MosInitShell(&Shell, MAX_CMD_BUFFER_LENGTH, MAX_CMD_LINE_SIZE, (void *)CmdBuffers, true);
+    static MosShellCommand list_cmds[] = {
         { CmdTest,           "run", "Run Test", "[TEST]", {0} },
         { CmdPigeon,         "p",   "Toggle Pigeon Printing", "", {0} },
         { CmdClearTickHisto, "cth", "Clear tick histogram", "", {0} },
     };
-
-    MosInitShell();
-    MosInitCmdList(&CmdList);
-    MosAddCmd(&CmdList, &list_cmds[0]);
-    MosAddCmd(&CmdList, &list_cmds[1]);
-    MosAddCmd(&CmdList, &list_cmds[2]);
-
-    while (1) {
-        MosCmdResult result;
-        CmdStatus status;
-        result = MosGetNextCmd("# ", CmdBuffers[CmdIx], MAX_CMD_LINE_SIZE);
-        switch (result) {
-        case MOS_CMD_RECEIVED:
-            status = RunCmd(CmdBuffers[CmdIx]);
-            switch (status) {
-            case CMD_OK_NO_HISTORY:
-                break;
-            case CMD_ERR_NOT_FOUND:
-                MosPrint("[ERR] Command not found...\n");
-                break;
-            case CMD_ERR_OUT_OF_RANGE:
-                MosPrint("[ERR] Index out of range...\n");
-                break;
-            case CMD_OK:
-                MosPrint("[OK]\n");
-                if (++CmdIx == MAX_CMD_BUFFER_LENGTH) CmdIx = 0;
-                if (CmdIx > CmdMaxIx) CmdMaxIx = CmdIx;
-                break;
-            default:
-            case CMD_ERR:
-                MosPrint("[ERR]\n");
-                if (++CmdIx == MAX_CMD_BUFFER_LENGTH) CmdIx = 0;
-                if (CmdIx > CmdMaxIx) CmdMaxIx = CmdIx;
-                break;
-            }
-            CmdHistoryIx = CmdIx;
-            CmdBuffers[CmdIx][0] = '\0';
-            break;
-        case MOS_CMD_UP_ARROW:
-            // Rotate history back one, skipping over current index
-            CmdHistoryIx = CalcOffsetCmdIx(CmdHistoryIx, CmdMaxIx, -1);
-            if (CmdHistoryIx == CmdIx)
-                CmdHistoryIx = CalcOffsetCmdIx(CmdHistoryIx, CmdMaxIx, -1);
-            strcpy(CmdBuffers[CmdIx], CmdBuffers[CmdHistoryIx]);
-            break;
-        case MOS_CMD_DOWN_ARROW:
-            // Rotate history forward one, skipping over current index
-            CmdHistoryIx = CalcOffsetCmdIx(CmdHistoryIx, CmdMaxIx, 1);
-            if (CmdHistoryIx == CmdIx)
-                CmdHistoryIx = CalcOffsetCmdIx(CmdHistoryIx, CmdMaxIx, 1);
-            strcpy(CmdBuffers[CmdIx], CmdBuffers[CmdHistoryIx]);
-            break;
-        default:
-            break;
-        }
+    for (u32 ix = 0; ix < count_of(list_cmds); ix++) {
+        MosAddCommand(&Shell, &list_cmds[ix]);
     }
+    MosRunShell(&Shell);
     return 0;
 }
 
@@ -2008,7 +1897,6 @@ int InitTestBench() {
     HalTestsInit();
 
     //DWT->CYCCNT -> COOL, High resolution timer built-in
-
     MosRegisterEventHook(EventCallback);
 
     MosInitHeap(&TestThreadHeapDesc, TestThreadHeap, sizeof(TestThreadHeap), MOS_STACK_ALIGNMENT);
