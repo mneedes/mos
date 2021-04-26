@@ -1779,16 +1779,6 @@ static bool MiscTests(void) {
     return tests_all_pass;
 }
 
-#if 0
-typedef enum {
-    CMD_ERR_OUT_OF_RANGE = -3,
-    CMD_ERR_NOT_FOUND = -2,
-    CMD_ERR = -1,
-    CMD_OK,
-    CMD_OK_NO_HISTORY,
-} CmdStatus;
-#endif
-
 static s32 CmdTest(s32 argc, char * argv[]) {
     bool test_pass = true;
     if (argc >= 2 && strcmp(argv[1], "hal") == 0) {

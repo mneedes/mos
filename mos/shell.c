@@ -199,7 +199,7 @@ MosCommandStatus MosRunCommand(MosShell * shell, char * cmd_buf_in) {
     u32 argc;
     char * argv[max_cmd_args];
     char cmd_buf[shell->max_cmd_line_size];
-    char (* CmdBuffers)[shell->cmd_buffer_len][shell->max_cmd_line_size] = shell->cmd_buffer;
+    char (* CmdBuffer)[shell->cmd_buffer_len][shell->max_cmd_line_size] = shell->cmd_buffer;
     strncpy(cmd_buf, cmd_buf_in, sizeof(cmd_buf));
     argc = MosParseCommand(argv, cmd_buf, max_cmd_args);
     if (argc == 0) return CMD_OK_NO_HISTORY;
@@ -210,8 +210,8 @@ MosCommandStatus MosRunCommand(MosShell * shell, char * cmd_buf_in) {
         if (argv[0][1] == '!') {
             if (shell->cmd_max_ix > 0) {
                 u32 run_cmd_ix = CalcOffsetCommandIx(shell->cmd_ix, shell->cmd_max_ix, -1);
-                strcpy(*CmdBuffers[shell->cmd_ix], *CmdBuffers[run_cmd_ix]);
-                return MosRunCommand(shell, *CmdBuffers[shell->cmd_ix]);
+                strcpy((*CmdBuffer)[shell->cmd_ix], (*CmdBuffer)[run_cmd_ix]);
+                return MosRunCommand(shell, (*CmdBuffer)[shell->cmd_ix]);
             } else return CMD_ERR_OUT_OF_RANGE;
         } else if (argv[0][1] == '-') {
             if (argv[0][2] >= '1' && argv[0][2] <= '9') {
@@ -219,8 +219,8 @@ MosCommandStatus MosRunCommand(MosShell * shell, char * cmd_buf_in) {
                 if (offset <= shell->cmd_max_ix) {
                     u32 run_cmd_ix = CalcOffsetCommandIx(shell->cmd_ix,
                                                          shell->cmd_max_ix, -offset);
-                    strcpy(*CmdBuffers[shell->cmd_ix], *CmdBuffers[run_cmd_ix]);
-                    return MosRunCommand(shell, *CmdBuffers[shell->cmd_ix]);
+                    strcpy((*CmdBuffer)[shell->cmd_ix], (*CmdBuffer)[run_cmd_ix]);
+                    return MosRunCommand(shell, (*CmdBuffer)[shell->cmd_ix]);
                 } else return CMD_ERR_OUT_OF_RANGE;
             }
         }
@@ -236,7 +236,7 @@ MosCommandStatus MosRunCommand(MosShell * shell, char * cmd_buf_in) {
             u32 hist_cmd_ix = CalcOffsetCommandIx(shell->cmd_ix, shell->cmd_max_ix, -ix);
             MosLockTraceMutex();
             MosPrintf("%2d: ", -ix);
-            MosPrint(*CmdBuffers[hist_cmd_ix]);
+            MosPrint((*CmdBuffer)[hist_cmd_ix]);
             MosPrint("\n");
             MosUnlockTraceMutex();
         }
@@ -248,14 +248,14 @@ MosCommandStatus MosRunCommand(MosShell * shell, char * cmd_buf_in) {
 }
 
 void MosRunShell(MosShell * shell) {
-    char (* CmdBuffers)[shell->cmd_buffer_len][shell->max_cmd_line_size] = shell->cmd_buffer;
+    char (* CmdBuffer)[shell->cmd_buffer_len][shell->max_cmd_line_size] = shell->cmd_buffer;
     while (1) {
         MosCommandResult result;
         MosCommandStatus status;
-        result = MosGetNextCommand("# ", *CmdBuffers[shell->cmd_ix], shell->max_cmd_line_size);
+        result = MosGetNextCommand("# ", (*CmdBuffer)[shell->cmd_ix], shell->max_cmd_line_size);
         switch (result) {
         case MOS_CMD_RECEIVED:
-            status = MosRunCommand(shell, *CmdBuffers[shell->cmd_ix]);
+            status = MosRunCommand(shell, (*CmdBuffer)[shell->cmd_ix]);
             switch (status) {
             case CMD_OK_NO_HISTORY:
                 break;
@@ -278,21 +278,21 @@ void MosRunShell(MosShell * shell) {
                 break;
             }
             shell->cmd_history_ix = shell->cmd_ix;
-            *CmdBuffers[shell->cmd_ix][0] = '\0';
+            (*CmdBuffer)[shell->cmd_ix][0] = '\0';
             break;
         case MOS_CMD_UP_ARROW:
             // Rotate history back one, skipping over current index
             shell->cmd_history_ix = CalcOffsetCommandIx(shell->cmd_history_ix, shell->cmd_max_ix, -1);
             if (shell->cmd_history_ix == shell->cmd_ix)
                 shell->cmd_history_ix = CalcOffsetCommandIx(shell->cmd_history_ix, shell->cmd_max_ix, -1);
-            strcpy(*CmdBuffers[shell->cmd_ix], *CmdBuffers[shell->cmd_history_ix]);
+            strcpy((*CmdBuffer)[shell->cmd_ix], (*CmdBuffer)[shell->cmd_history_ix]);
             break;
         case MOS_CMD_DOWN_ARROW:
             // Rotate history forward one, skipping over current index
             shell->cmd_history_ix = CalcOffsetCommandIx(shell->cmd_history_ix, shell->cmd_max_ix, 1);
             if (shell->cmd_history_ix == shell->cmd_ix)
                 shell->cmd_history_ix = CalcOffsetCommandIx(shell->cmd_history_ix, shell->cmd_max_ix, 1);
-            strcpy(*CmdBuffers[shell->cmd_ix], *CmdBuffers[shell->cmd_history_ix]);
+            strcpy((*CmdBuffer)[shell->cmd_ix], (*CmdBuffer)[shell->cmd_history_ix]);
             break;
         default:
             break;
