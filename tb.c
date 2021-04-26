@@ -1878,8 +1878,7 @@ static char CmdBuffers[MAX_CMD_BUFFER_LENGTH][MAX_CMD_LINE_SIZE] = {{ 0 }};
 
 static s32 TestShell(s32 arg) {
     MOS_UNUSED(arg);
-    static MosShell Shell;
-    MosPrintf("Size(cmdbuffers) = %u\n", sizeof(CmdBuffers));
+    MosShell Shell;
     MosInitShell(&Shell, MAX_CMD_BUFFER_LENGTH, MAX_CMD_LINE_SIZE, (void *)CmdBuffers, true);
     static MosShellCommand list_cmds[] = {
         { CmdTest,           "run", "Run Test", "[TEST]", {0} },
