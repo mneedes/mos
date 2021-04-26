@@ -186,23 +186,22 @@ u32 MosParseCommand(char * argv[], char * args, u32 max_argc) {
     return argc;
 }
 
-#define MAX_CMD_ARGUMENTS       10
-
 // Calculate a valid command index at the offset from the provided index
 static u32 CalcOffsetCommandIx(s32 ix, s32 max_ix, s32 offset) {
     s32 new_ix = (ix + offset) % (max_ix + 1);
     if (new_ix < 0) new_ix += (max_ix + 1);
     return (u32)new_ix;
-}    u16 cmd_buffer_len;
+}
 
 // FIXME: This is recursive -- maybe not a good idea
 MosCommandStatus MosRunCommand(MosShell * shell, char * cmd_buf_in) {
+    const u32 max_cmd_args = 10;
     u32 argc;
-    char * argv[MAX_CMD_ARGUMENTS];
+    char * argv[max_cmd_args];
     char cmd_buf[shell->max_cmd_line_size];
     char (* CmdBuffers)[shell->cmd_buffer_len][shell->max_cmd_line_size] = shell->cmd_buffer;
     strncpy(cmd_buf, cmd_buf_in, sizeof(cmd_buf));
-    argc = MosParseCommand(argv, cmd_buf, MAX_CMD_ARGUMENTS);
+    argc = MosParseCommand(argv, cmd_buf, max_cmd_args);
     if (argc == 0) return CMD_OK_NO_HISTORY;
     MosShellCommand * cmd = MosFindCommand(shell, argv[0]);
     if (cmd) {

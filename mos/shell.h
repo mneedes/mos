@@ -65,7 +65,7 @@ MosShellCommand * MosFindCommand(MosShell * shell, char * name);
 void MosPrintCommandHelp(MosShell * shell);
 //  Parser support quotes and escape character '\'
 MosCommandResult MosGetNextCommand(char * prompt, char * cmd, u32 max_cmd_len);
-//  NOTE: MosParseCmd modifies args in place like _strtok()
+//  NOTE: MosParseCmd modifies args in place like strtok_r()
 u32 MosParseCommand(char * argv[], char * args, u32 max_argc);
 MosCommandStatus MosRunCommand(MosShell * shell, char * cmd_buf_in);
 void MosRunShell(MosShell * shell);
