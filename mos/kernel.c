@@ -27,6 +27,12 @@
   #define ENABLE_FP_CONTEXT_SAVE    false
 #endif
 
+#if (defined(__ARM_ARCH_8M_BASE__) || defined(__ARM_ARCH_8M_MAIN__))
+  #define DEFAULT_EXC_RETURN        0xffffffbc
+#else
+  #define DEFAULT_EXC_RETURN        0xfffffffd
+#endif
+
 #if (defined(__ARM_ARCH_8M_MAIN__) && __ARM_ARCH_8M_MAIN__ == 1U) || (defined(__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE >= 3))
   #define ENABLE_SPLIM_SUPPORT      true
 #else
@@ -53,12 +59,12 @@ enum {
 
 typedef struct {
     u32 SWSAVE[8];   // R4-R11
-    u32 LR_EXC;      // Exception LR
+    u32 LR_EXC_RTN;  // Exception Return LR
     u32 HWSAVE[4];   // R0-R3
     u32 R12;         // R12
     u32 LR;          // R14
     u32 PC;          // R15
-    u32 PSR;
+    u32 PSR;         // xPSR
 } StackFrame;
 
 typedef enum {
@@ -200,8 +206,8 @@ static s32 ThreadExit(s32 rtn_val) {
     asm volatile ( "dmb" );
     if (MosIsOnList(&RunningThread->tmr_link.link))
         MosRemoveFromList(&RunningThread->tmr_link.link);
-    MosList * elm_save;
-    for (MosList * elm = RunningThread->stop_q.next;
+    MosLink * elm_save;
+    for (MosLink * elm = RunningThread->stop_q.next;
              elm != &RunningThread->stop_q; elm = elm_save) {
         elm_save = elm->next;
         Thread * thd = container_of(elm, Thread, run_link);
@@ -233,7 +239,7 @@ static void InitThread(Thread * thd, MosThreadPriority pri,
     sf->LR = (u32)ThreadExit;
     sf->R12 = 0;
     sf->HWSAVE[0] = arg;
-    sf->LR_EXC = 0xfffffffd;
+    sf->LR_EXC_RTN = DEFAULT_EXC_RETURN;
     // Either fill lower stack OR just place canary value at bottom
     if (MOS_STACK_USAGE_MONITOR) {
         u32 * fill = (u32 *)sf - 1;
@@ -264,8 +270,8 @@ void SysTick_Handler(void) {
     if (RunningThread == NO_SUCH_THREAD) return;
     // Process timer queue
     //  Timer queues can contain threads or message timers
-    MosList * elm_save;
-    for (MosList * elm = TimerQueue.next; elm != &TimerQueue; elm = elm_save) {
+    MosLink * elm_save;
+    for (MosLink * elm = TimerQueue.next; elm != &TimerQueue; elm = elm_save) {
         elm_save = elm->next;
         if (((MosLinkHet *)elm)->type == ELM_THREAD) {
             Thread * thd = container_of(elm, Thread, tmr_link);
@@ -320,7 +326,7 @@ static u32 MOS_USED Scheduler(u32 sp) {
     } else if (RunningThread->state & THREAD_STATE_TICK) {
         // Update running thread timer state (insertion sort in timer queue)
         s32 rem_ticks = (s32)RunningThread->wake_tick - Tick.lower;
-        MosList * elm;
+        MosLink * elm;
         for (elm = TimerQueue.next; elm != &TimerQueue; elm = elm->next) {
             s32 wake_tick;
             if (((MosLinkHet *)elm)->type == ELM_THREAD) {
@@ -344,13 +350,13 @@ static u32 MOS_USED Scheduler(u32 sp) {
     while (1) {
         asm volatile ( "cpsid if" );
         if (!MosIsListEmpty(&ISREventQueue)) {
-            MosList * elm = ISREventQueue.next;
+            MosLink * elm = ISREventQueue.next;
             MosRemoveFromList(elm);
             // Currently only semaphores are on event list
             MosSem * sem = container_of(elm, MosSem, evt_link);
             // Release thread if it is pending
             if (!MosIsListEmpty(&sem->pend_q)) {
-                MosList * elm = sem->pend_q.next;
+                MosLink * elm = sem->pend_q.next;
                 MosRemoveFromList(elm);
                 asm volatile ("cpsie if");
                 Thread * thd = container_of(elm, Thread, run_link);
@@ -585,7 +591,7 @@ void MosInitTimer(MosTimer * timer, MosTimerCallback * callback) {
 }
 
 static void AddTimer(MosTimer * timer) {
-    MosList * tmr;
+    MosLink * tmr;
     SetBasePri(IntPriMaskLow);
     u32 tick_count = MosGetTickCount();
     timer->wake_tick = tick_count + timer->ticks;
@@ -1027,7 +1033,7 @@ static void MOS_USED BlockOnMutex(MosMutex * mtx) {
     // Retry (don't block) if mutex has since been given
     if (mtx->owner != NO_SUCH_THREAD) {
         // Add thread to pend queue
-        MosList * elm = mtx->pend_q.next;
+        MosLink * elm = mtx->pend_q.next;
         for (; elm != &mtx->pend_q; elm = elm->next) {
             Thread * thd = container_of(elm, Thread, run_link);
             if (thd->pri > RunningThread->pri) break;
@@ -1118,7 +1124,7 @@ static void MOS_USED YieldOnMutex(MosMutex * mtx) {
     SetBasePri(IntPriMaskLow);
     asm volatile ( "dsb" );
     if (!MosIsListEmpty(&mtx->pend_q)) {
-        MosList * elm = mtx->pend_q.next;
+        MosLink * elm = mtx->pend_q.next;
         Thread * thd = container_of(elm, Thread, run_link);
         MosRemoveFromList(elm);
         MosAddToFrontOfList(&RunQueues[thd->pri], elm);
@@ -1181,7 +1187,7 @@ static void MOS_USED BlockOnSem(MosSem * sem) {
     asm volatile ( "cpsid if" );
     // Retry (don't block) if count has since incremented
     if (sem->value == 0) {
-        MosList * elm = sem->pend_q.next;
+        MosLink * elm = sem->pend_q.next;
         for (; elm != &sem->pend_q; elm = elm->next) {
             Thread * thd = container_of(elm, Thread, run_link);
             if (thd->pri > RunningThread->pri) break;
@@ -1224,7 +1230,7 @@ static bool MOS_USED BlockOnSemOrTO(MosSem * sem) {
     // Immediately retry (don't block) if count has since incremented
     if (sem->value == 0) {
         RunningThread->timed_out = 0;
-        MosList * elm = sem->pend_q.next;
+        MosLink * elm = sem->pend_q.next;
         for (; elm != &sem->pend_q; elm = elm->next) {
             Thread * thd = container_of(elm, Thread, run_link);
             if (thd->pri > RunningThread->pri) break;
