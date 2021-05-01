@@ -136,7 +136,8 @@ static HalRxUARTCallback * rx_callback = NULL;
 
 void USART2_IRQHandler(void) {
     if (UartHandle.Instance->SR & USART_SR_RXNE) {
-        if (rx_callback) (*rx_callback)(UartHandle.Instance->DR);
+        char ch = UartHandle.Instance->DR;
+        if (rx_callback) (*rx_callback)(ch);
     }
 }
 

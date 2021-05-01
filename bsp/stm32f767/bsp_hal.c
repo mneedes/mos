@@ -246,7 +246,8 @@ static HalRxUARTCallback * rx_callback = NULL;
 
 void USART3_IRQHandler(void) {
     if (huart3.Instance->ISR & USART_ISR_RXNE) {
-        if (rx_callback) (*rx_callback)(huart3.Instance->RDR);
+        char ch = huart3.Instance->RDR;
+        if (rx_callback) (*rx_callback)(ch);
     }
 }
 
