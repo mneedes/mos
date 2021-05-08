@@ -22,8 +22,6 @@ typedef struct {
     u16 align_mask;
     u16 fl_block_cnt;
     u16 min_block_size;
-    u16 double_free_cnt;
-    u16 dead_canary_cnt;
 } MosHeap;
 
 void MosInitHeap(MosHeap * heap, u8 * data, u32 heap_size, u32 alignment);

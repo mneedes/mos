@@ -17,7 +17,7 @@
  *
  *  |slab_ptr|         payload            |slab ptr...
  *           ^                            ^
- *       alignment                        +-  NEXT BLOCK
+ *       alignment                        +- next block
  *
  *    Actual alignment = max(requested alignment, pointer size)
  *
@@ -25,8 +25,7 @@
  *
  *  |slab ptr| (free-list link)           |slab ptr...
  *           ^                            ^
- *       alignment                        +- NEXT BLOCK
- *
+ *       alignment                        +- next block
  */
 
 enum {

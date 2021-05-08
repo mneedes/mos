@@ -13,7 +13,7 @@
  *
  *  |canary|size_p| size |      payload       |canary|size_p| size...
  *                       ^                    ^
- *                   alignment                +-  NEXT BLOCK
+ *                   alignment                +-  next block
  *
  *    Actual alignment = max(requested alignment, pointer size)
  *    Implicit link sizes = sizeof(payload) + sizeof(Link)
@@ -23,14 +23,12 @@
  *
  *  |canary|size_p| size | (free-list link)  payload  |...
  *                       ^         ^                  ^
- *                   alignment     |                  +- NEXT BLOCK
+ *                   alignment     |                  +- next block
  *                                 |
  *   Payload of freed block contains explicit link
- *
  */
 
-// TODO: Assert instead of count issues
-// TODO: Sort frags in power of 2 bins
+// TODO: place frags in power of 2 bins
 // TODO: Deterministic allocations using power of 2 bins.
 
 enum {
@@ -81,9 +79,6 @@ void MosInitHeap(MosHeap * heap, u8 * _bot, u32 heap_size, u32 alignment) {
     MosInitList(&heap->fl);
     MosAddToList(&heap->fl, &bot->fl_link);
     heap->fl_block_cnt = 1;
-    // Initialize error counters
-    heap->double_free_cnt = 0;
-    heap->dead_canary_cnt = 0;
     MosInitMutex(&heap->mtx);
 }
 
@@ -98,9 +93,8 @@ void * MosAlloc(MosHeap * heap, u32 size) {
         for (elm = heap->fl.next; elm != &heap->fl; elm = elm->next) {
             block = container_of(elm, Block, fl_link);
             if (block->link.size >= size) {
-                if (block->link.canary != HEAP_CANARY_VALUE)
-                    heap->dead_canary_cnt++;
-                else break;
+                MosAssert(block->link.canary == HEAP_CANARY_VALUE);
+                break;
             }
         }
         if (elm == &heap->fl) {
@@ -144,16 +138,8 @@ void * MosReAlloc(MosHeap * heap, void * _block, u32 _new_size) {
     MosLockMutex(&heap->mtx);
     Block * block = (Block *) ((u8 *) _block - sizeof(Link));
     // Check for canary value and double-free
-    if (block->link.canary != HEAP_CANARY_VALUE) {
-        heap->dead_canary_cnt++;
-        MosUnlockMutex(&heap->mtx);
-        return NULL;
-    }
-    if (!(block->link.size & 0x1)) {
-        heap->double_free_cnt++;
-        MosUnlockMutex(&heap->mtx);
-        return NULL;
-    }
+    MosAssert(block->link.canary == HEAP_CANARY_VALUE);
+    MosAssert(block->link.size & 0x1);
     u32 new_size = _new_size;
     if (new_size < MIN_PAYLOAD_SIZE) new_size = MIN_PAYLOAD_SIZE;
     new_size = MOS_ALIGN32(new_size + sizeof(Link), heap->align_mask);
@@ -209,25 +195,13 @@ void MosFree(MosHeap * heap, void * _block) {
     Block * block = (Block *) ((u8 *) _block - sizeof(Link));
     MosLockMutex(&heap->mtx);
     // Check for canary value and double-free
-    if (block->link.canary != HEAP_CANARY_VALUE) {
-        heap->dead_canary_cnt++;
-        MosUnlockMutex(&heap->mtx);
-        return;
-    }
-    if (!(block->link.size & 0x1)) {
-        heap->double_free_cnt++;
-        MosUnlockMutex(&heap->mtx);
-        return;
-    }
+    MosAssert(block->link.canary == HEAP_CANARY_VALUE);
+    MosAssert(block->link.size & 0x1);
     // Unmark allocation bit
     block->link.size--;
     // Check next canary value
     Block * next = (Block *) ((u8 *) block + block->link.size);
-    if (next->link.canary != HEAP_CANARY_VALUE) {
-        heap->dead_canary_cnt++;
-        MosUnlockMutex(&heap->mtx);
-        return;
-    }
+    MosAssert(next->link.canary == HEAP_CANARY_VALUE);
     heap->bytes_free += block->link.size;
     // Find next and previous blocks and determine if allocated
     Block * prev = NULL;
@@ -256,7 +230,7 @@ void MosFree(MosHeap * heap, void * _block) {
         // No combination possible
         heap->fl_block_cnt += 1;
     }
-    // Adjust Links
+    // Adjust implicit links
     block->link.size += size_increase;
     next = (Block *) ((u8 *) block + block->link.size);
     next->link.size_p = block->link.size;
@@ -264,4 +238,3 @@ void MosFree(MosHeap * heap, void * _block) {
     MosAddToFrontOfList(&heap->fl, &block->fl_link);
     MosUnlockMutex(&heap->mtx);
 }
-
