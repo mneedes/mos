@@ -358,7 +358,7 @@ static u32 MOS_USED Scheduler(u32 sp) {
             if (!MosIsListEmpty(&sem->pend_q)) {
                 MosLink * elm = sem->pend_q.next;
                 MosRemoveFromList(elm);
-                asm volatile ("cpsie if");
+                asm volatile ( "cpsie if" );
                 Thread * thd = container_of(elm, Thread, run_link);
                 MosAddToFrontOfList(&RunQueues[thd->pri], elm);
                 if (MosIsOnList(&thd->tmr_link.link))
@@ -532,20 +532,20 @@ u32 MosGetTickCount(void) {
 }
 
 u64 MosGetCycleCount(void) {
-    asm volatile ( "cpsid if " );
+    asm volatile ( "cpsid if" );
     if (SysTick->CTRL & SysTick_CTRL_COUNTFLAG_Msk) Tick.count++;
     s64 tmp = Tick.count;
     u32 val = SysTick->VAL;
-    asm volatile ( "cpsie if " );
+    asm volatile ( "cpsie if" );
     return (tmp * CyclesPerTick) - val;
 }
 
 void MosAdvanceTickCount(u32 ticks) {
     if (ticks) {
-        asm volatile ( "cpsid if " );
+        asm volatile ( "cpsid if" );
         if (SysTick->CTRL & SysTick_CTRL_COUNTFLAG_Msk) Tick.count++;
         Tick.count += ticks;
-        asm volatile ( "cpsie if " );
+        asm volatile ( "cpsie if" );
     }
 }
 
@@ -568,6 +568,7 @@ void MOS_NAKED MosDelayMicroSec(u32 usec) {
         "mul r0, r0, r1\n\t"
         "sub r0, #13\n\t"  // Overhead calibration
         "delay:\n\t"
+        // It is possible that 6 is another valid value, non-cached flash stall?
 #if (MOS_CYCLES_PER_INNER_LOOP == 3)
         "subs r0, #3\n\t"
 #elif (MOS_CYCLES_PER_INNER_LOOP == 1)

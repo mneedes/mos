@@ -24,11 +24,11 @@ typedef struct {
 } MosFIFO32;
 
 // Non-blocking FIFO
-void MosInitFIFO32(MosFIFO32 * fifo, u32 * buf, u32 len);
-bool MosWriteToFIFO32(MosFIFO32 * fifo, u32 data);
-bool MosReadFromFIFO32(MosFIFO32 * fifo, u32 * data);
+MOS_ISR_SAFE void MosInitFIFO32(MosFIFO32 * fifo, u32 * buf, u32 len);
+MOS_ISR_SAFE bool MosWriteToFIFO32(MosFIFO32 * fifo, u32 data);
+MOS_ISR_SAFE bool MosReadFromFIFO32(MosFIFO32 * fifo, u32 * data);
 
 // Read head without removing entry
-bool MosSnoopFIFO32(MosFIFO32 * fifo, u32 * data);
+MOS_ISR_SAFE bool MosSnoopFIFO32(MosFIFO32 * fifo, u32 * data);
 
 #endif

@@ -39,7 +39,7 @@ typedef void (MosWakeHook)(void);
 typedef void (MosEventHook)(MosEvent evt, u32 val);
 
 // Microkernel Parameters
-typedef struct {
+typedef struct MosParams {
     char              * version;
     MosThreadPriority   thread_pri_hi;
     MosThreadPriority   thread_pri_low;
@@ -50,19 +50,19 @@ typedef struct {
 } MosParams;
 
 // Mos Thread (opaque container)
-typedef struct {
+typedef struct MosThread {
     u32 rsvd[18];
     s32 ref_cnt;
 } MosThread;
 
 // Blocking mutex supporting recursion
-typedef struct {
+typedef struct MosMutex {
     MosThread * owner;
     s32         depth;
     MosList     pend_q;
 } MosMutex;
 
-typedef struct {
+typedef struct MosSem {
     u32     value;
     MosList pend_q;
     MosLink evt_link;
@@ -208,8 +208,9 @@ bool MosWaitForSemOrTO(MosSem * sem, u32 ticks);
 MOS_ISR_SAFE bool MosTrySem(MosSem * sem);
 MOS_ISR_SAFE void MosIncrementSem(MosSem * sem);
 
-//   (2) Signal (ganged 32-bit binary semaphores)
-//       zero is returned for timeout / no poll
+//   (2) A Signal is a ganged 32-bit binary semaphore
+//       Single-reader / multiple-writer
+//       zero is returned for timeout or nothing polled
 
 u32 MosWaitForSignal(MosSem * sem);
 u32 MosWaitForSignalOrTO(MosSem * sem, u32 ticks);
