@@ -22,13 +22,13 @@ void EXTI0_IRQHandler(void) {
     IRQ0_Callback();
 }
 
-void EXTI10_IRQHandler(void) {
+void EXTI15_10_IRQHandler(void) {
     IRQ1_Callback();
 }
 
 void HalTestsInit(void) {
     NVIC_EnableIRQ(EXTI0_IRQn);
-    NVIC_EnableIRQ(EXTI1_IRQn);
+    NVIC_EnableIRQ(EXTI15_10_IRQn);
 }
 
 void HalTestsTriggerInterrupt(u32 num) {
@@ -37,7 +37,7 @@ void HalTestsTriggerInterrupt(u32 num) {
         NVIC_SetPendingIRQ(EXTI0_IRQn);
         break;
     case 1:
-        NVIC_SetPendingIRQ(EXTI1_IRQn);
+        NVIC_SetPendingIRQ(EXTI15_10_IRQn);
         break;
     default:
         break;
@@ -77,25 +77,25 @@ static s32 HalPulseReceiverThread(s32 arg) {
 static MosThread * thread = { 0 };
 
 bool HalTests(int argc, char * argv[]) {
-	if (argc == 0) {
-		MosPrint("Not enough arguments\n");
-		return false;
-	}
-	bool success = true;
-	if (strcmp(argv[0], "start") == 0) {
-		if (MosAllocAndRunThread(&thread, 0, HalPulseReceiverThread, 0, 512)) {
-		    MosPrint("Hal Pulse Receiver Test START\n");
-		}
-	    if (!thread) success = false;
-	} else if (strcmp(argv[0], "stop") == 0) {
-		if (thread == NULL) {
-			success = false;
-		} else {
-		    // KillThread
+    if (argc == 0) {
+        MosPrint("Not enough arguments\n");
+        return false;
+    }
+    bool success = true;
+    if (strcmp(argv[0], "start") == 0) {
+        if (MosAllocAndRunThread(&thread, 0, HalPulseReceiverThread, 0, 512)) {
+            MosPrint("Hal Pulse Receiver Test START\n");
+        }
+        if (!thread) success = false;
+    } else if (strcmp(argv[0], "stop") == 0) {
+        if (thread == NULL) {
+            success = false;
+        } else {
+            // KillThread
             if (MosWaitForThreadStop(thread) != TEST_PASS) success = false;
             MosDecThreadRefCount(&thread);
             MosPrint("Hal Pulse Receiver Test STOP\n");
-		}
-	}
+        }
+    }
     return success;
 }

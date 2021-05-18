@@ -118,18 +118,18 @@ void HalInit(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_ADC1_Init();
-  MX_DFSDM1_Init();
-  MX_I2C1_Init();
-  MX_I2C2_Init();
-  MX_OCTOSPI1_Init();
-  MX_SPI1_Init();
-  MX_SPI3_Init();
+  //MX_ADC1_Init();
+  //MX_DFSDM1_Init();
+  //MX_I2C1_Init();
+  //MX_I2C2_Init();
+  //MX_OCTOSPI1_Init();
+  //MX_SPI1_Init();
+  //MX_SPI3_Init();
   MX_UART4_Init();
   MX_USART1_UART_Init();
   MX_USART2_UART_Init();
   MX_USART3_UART_Init();
-  MX_USB_OTG_FS_USB_Init();
+  //MX_USB_OTG_FS_USB_Init();
   MX_RNG_Init();
 }
 
@@ -910,10 +910,10 @@ static void MX_GPIO_Init(void)
 
   /* EXTI interrupt init*/
   HAL_NVIC_SetPriority(EXTI9_5_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
+  //HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
 
   HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
+  //HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
 }
 
