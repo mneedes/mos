@@ -145,7 +145,7 @@ static u32 IntDisableCount = 0;
 
 // Timers and Ticks
 static MosList TimerQueue;
-static volatile Ticker MOS_ALIGNED(8) Tick = { .count = MOS_START_TICK_COUNT };
+static volatile Ticker MOS_ALIGNED(8) Tick = { .count = 1 };
 static s32 MaxTickInterval;
 static u32 CyclesPerTick;
 static u32 MOS_USED CyclesPerMicroSec;
@@ -543,8 +543,8 @@ u64 MosGetCycleCount(void) {
 void MosAdvanceTickCount(u32 ticks) {
     if (ticks) {
         asm volatile ( "cpsid if" );
-        if (SysTick->CTRL & SysTick_CTRL_COUNTFLAG_Msk) Tick.count++;
         Tick.count += ticks;
+        SCB->ICSR = SCB_ICSR_PENDSTSET_Msk;
         asm volatile ( "cpsie if" );
     }
 }

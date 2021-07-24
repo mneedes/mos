@@ -21,12 +21,6 @@
 // Tick rate
 #define MOS_MICRO_SEC_PER_TICK      1000
 
-// Starting tick count
-//   Set to early rollover to always test rollovers,
-//   Set to one for more intuitive time keeping
-#define MOS_START_TICK_COUNT        0xFFFFFFFFFFFFFF00
-//#define MOS_START_TICK_COUNT      0x0000000000000001
-
 // Enable floating point context switch support
 //  Note that if false, floating point might still work
 //  if confined to a single context.
