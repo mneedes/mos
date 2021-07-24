@@ -159,7 +159,7 @@ static u8 MOS_STACK_ALIGNED IdleStack[112 + sizeof(StackFrame)];
 //   disabling context switches.
 static MOS_INLINE void SetBasePri(u32 pri) {
     asm volatile (
-        "msr basepri, %0\n\t"
+        "msr basepri, %0\n"
         "isb"
             : : "r" (pri) : "memory"
     );
@@ -400,18 +400,18 @@ static u32 MOS_USED Scheduler(u32 sp) {
 void MOS_NAKED PendSV_Handler(void) {
     // Floating point context switch (lazy stacking)
     asm volatile (
-        "mrs r0, psp\n\t"
-        "tst lr, #16\n\t"
-        "it eq\n\t"
-        "vstmdbeq r0!, {s16-s31}\n\t"
-        "stmdb r0!, {r4-r11, lr}\n\t"
-        "bl Scheduler\n\t"
-        "ldmfd r0!, {r4-r11, lr}\n\t"
-        "tst lr, #16\n\t"
-        "it eq\n\t"
-        "vldmiaeq r0!, {s16-s31}\n\t"
-        "msr psp, r0\n\t"
-        "bx lr\n\t"
+        "mrs r0, psp\n"
+        "tst lr, #16\n"
+        "it eq\n"
+        "vstmdbeq r0!, {s16-s31}\n"
+        "stmdb r0!, {r4-r11, lr}\n"
+        "bl Scheduler\n"
+        "ldmfd r0!, {r4-r11, lr}\n"
+        "tst lr, #16\n"
+        "it eq\n"
+        "vldmiaeq r0!, {s16-s31}\n"
+        "msr psp, r0\n"
+        "bx lr"
     );
 }
 
@@ -420,12 +420,12 @@ void MOS_NAKED PendSV_Handler(void) {
 void MOS_NAKED PendSV_Handler(void) {
     // Vanilla context switch without floating point.
     asm volatile (
-        "mrs r0, psp\n\t"
-        "stmdb r0!, {r4-r11, lr}\n\t"
-        "bl Scheduler\n\t"
-        "ldmfd r0!, {r4-r11, lr}\n\t"
-        "msr psp, r0\n\t"
-        "bx lr\n\t"
+        "mrs r0, psp\n"
+        "stmdb r0!, {r4-r11, lr}\n"
+        "bl Scheduler\n"
+        "ldmfd r0!, {r4-r11, lr}\n"
+        "msr psp, r0\n"
+        "bx lr"
     );
 }
 
@@ -500,11 +500,11 @@ static void MOS_USED FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 lr) {
 
 void MOS_NAKED MOS_WEAK HardFault_Handler(void) {
     asm volatile (
-        "mrs r0, msp\n\t"
-        "mrs r1, psp\n\t"
-        "mrs r2, psr\n\t"
-        "mov r3, lr\n\t"
-        "b FaultHandler\n\t"
+        "mrs r0, msp\n"
+        "mrs r1, psp\n"
+        "mrs r2, psr\n"
+        "mov r3, lr\n"
+        "b FaultHandler"
             : : : "r0", "r1", "r2", "r3"
     );
 }
@@ -563,23 +563,23 @@ void MosDelayThread(u32 ticks) {
 void MOS_NAKED MosDelayMicroSec(u32 usec) {
     MOS_UNUSED(usec);
     asm volatile (
-        "ldr r1, _CyclesPerMicroSec\n\t"
-        "ldr r1, [r1]\n\t"
-        "mul r0, r0, r1\n\t"
-        "sub r0, #13\n\t"  // Overhead calibration
-        "delay:\n\t"
+        "ldr r1, _CyclesPerMicroSec\n"
+        "ldr r1, [r1]\n"
+        "mul r0, r0, r1\n"
+        "sub r0, #13\n"  // Overhead calibration
+        "delay:\n"
         // It is possible that 6 is another valid value, non-cached flash stall?
 #if (MOS_CYCLES_PER_INNER_LOOP == 3)
-        "subs r0, #3\n\t"
+        "subs r0, #3\n"
 #elif (MOS_CYCLES_PER_INNER_LOOP == 1)
-        "subs r0, #1\n\t"
+        "subs r0, #1\n"
 #else
 #error "Invalid selection for inner loop cycles"
 #endif
-        "bgt delay\n\t"
-        "bx lr\n\t"
-        ".balign 4\n\t"
-        "_CyclesPerMicroSec: .word CyclesPerMicroSec\n\t"
+        "bgt delay\n"
+        "bx lr\n"
+        ".balign 4\n"
+        "_CyclesPerMicroSec: .word CyclesPerMicroSec"
             : : : "r0", "r1"
     );
 }
@@ -660,8 +660,8 @@ static s32 IdleThreadEntry(s32 arg) {
         if (SleepHook) (*SleepHook)();
         SysTick->CTRL = SYSTICK_CTRL_ENABLE;
         asm volatile (
-            "dsb\n\t"
-            "wfi\n\t" ::: "memory"
+            "dsb\n"
+            "wfi" ::: "memory"
         );
         if (WakeHook) (*WakeHook)();
         if (load) {
@@ -681,9 +681,9 @@ static s32 IdleThreadEntry(s32 arg) {
             }
             SysTick->CTRL = SYSTICK_CTRL_ENABLE;
         }
-        asm volatile ( "cpsie i\n\t"
-                       "dsb\n\t"
-                       "isb\n\t" ::: "memory" );
+        asm volatile ( "cpsie i\n"
+                       "dsb\n"
+                       "isb" ::: "memory" );
     }
     return 0;
 }
@@ -753,16 +753,16 @@ void MosRegisterEventHook(MosEventHook * hook) { EventHook = hook; }
 void MosRunScheduler(void) {
     // Start PSP in a safe place for first PendSV and then enable interrupts
     asm volatile (
-        "ldr r0, psp_start\n\t"
-        "msr psp, r0\n\t"
-        "mov r0, #0\n\t"
-        "msr basepri, r0\n\t"
-        "cpsie if\n\t"
-        "b SkipRS\n\t"
-        ".balign 4\n\t"
+        "ldr r0, psp_start\n"
+        "msr psp, r0\n"
+        "mov r0, #0\n"
+        "msr basepri, r0\n"
+        "cpsie if\n"
+        "b SkipRS\n"
+        ".balign 4\n"
         // 112 (28 words) is enough to store a dummy FP stack frame
-        "psp_start: .word IdleStack + 112\n\t"
-        "SkipRS:\n\t"
+        "psp_start: .word IdleStack + 112\n"
+        "SkipRS:"
             : : : "r0"
     );
     // Invoke PendSV handler to start scheduler (first context switch)
@@ -1059,29 +1059,29 @@ static void MOS_USED BlockOnMutex(MosMutex * mtx) {
 void MOS_NAKED MosLockMutex(MosMutex * mtx) {
     MOS_USED_PARAM(mtx);
     asm volatile (
-        "ldr r1, _ThreadID\n\t"
-        "ldr r1, [r1]\n\t"
-        "RetryTM:\n\t"
-        "ldrex r2, [r0]\n\t"
-        "cmp r2, r1\n\t"
-        "beq IncTM\n\t"
-        "cbnz r2, BlockTM\n\t"
-        "strex r2, r1, [r0]\n\t"
-        "cmp r2, #0\n\t"
-        "bne RetryTM\n\t"
-        "IncTM:\n\t"
-        "ldr r2, [r0, #4]\n\t"
-        "add r2, #1\n\t"
-        "str r2, [r0, #4]\n\t"
-        "dmb\n\t"
-        "bx lr\n\t"
-        "BlockTM:\n\t"
-        "push {r0, r1, lr}\n\t"
-        "bl BlockOnMutex\n\t"
-        "pop {r0, r1, lr}\n\t"
-        "b RetryTM\n\t"
-        ".balign 4\n\t"
-        "_ThreadID: .word RunningThread\n\t"
+        "ldr r1, _ThreadID\n"
+        "ldr r1, [r1]\n"
+        "RetryTM:\n"
+        "ldrex r2, [r0]\n"
+        "cmp r2, r1\n"
+        "beq IncTM\n"
+        "cbnz r2, BlockTM\n"
+        "strex r2, r1, [r0]\n"
+        "cmp r2, #0\n"
+        "bne RetryTM\n"
+        "IncTM:\n"
+        "ldr r2, [r0, #4]\n"
+        "add r2, #1\n"
+        "str r2, [r0, #4]\n"
+        "dmb\n"
+        "bx lr\n"
+        "BlockTM:\n"
+        "push {r0, r1, lr}\n"
+        "bl BlockOnMutex\n"
+        "pop {r0, r1, lr}\n"
+        "b RetryTM\n"
+        ".balign 4\n"
+        "_ThreadID: .word RunningThread"
             // Explicit clobber list prevents compiler from making
             // assumptions about registers not being changed as
             // this assembly code calls a C function.  Normally C
@@ -1093,28 +1093,28 @@ void MOS_NAKED MosLockMutex(MosMutex * mtx) {
 bool MOS_NAKED MosTryMutex(MosMutex * mtx) {
     MOS_USED_PARAM(mtx);
     asm volatile (
-        "ldr r1, _ThreadID2\n\t"
-        "ldr r1, [r1]\n\t"
-        "RetryTRM:\n\t"
-        "ldrex r2, [r0]\n\t"
-        "cmp r2, r1\n\t"
-        "beq IncTRM\n\t"
-        "cbnz r2, FailTRM\n\t"
-        "strex r2, r1, [r0]\n\t"
-        "cmp r2, #0\n\t"
-        "bne RetryTRM\n\t"
-        "IncTRM:\n\t"
-        "ldr r2, [r0, #4]\n\t"
-        "add r2, #1\n\t"
-        "str r2, [r0, #4]\n\t"
-        "dmb\n\t"
-        "mov r0, #1\n\t"
-        "bx lr\n\t"
-        "FailTRM:\n\t"
-        "mov r0, #0\n\t"
-        "bx lr\n\t"
-        ".balign 4\n\t"
-        "_ThreadID2: .word RunningThread\n\t"
+        "ldr r1, _ThreadID2\n"
+        "ldr r1, [r1]\n"
+        "RetryTRM:\n"
+        "ldrex r2, [r0]\n"
+        "cmp r2, r1\n"
+        "beq IncTRM\n"
+        "cbnz r2, FailTRM\n"
+        "strex r2, r1, [r0]\n"
+        "cmp r2, #0\n"
+        "bne RetryTRM\n"
+        "IncTRM:\n"
+        "ldr r2, [r0, #4]\n"
+        "add r2, #1\n"
+        "str r2, [r0, #4]\n"
+        "dmb\n"
+        "mov r0, #1\n"
+        "bx lr\n"
+        "FailTRM:\n"
+        "mov r0, #0\n"
+        "bx lr\n"
+        ".balign 4\n"
+        "_ThreadID2: .word RunningThread"
             : : : "r0", "r1", "r2", "r3"
     );
 }
@@ -1145,20 +1145,20 @@ static void MOS_USED YieldOnMutex(MosMutex * mtx) {
 void MOS_NAKED MosUnlockMutex(MosMutex * mtx) {
     MOS_USED_PARAM(mtx);
     asm volatile (
-        "dmb\n\t"
-        "ldr r1, [r0, #4]\n\t"
-        "sub r1, #1\n\t"
-        "str r1, [r0, #4]\n\t"
-        "cbnz r1, SkipGM\n\t"
-        "mov r1, #0\n\t"
-        "RetryGM:\n\t"
-        "ldrex r2, [r0]\n\t"
-        "strex r2, r1, [r0]\n\t"
-        "cmp r2, #0\n\t"
-        "bne RetryGM\n\t"
-        "b YieldOnMutex\n\t"
-        "SkipGM:\n\t"
-        "bx lr\n\t"
+        "dmb\n"
+        "ldr r1, [r0, #4]\n"
+        "sub r1, #1\n"
+        "str r1, [r0, #4]\n"
+        "cbnz r1, SkipGM\n"
+        "mov r1, #0\n"
+        "RetryGM:\n"
+        "ldrex r2, [r0]\n"
+        "strex r2, r1, [r0]\n"
+        "cmp r2, #0\n"
+        "bne RetryGM\n"
+        "b YieldOnMutex\n"
+        "SkipGM:\n"
+        "bx lr"
             : : : "r0", "r1", "r2", "r3"
     );
 }
@@ -1203,20 +1203,20 @@ static void MOS_USED BlockOnSem(MosSem * sem) {
 void MOS_NAKED MosWaitForSem(MosSem * sem) {
     MOS_USED_PARAM(sem);
     asm volatile (
-        "RetryTS:\n\t"
-        "ldrex r1, [r0]\n\t"
-        "cbz r1, BlockTS\n\t"
-        "sub r1, #1\n\t"
-        "strex r2, r1, [r0]\n\t"
-        "cmp r2, #0\n\t"
-        "bne RetryTS\n\t"
-        "dmb\n\t"
-        "bx lr\n\t"
-        "BlockTS:\n\t"
-        "push {r0, lr}\n\t"
-        "bl BlockOnSem\n\t"
-        "pop {r0, lr}\n\t"
-        "b RetryTS\n\t"
+        "RetryTS:\n"
+        "ldrex r1, [r0]\n"
+        "cbz r1, BlockTS\n"
+        "sub r1, #1\n"
+        "strex r2, r1, [r0]\n"
+        "cmp r2, #0\n"
+        "bne RetryTS\n"
+        "dmb\n"
+        "bx lr\n"
+        "BlockTS:\n"
+        "push {r0, lr}\n"
+        "bl BlockOnSem\n"
+        "pop {r0, lr}\n"
+        "b RetryTS"
             : : : "r0", "r1", "r2", "r3"
     );
 }
@@ -1242,8 +1242,8 @@ static bool MOS_USED BlockOnSemOrTO(MosSem * sem) {
         // Must enable interrupts before checking timeout to allow pend
         // Barrier ensures that pend occurs before checking timeout.
         asm volatile (
-            "cpsie if\n\t"
-            "isb\n\t"
+            "cpsie if\n"
+            "isb"
         );
         if (RunningThread->timed_out) timeout = true;
     } else asm volatile ( "cpsie if" );
@@ -1254,28 +1254,28 @@ bool MOS_NAKED MosWaitForSemOrTO(MosSem * sem, u32 ticks) {
     MOS_USED_PARAM(sem);
     MOS_USED_PARAM(ticks);
     asm volatile (
-        "push {r0, lr}\n\t"
-        "mov r0, r1\n\t"
-        "bl SetTimeout\n\t"
-        "pop {r0, lr}\n\t"
-        "RetryTSTO:\n\t"
-        "ldrex r1, [r0]\n\t"
-        "cbz r1, BlockTSTO\n\t"
-        "sub r1, #1\n\t"
-        "strex r2, r1, [r0]\n\t"
-        "cmp r2, #0\n\t"
-        "bne RetryTSTO\n\t"
-        "dmb\n\t"
-        "mov r0, #1\n\t"
-        "bx lr\n\t"
-        "BlockTSTO:\n\t"
-        "push {r0, lr}\n\t"
-        "bl BlockOnSemOrTO\n\t"
-        "cmp r0, #0\n\t"
-        "pop {r0, lr}\n\t"
-        "beq RetryTSTO\n\t"
-        "mov r0, #0\n\t"
-        "bx lr\n\t"
+        "push {r0, lr}\n"
+        "mov r0, r1\n"
+        "bl SetTimeout\n"
+        "pop {r0, lr}\n"
+        "RetryTSTO:\n"
+        "ldrex r1, [r0]\n"
+        "cbz r1, BlockTSTO\n"
+        "sub r1, #1\n"
+        "strex r2, r1, [r0]\n"
+        "cmp r2, #0\n"
+        "bne RetryTSTO\n"
+        "dmb\n"
+        "mov r0, #1\n"
+        "bx lr\n"
+        "BlockTSTO:\n"
+        "push {r0, lr}\n"
+        "bl BlockOnSemOrTO\n"
+        "cmp r0, #0\n"
+        "pop {r0, lr}\n"
+        "beq RetryTSTO\n"
+        "mov r0, #0\n"
+        "bx lr"
             : : : "r0", "r1", "r2", "r3"
     );
 }
@@ -1283,19 +1283,19 @@ bool MOS_NAKED MosWaitForSemOrTO(MosSem * sem, u32 ticks) {
 bool MOS_NAKED MOS_ISR_SAFE MosTrySem(MosSem * sem) {
     MOS_USED_PARAM(sem);
     asm volatile (
-        "RetryTRS:\n\t"
-        "ldrex r1, [r0]\n\t"
-        "cbz r1, FailTRS\n\t"
-        "sub r1, #1\n\t"
-        "strex r2, r1, [r0]\n\t"
-        "cmp r2, #0\n\t"
-        "bne RetryTRS\n\t"
-        "dmb\n\t"
-        "mov r0, #1\n\t"
-        "bx lr\n\t"
-        "FailTRS:\n\t"
-        "mov r0, #0\n\t"
-        "bx lr\n\t"
+        "RetryTRS:\n"
+        "ldrex r1, [r0]\n"
+        "cbz r1, FailTRS\n"
+        "sub r1, #1\n"
+        "strex r2, r1, [r0]\n"
+        "cmp r2, #0\n"
+        "bne RetryTRS\n"
+        "dmb\n"
+        "mov r0, #1\n"
+        "bx lr\n"
+        "FailTRS:\n"
+        "mov r0, #0\n"
+        "bx lr"
             : : : "r0", "r1", "r2", "r3"
     );
 }
@@ -1319,16 +1319,16 @@ static void MOS_USED MOS_ISR_SAFE YieldOnSem(MosSem * sem) {
 void MOS_NAKED MOS_ISR_SAFE MosIncrementSem(MosSem * sem) {
     MOS_USED_PARAM(sem);
     asm volatile (
-        "push { lr }\n\t"
-        "RetryGS:\n\t"
-        "ldrex r1, [r0]\n\t"
-        "add r1, #1\n\t"
-        "strex r2, r1, [r0]\n\t"
-        "cmp r2, #0\n\t"
-        "bne RetryGS\n\t"
-        "dmb\n\t"
-        "bl YieldOnSem\n\t"
-        "pop { pc }\n\t"
+        "push { lr }\n"
+        "RetryGS:\n"
+        "ldrex r1, [r0]\n"
+        "add r1, #1\n"
+        "strex r2, r1, [r0]\n"
+        "cmp r2, #0\n"
+        "bne RetryGS\n"
+        "dmb\n"
+        "bl YieldOnSem\n"
+        "pop { pc }"
             : : : "r0", "r1", "r2", "r3"
     );
 }
@@ -1336,21 +1336,21 @@ void MOS_NAKED MOS_ISR_SAFE MosIncrementSem(MosSem * sem) {
 u32 MOS_NAKED MosWaitForSignal(MosSem * sem) {
     MOS_USED_PARAM(sem);
     asm volatile (
-        "mov r3, #0\n\t"
-        "RetryWS:\n\t"
-        "ldrex r1, [r0]\n\t"
-        "cbz r1, BlockWS\n\t"
-        "strex r2, r3, [r0]\n\t"
-        "cmp r2, #0\n\t"
-        "bne RetryWS\n\t"
-        "mov r0, r1\n\t"
-        "dmb\n\t"
-        "bx lr\n\t"
-        "BlockWS:\n\t"
-        "push {r0, r3, lr}\n\t"
-        "bl BlockOnSem\n\t"
-        "pop {r0, r3, lr}\n\t"
-        "b RetryWS\n\t"
+        "mov r3, #0\n"
+        "RetryWS:\n"
+        "ldrex r1, [r0]\n"
+        "cbz r1, BlockWS\n"
+        "strex r2, r3, [r0]\n"
+        "cmp r2, #0\n"
+        "bne RetryWS\n"
+        "mov r0, r1\n"
+        "dmb\n"
+        "bx lr\n"
+        "BlockWS:\n"
+        "push {r0, r3, lr}\n"
+        "bl BlockOnSem\n"
+        "pop {r0, r3, lr}\n"
+        "b RetryWS"
             : : : "r0", "r1", "r2", "r3"
     );
 }
@@ -1359,28 +1359,28 @@ u32 MOS_NAKED MosWaitForSignalOrTO(MosSem * sem, u32 ticks) {
     MOS_USED_PARAM(sem);
     MOS_USED_PARAM(ticks);
     asm volatile (
-        "push {r0, lr}\n\t"
-        "mov r0, r1\n\t"
-        "bl SetTimeout\n\t"
-        "pop {r0, lr}\n\t"
-        "RetryWSTO:\n\t"
-        "mov r2, #0\n\t"
-        "ldrex r1, [r0]\n\t"
-        "cbz r1, BlockWSTO\n\t"
-        "strex r3, r2, [r0]\n\t"
-        "cmp r3, #0\n\t"
-        "bne RetryWSTO\n\t"
-        "dmb\n\t"
-        "mov r0, r1\n\t"
-        "bx lr\n\t"
-        "BlockWSTO:\n\t"
-        "push {r0, lr}\n\t"
-        "bl BlockOnSemOrTO\n\t"
-        "cmp r0, #0\n\t"
-        "pop {r0, lr}\n\t"
-        "beq RetryWSTO\n\t"
-        "mov r0, #0\n\t"
-        "bx lr\n\t"
+        "push {r0, lr}\n"
+        "mov r0, r1\n"
+        "bl SetTimeout\n"
+        "pop {r0, lr}\n"
+        "RetryWSTO:\n"
+        "mov r2, #0\n"
+        "ldrex r1, [r0]\n"
+        "cbz r1, BlockWSTO\n"
+        "strex r3, r2, [r0]\n"
+        "cmp r3, #0\n"
+        "bne RetryWSTO\n"
+        "dmb\n"
+        "mov r0, r1\n"
+        "bx lr\n"
+        "BlockWSTO:\n"
+        "push {r0, lr}\n"
+        "bl BlockOnSemOrTO\n"
+        "cmp r0, #0\n"
+        "pop {r0, lr}\n"
+        "beq RetryWSTO\n"
+        "mov r0, #0\n"
+        "bx lr"
             : : : "r0", "r1", "r2", "r3"
     );
 }
@@ -1388,19 +1388,19 @@ u32 MOS_NAKED MosWaitForSignalOrTO(MosSem * sem, u32 ticks) {
 u32 MOS_NAKED MOS_ISR_SAFE MosPollForSignal(MosSem * sem) {
     MOS_USED_PARAM(sem);
     asm volatile (
-        "mov r3, #0\n\t"
-        "RetryPS:\n\t"
-        "ldrex r1, [r0]\n\t"
-        "cbz r1, FailPS\n\t"
-        "strex r2, r3, [r0]\n\t"
-        "cmp r2, #0\n\t"
-        "bne RetryPS\n\t"
-        "dmb\n\t"
-        "mov r0, r1\n\t"
-        "bx lr\n\t"
-        "FailPS:\n\t"
-        "mov r0, #0\n\t"
-        "bx lr\n\t"
+        "mov r3, #0\n"
+        "RetryPS:\n"
+        "ldrex r1, [r0]\n"
+        "cbz r1, FailPS\n"
+        "strex r2, r3, [r0]\n"
+        "cmp r2, #0\n"
+        "bne RetryPS\n"
+        "dmb\n"
+        "mov r0, r1\n"
+        "bx lr\n"
+        "FailPS:\n"
+        "mov r0, #0\n"
+        "bx lr"
             : : : "r0", "r1", "r2", "r3"
     );
 }
@@ -1409,16 +1409,16 @@ void MOS_NAKED MOS_ISR_SAFE MosRaiseSignal(MosSem * sem, u32 flags) {
     MOS_USED_PARAM(sem);
     MOS_USED_PARAM(flags);
     asm volatile (
-        "push { lr }\n\t"
-        "RetryRS:\n\t"
-        "ldrex r2, [r0]\n\t"
-        "orr r2, r2, r1\n\t"
-        "strex r3, r2, [r0]\n\t"
-        "cmp r3, #0\n\t"
-        "bne RetryRS\n\t"
-        "dmb\n\t"
-        "bl YieldOnSem\n\t"
-        "pop { pc }\n\t"
+        "push { lr }\n"
+        "RetryRS:\n"
+        "ldrex r2, [r0]\n"
+        "orr r2, r2, r1\n"
+        "strex r3, r2, [r0]\n"
+        "cmp r3, #0\n"
+        "bne RetryRS\n"
+        "dmb\n"
+        "bl YieldOnSem\n"
+        "pop { pc }"
             : : : "r0", "r1", "r2", "r3"
     );
 }
