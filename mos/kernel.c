@@ -632,7 +632,7 @@ static s32 IdleThreadEntry(s32 arg) {
     MOS_UNUSED(arg);
     while (1) {
         // Disable interrupts and timer
-        asm volatile ( "cpsid i" );
+        asm volatile ( "cpsid i" ::: "memory" );
         SysTick->CTRL = SYSTICK_CTRL_DISABLE;
         if (SysTick->CTRL & SysTick_CTRL_COUNTFLAG_Msk) Tick.count += 1;
         // Figure out how long to wait
@@ -661,7 +661,7 @@ static s32 IdleThreadEntry(s32 arg) {
         SysTick->CTRL = SYSTICK_CTRL_ENABLE;
         asm volatile (
             "dsb\n\t"
-            "wfi\n\t"
+            "wfi\n\t" ::: "memory"
         );
         if (WakeHook) (*WakeHook)();
         if (load) {
@@ -683,7 +683,7 @@ static s32 IdleThreadEntry(s32 arg) {
         }
         asm volatile ( "cpsie i\n\t"
                        "dsb\n\t"
-                       "isb\n\t" );
+                       "isb\n\t" ::: "memory" );
     }
     return 0;
 }
@@ -1145,6 +1145,7 @@ static void MOS_USED YieldOnMutex(MosMutex * mtx) {
 void MOS_NAKED MosUnlockMutex(MosMutex * mtx) {
     MOS_USED_PARAM(mtx);
     asm volatile (
+        "dmb\n\t"
         "ldr r1, [r0, #4]\n\t"
         "sub r1, #1\n\t"
         "str r1, [r0, #4]\n\t"

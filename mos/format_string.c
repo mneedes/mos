@@ -10,7 +10,7 @@ static const char LowerCaseDigits[] = "0123456789abcdef";
 static const char UpperCaseDigits[] = "0123456789ABCDEF";
 
 // TODO: Properly handle min_width for floats
-// TODO: Limit digits from Dtoa to "25" or so
+// TODO: Limit digits from Dtoa to "25" or so?
 
 u32 MosDtoa(char * restrict out, double in, u16 min_width, u16 prec) {
     (void) min_width;
@@ -178,7 +178,7 @@ s32 MosVSNPrintf(char * restrict buffer, mos_size sz,
     char * restrict out = buffer;
     s32 buf_rem = (s32) sz - 1;
     u32 do_numeric, is_signed, is_upper, in_prec, in_arg = false;
-    u32 base, long_cnt, min_width, precision;
+    u32 base, long_cnt, min_width, prec;
     char pad_char = ' ';
     for (ch = fmt; *ch != '\0'; ch++) {
         if (!in_arg) {
@@ -189,14 +189,14 @@ s32 MosVSNPrintf(char * restrict buffer, mos_size sz,
                 long_cnt = 0;
                 pad_char = ' ';
                 min_width = 0;
-                precision = 6;
+                prec = 6;
             } else WriteBuf(&out, ch, 1, &buf_rem);
         } else if (*ch >= '0' && *ch <= '9') {
             if (!in_prec) {
                 if (min_width == 0 && *ch == '0') pad_char = '0';
                 else min_width = (10 * min_width) + (*ch - '0');
             } else {
-                precision = (10 * precision) + (*ch - '0');
+                prec = (10 * prec) + (*ch - '0');
             }
         } else {
             // Argument will be consumed (unless modifier found)
@@ -209,9 +209,9 @@ s32 MosVSNPrintf(char * restrict buffer, mos_size sz,
                 break;
             }
             case '.': {
+                prec = 0;
                 in_prec = true;
                 in_arg = true;
-                precision = 0;
                 break;
             }
             case 'c': {
@@ -259,7 +259,7 @@ s32 MosVSNPrintf(char * restrict buffer, mos_size sz,
             case 'f': {
                 double argD = (double) va_arg(args, double);
                 char tmpD[25];
-                u32 cnt = MosDtoa(tmpD, argD, min_width, precision);
+                u32 cnt = MosDtoa(tmpD, argD, min_width, prec);
                 WriteBuf(&out, tmpD, cnt, &buf_rem);
                 break;
             }

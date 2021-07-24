@@ -13,7 +13,7 @@
  *
  *  |canary|size_p| size |      payload       |canary|size_p| size...
  *                       ^                    ^
- *                   alignment                +-  next block
+ *                   alignment                +- next block
  *
  *    Actual alignment = max(requested alignment, pointer size)
  *    Implicit link sizes = sizeof(payload) + sizeof(Link)

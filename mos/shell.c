@@ -23,7 +23,7 @@ static u32 RxQueueBuf[16];
 
 // Callback must be ISR safe
 static void MosRxCallback(char ch) {
-    MosTrySendToQueue(&RxQueue, (u32) ch);
+    MosTrySendToQueue32(&RxQueue, (u32) ch);
 }
 
 void MosInitShell(MosShell * shell, u16 cmd_buffer_len, u16 max_cmd_line_size,
@@ -37,7 +37,7 @@ void MosInitShell(MosShell * shell, u16 cmd_buffer_len, u16 max_cmd_line_size,
     MosInitMutex(&shell->mtx);
     MosInitList(&shell->cmd_list);
     if (isSerialConsole) {
-        MosInitQueue(&RxQueue, RxQueueBuf, count_of(RxQueueBuf));
+        MosInitQueue32(&RxQueue, RxQueueBuf, count_of(RxQueueBuf));
         HalRegisterRxUARTCallback(MosRxCallback);
     }
 }
@@ -99,7 +99,7 @@ MosCommandResult MosGetNextCommand(char * prompt, char * cmd, u32 max_cmd_len) {
     last_ch_was_arrow = false;
     u32 state = KEY_NORMAL;
     while (1) {
-        char ch = (char) MosReceiveFromQueue(&RxQueue);
+        char ch = (char) MosReceiveFromQueue32(&RxQueue);
         switch (state) {
         default:
         case KEY_NORMAL:

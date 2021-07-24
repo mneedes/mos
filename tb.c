@@ -79,7 +79,7 @@ void MOS_ISR_SAFE IRQ0_Callback(void) {
 }
 
 void MOS_ISR_SAFE IRQ1_Callback(void) {
-    if (MosTrySendToQueue(&TestQueue, 1)) TestHisto[0]++;
+    if (MosTrySendToQueue32(&TestQueue, 1)) TestHisto[0]++;
 }
 
 void EventCallback(MosEvent evt, u32 val) {
@@ -466,17 +466,17 @@ static s32 ThreadTimerTestBusyThread(s32 arg) {
 static MosTimer self_timer;
 
 static bool MOS_ISR_SAFE ThreadTimerCallback(MosTimer * tmr) {
-    return MosTrySendToQueue(&TestQueue, tmr->arg);
+    return MosTrySendToQueue32(&TestQueue, tmr->arg);
 }
 
 static s32 MessageTimerTestThread(s32 arg) {
-    MosInitQueue(&TestQueue, queue, count_of(queue));
+    MosInitQueue32(&TestQueue, queue, count_of(queue));
     MosInitTimer(&self_timer, &ThreadTimerCallback);
     u32 cnt = 0xdeadbeef;
     for (;;) {
         if (MosIsStopRequested()) break;
         MosSetTimer(&self_timer, timer_test_delay, cnt);
-        u32 val = MosReceiveFromQueue(&TestQueue);
+        u32 val = MosReceiveFromQueue32(&TestQueue);
         if (val != cnt) return TEST_FAIL;
         cnt++;
         TestHisto[arg]++;
@@ -490,11 +490,11 @@ static bool MOS_ISR_SAFE ThreadTimerCallback2(MosTimer * tmr) {
     // TODO: rescheduling timer in callbacks
     u32 msg = tmr->arg;
     MosSetTimer(&self_timer, timer_test_delay, msg + 1);
-    return MosTrySendToQueue(&TestQueue, msg);
+    return MosTrySendToQueue32(&TestQueue, msg);
 }
 
 static s32 MessageTimerTestThread2(s32 arg) {
-    MosInitQueue(&TestQueue, queue, count_of(queue));
+    MosInitQueue32(&TestQueue, queue, count_of(queue));
     MosInitTimer(&self_timer, &ThreadTimerCallback2);
     MosSetTimer(&self_timer, timer_test_delay, 0);
     u32 cnt = 0;
@@ -503,7 +503,7 @@ static s32 MessageTimerTestThread2(s32 arg) {
             MosCancelTimer(&self_timer);
             break;
         }
-        u32 val = MosReceiveFromQueue(&TestQueue);
+        u32 val = MosReceiveFromQueue32(&TestQueue);
         if (val != cnt) return TEST_FAIL;
         cnt++;
         TestHisto[arg]++;
@@ -1052,7 +1052,7 @@ static s32 QueueTestPendIRQ(s32 arg) {
 
 static s32 QueueTestThreadTx(s32 arg) {
     for (;;) {
-        MosSendToQueue(&TestQueue, arg);
+        MosSendToQueue32(&TestQueue, arg);
         TestHisto[arg]++;
         MosDelayThread(queue_test_delay);
         if (MosIsStopRequested()) break;
@@ -1062,7 +1062,7 @@ static s32 QueueTestThreadTx(s32 arg) {
 
 static s32 QueueTestThreadTxTimeout(s32 arg) {
     for (;;) {
-        if (MosSendToQueueOrTO(&TestQueue, 2,
+        if (MosSendToQueue32OrTO(&TestQueue, 2,
                                queue_test_delay / 2 + 2)) {
             TestHisto[arg]++;
         } else {
@@ -1075,7 +1075,7 @@ static s32 QueueTestThreadTxTimeout(s32 arg) {
 
 static s32 QueueTestThreadRx(s32 arg) {
     for (;;) {
-        u32 val = MosReceiveFromQueue(&TestQueue);
+        u32 val = MosReceiveFromQueue32(&TestQueue);
         TestHisto[arg + val]++;
         if (MosIsStopRequested()) break;
     }
@@ -1085,7 +1085,7 @@ static s32 QueueTestThreadRx(s32 arg) {
 static s32 QueueTestThreadRxTry(s32 arg) {
     for (;;) {
         u32 val;
-        if (MosTryReceiveFromQueue(&TestQueue, &val)) {
+        if (MosTryReceiveFromQueue32(&TestQueue, &val)) {
             TestHisto[arg + val]++;
             if (MosIsStopRequested()) break;
         }
@@ -1095,7 +1095,7 @@ static s32 QueueTestThreadRxTry(s32 arg) {
 
 static s32 QueueTestThreadRxSlow(s32 arg) {
     for (;;) {
-        u32 val = MosReceiveFromQueue(&TestQueue);
+        u32 val = MosReceiveFromQueue32(&TestQueue);
         TestHisto[arg + val]++;
         if (MosIsStopRequested()) break;
         MosDelayThread(queue_test_delay);
@@ -1106,7 +1106,7 @@ static s32 QueueTestThreadRxSlow(s32 arg) {
 static s32 QueueTestThreadRxTimeout(s32 arg) {
     for (;;) {
         u32 val;
-        if (MosReceiveFromQueueOrTO(&TestQueue, &val,
+        if (MosReceiveFromQueue32OrTO(&TestQueue, &val,
                                     queue_test_delay / 2 + 2)) {
             TestHisto[arg + val]++;
         } else {
@@ -1128,7 +1128,7 @@ static bool QueueTests(void) {
     test_pass = true;
     MosPrint("Queue Test 1\n");
     ClearHistogram();
-    MosInitQueue(&TestQueue, queue, count_of(queue));
+    MosInitQueue32(&TestQueue, queue, count_of(queue));
     MosInitAndRunThread(Threads[1], 1, QueueTestPendIRQ, 0, Stacks[1], DFT_STACK_SIZE);
     MosInitAndRunThread(Threads[2], 3, QueueTestThreadTx, 2, Stacks[2], DFT_STACK_SIZE);
     MosInitAndRunThread(Threads[3], 3, QueueTestThreadRx, 2, Stacks[3], DFT_STACK_SIZE);
@@ -1136,7 +1136,7 @@ static bool QueueTests(void) {
     MosRequestThreadStop(Threads[1]);
     MosRequestThreadStop(Threads[2]);
     MosRequestThreadStop(Threads[3]);
-    MosSendToQueue(&TestQueue, 2); // Unblock thread to stop
+    MosSendToQueue32(&TestQueue, 2); // Unblock thread to stop
     if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[3]) != TEST_PASS) test_pass = false;
@@ -1155,7 +1155,7 @@ static bool QueueTests(void) {
     test_pass = true;
     MosPrint("Queue Test 2\n");
     ClearHistogram();
-    MosInitQueue(&TestQueue, queue, count_of(queue));
+    MosInitQueue32(&TestQueue, queue, count_of(queue));
     MosInitAndRunThread(Threads[1], 1, QueueTestPendIRQ, 0, Stacks[1], DFT_STACK_SIZE);
     MosInitAndRunThread(Threads[2], 3, QueueTestThreadTx, 2, Stacks[2], DFT_STACK_SIZE);
     MosInitAndRunThread(Threads[3], 3, QueueTestThreadRxTimeout, 2, Stacks[3], DFT_STACK_SIZE);
@@ -1184,7 +1184,7 @@ static bool QueueTests(void) {
     test_pass = true;
     MosPrint("Queue Test 3\n");
     ClearHistogram();
-    MosInitQueue(&TestQueue, queue, count_of(queue));
+    MosInitQueue32(&TestQueue, queue, count_of(queue));
     MosInitAndRunThread(Threads[1], 1, QueueTestPendIRQ, 0, Stacks[1], DFT_STACK_SIZE);
     MosInitAndRunThread(Threads[2], 3, QueueTestThreadTxTimeout, 1, Stacks[2], DFT_STACK_SIZE);
     MosInitAndRunThread(Threads[3], 3, QueueTestThreadRxSlow, 2, Stacks[3], DFT_STACK_SIZE);
@@ -1196,7 +1196,7 @@ static bool QueueTests(void) {
     // Give Thread 3 extra time to drain the queue
     MosDelayThread(queue_test_delay * (count_of(queue) + 1));
     MosRequestThreadStop(Threads[3]);
-    MosSendToQueue(&TestQueue, 2);
+    MosSendToQueue32(&TestQueue, 2);
     if (MosWaitForThreadStop(Threads[3]) != TEST_PASS) test_pass = false;
     DisplayHistogram(5);
     if (TestHisto[2] != exp_cnt) test_pass = false;
@@ -1214,7 +1214,7 @@ static bool QueueTests(void) {
     test_pass = true;
     MosPrint("Queue Test 4\n");
     ClearHistogram();
-    MosInitQueue(&TestQueue, queue, count_of(queue));
+    MosInitQueue32(&TestQueue, queue, count_of(queue));
     MosInitAndRunThread(Threads[1], 1, QueueTestPendIRQ, 0, Stacks[1], DFT_STACK_SIZE);
     MosInitAndRunThread(Threads[2], 3, QueueTestThreadTx, 2, Stacks[2], DFT_STACK_SIZE);
     MosInitAndRunThread(Threads[3], 3, QueueTestThreadRxTry, 2, Stacks[3], DFT_STACK_SIZE);
@@ -1222,7 +1222,7 @@ static bool QueueTests(void) {
     MosRequestThreadStop(Threads[1]);
     MosRequestThreadStop(Threads[2]);
     MosRequestThreadStop(Threads[3]);
-    MosSendToQueue(&TestQueue, 2); // Unblock thread to stop
+    MosSendToQueue32(&TestQueue, 2); // Unblock thread to stop
     if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[3]) != TEST_PASS) test_pass = false;
@@ -1265,7 +1265,7 @@ static s32 MutexTestThread(s32 arg) {
             static u32 count = 0;
             if ((count++ & 0xFFF) == 0) {
                 // Give low priority thread chance to acquire mutex
-                MosTrySendToQueue(&TestQueue, 0);
+                MosTrySendToQueue32(&TestQueue, 0);
                 MosDelayThread(5);
             }
         }
@@ -1322,7 +1322,7 @@ EXIT_MTT:
 static s32 MutexDummyThread(s32 arg) {
     for (;;) {
         u32 dummy;
-        if (MosTryReceiveFromQueue(&TestQueue, &dummy)) {
+        if (MosTryReceiveFromQueue32(&TestQueue, &dummy)) {
             // Give low priority thread chance to acquire mutex
             MosDelayThread(2);
         }
@@ -1386,7 +1386,7 @@ static bool MutexTests(void) {
     MosPrint("Mutex Test 3\n");
     ClearHistogram();
     MosInitMutex(&TestMutex);
-    MosInitQueue(&TestQueue, queue, count_of(queue));
+    MosInitQueue32(&TestQueue, queue, count_of(queue));
     MosInitAndRunThread(Threads[1], 1, MutexTestThread, MUTEX_TEST_PRIO_INHER,
                         Stacks[1], DFT_STACK_SIZE);
     MosInitAndRunThread(Threads[2], 2, MutexDummyThread, 1, Stacks[2], DFT_STACK_SIZE);
@@ -1728,20 +1728,38 @@ static bool MiscTests(void) {
         if (MosSNPrintf(buf, 8, "%c%%%d%%d%c%", '*', -1, '$') != 7) test_pass = false;
         if (strcmp(buf, "*%-1%d$")) test_pass = false;
         float flt = -1.375;
-        MosSNPrintf(buf, sizeof(buf), "%4f", flt);
+        MosSNPrintf(buf, sizeof(buf), "%0.4f", flt);
         if (strcmp(buf, "-1.3750")) test_pass = false;
         double dbl = 0.33333333333333;
-        MosSNPrintf(buf, sizeof(buf), "%4f", dbl);
+        MosSNPrintf(buf, sizeof(buf), "%0.4f", dbl);
         if (strcmp(buf, "0.3333")) test_pass = false;
         dbl = 123456789;
         MosSNPrintf(buf, sizeof(buf), "%f", dbl);
-        if (strcmp(buf, "123456789.0")) test_pass = false; // TODO: FIX ?  sb: 12345679
+        if (strcmp(buf, "123456789.000000")) test_pass = false;
+        // Note: Tests rounding since 123456789.1 -> 123456789.099999
+        dbl = -123456789.1;
+        MosSNPrintf(buf, sizeof(buf), "%.0f", dbl);
+        if (strcmp(buf, "-123456789")) test_pass = false;
+        MosSNPrintf(buf, sizeof(buf), "%.1f", dbl);
+        if (strcmp(buf, "-123456789.1")) test_pass = false;
         MosPrintf("*%f*\n", dbl);
         u64 p0 = 0x400921fb54442d18;
         double * pf = (double *) &p0;
-        MosSNPrintf(buf, sizeof(buf), "%9f", *pf); // TODO: should be %0.9f
-        if (strcmp(buf, "3.141592653")) test_pass = false; // TODO: should be 54 (round)
-        MosPrint(buf);
+        MosSNPrintf(buf, sizeof(buf), "%0.9f", *pf);
+        if (strcmp(buf, "3.141592654")) test_pass = false;
+        MosPrintf("%s\n", buf);
+        MosSNPrintf(buf, sizeof(buf), "%f", *pf);
+        if (strcmp(buf, "3.141593")) test_pass = false;
+        MosPrintf("%s\n", buf);
+        dbl = 10.501;
+        MosSNPrintf(buf, sizeof(buf), "%.0f", dbl);
+        if (strcmp(buf, "11")) test_pass = false;
+        MosSNPrintf(buf, sizeof(buf), "%.1f", dbl);
+        if (strcmp(buf, "10.5")) test_pass = false;
+        MosSNPrintf(buf, sizeof(buf), "%.2f", dbl);
+        if (strcmp(buf, "10.50")) test_pass = false;
+        MosSNPrintf(buf, sizeof(buf), "%.3f", dbl);
+        if (strcmp(buf, "10.501")) test_pass = false;
         p0 = 0x7ff0000000000000;
         MosSNPrintf(buf, sizeof(buf), "%f", *pf);
         if (strcmp(buf, "+Inf")) test_pass = false;
@@ -1911,6 +1929,5 @@ int InitTestBench() {
             return -1;
         }
     }
-
     return 0;
 }
