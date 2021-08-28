@@ -10,98 +10,103 @@
 
 #include <mos/queue.h>
 
-void MosInitQueue32(MosQueue * queue, u32 * buf, u32 num_elm) {
-    queue->buf = buf;
-    queue->num_elm = num_elm;
-    queue->head = 0;
-    queue->tail = 0;
-    MosInitSem(&queue->sem_head, 0);
-    MosInitSem(&queue->sem_tail, num_elm);
+#define COPY_TO_TAIL \
+    u32 * from = (u32 *) data; \
+    asm volatile ( "cpsid if" ); \
+    for (u32 ix = 0; ix < queue->elm_size; ix++) *queue->tail++ = *from++; \
+    if (queue->tail == queue->end) queue->tail = queue->begin; \
+    asm volatile ( \
+        "dmb\n\t" \
+        "cpsie if\n\t" \
+    );
+
+#define COPY_FROM_HEAD \
+    u32 * to = (u32 *) data; \
+    asm volatile ( "cpsid if" ); \
+    for (u32 ix = 0; ix < queue->elm_size; ix++) *to++ = *queue->head++; \
+    if (queue->head == queue->end) queue->head = queue->begin; \
+    asm volatile ( \
+        "dmb\n\t" \
+        "cpsie if\n\t" \
+    );
+
+MOS_ISR_SAFE static void CopyToTail(MosQueue * queue, const u32 * data) {
+    asm volatile ( "cpsid if" );
+    for (u32 ix = 0; ix < queue->elm_size; ix++) *queue->tail++ = *data++;
+    if (queue->tail == queue->end) queue->tail = queue->begin;
+    asm volatile (
+        "dmb\n\t"
+        "cpsie if\n\t"
+    );
 }
 
-void MosSendToQueue32(MosQueue * queue, u32 data) {
+MOS_ISR_SAFE static void CopyFromHead(MosQueue * queue, u32 * data) {
+    asm volatile ( "cpsid if" );
+    for (u32 ix = 0; ix < queue->elm_size; ix++) *data++ = *queue->head++;
+    if (queue->head == queue->end) queue->head = queue->begin;
+    asm volatile (
+        "dmb\n\t"
+        "cpsie if\n\t"
+    );
+}
+
+void MosInitQueue(MosQueue * queue, void * begin, u32 elm_size, u32 num_elm) {
+    MosAssert((elm_size & 0x3) == 0x0);
+    queue->elm_size = elm_size >> 2;
+    queue->begin    = (u32 *) begin;
+    queue->end      = queue->begin + (num_elm * queue->elm_size);
+    queue->tail     = queue->begin;
+    queue->head     = queue->begin;
+    MosInitSem(&queue->sem_tail, num_elm);
+    MosInitSem(&queue->sem_head, 0);
+}
+
+void MosSendToQueue(MosQueue * queue, const void * data) {
     // After taking semaphore context has a "license to write one entry,"
     // but it still must wait if another context is trying to do the same
     // thing in a thread.
     MosWaitForSem(&queue->sem_tail);
-    asm volatile ( "cpsid if" );
-    queue->buf[queue->tail] = data;
-    if (++queue->tail >= queue->num_elm) queue->tail = 0;
-    asm volatile (
-        "dmb\n\t"
-        "cpsie if\n\t"
-    );
+    CopyToTail(queue, data);
     MosIncrementSem(&queue->sem_head);
 }
 
-MOS_ISR_SAFE bool MosTrySendToQueue32(MosQueue * queue, u32 data) {
+MOS_ISR_SAFE bool MosTrySendToQueue(MosQueue * queue, const void * data) {
     // MosTrySendToQueue() and MosTryReceiveFromQueue() are ISR safe since
     // they do not block and interrupts are locked out when queues are being
     // manipulated.
     if (!MosTrySem(&queue->sem_tail)) return false;
-    asm volatile ( "cpsid if" );
-    queue->buf[queue->tail] = data;
-    if (++queue->tail >= queue->num_elm) queue->tail = 0;
-    asm volatile (
-        "dmb\n\t"
-        "cpsie if\n\t"
-    );
+    CopyToTail(queue, data);
     MosIncrementSem(&queue->sem_head);
     return true;
 }
 
-bool MosSendToQueue32OrTO(MosQueue * queue, u32 data, u32 ticks) {
+bool MosSendToQueueOrTO(MosQueue * queue, const void * data, u32 ticks) {
     if (MosWaitForSemOrTO(&queue->sem_tail, ticks)) {
-        asm volatile ( "cpsid if" );
-        queue->buf[queue->tail] = data;
-        if (++queue->tail >= queue->num_elm) queue->tail = 0;
-        asm volatile (
-            "dmb\n\t"
-            "cpsie if\n\t"
-        );
+        CopyToTail(queue, data);
         MosIncrementSem(&queue->sem_head);
         return true;
     }
     return false;
 }
 
-u32 MosReceiveFromQueue32(MosQueue * queue) {
+void MosReceiveFromQueue(MosQueue * queue, void * data) {
     MosWaitForSem(&queue->sem_head);
-    asm volatile ( "cpsid if" );
-    u32 data = queue->buf[queue->head];
-    if (++queue->head >= queue->num_elm) queue->head = 0;
-    asm volatile (
-        "dmb\n\t"
-        "cpsie if\n\t"
-    );
+    CopyFromHead(queue, data);
     MosIncrementSem(&queue->sem_tail);
-    return data;
 }
 
-MOS_ISR_SAFE bool MosTryReceiveFromQueue32(MosQueue * queue, u32 * data) {
+MOS_ISR_SAFE bool MosTryReceiveFromQueue(MosQueue * queue, void * data) {
     if (MosTrySem(&queue->sem_head)) {
-        asm volatile ( "cpsid if" );
-        *data = queue->buf[queue->head];
-        if (++queue->head >= queue->num_elm) queue->head = 0;
-        asm volatile (
-            "dmb\n\t"
-            "cpsie if\n\t"
-        );
+        CopyFromHead(queue, data);
         MosIncrementSem(&queue->sem_tail);
         return true;
     }
     return false;
 }
 
-bool MosReceiveFromQueue32OrTO(MosQueue * queue, u32 * data, u32 ticks) {
+bool MosReceiveFromQueueOrTO(MosQueue * queue, void * data, u32 ticks) {
     if (MosWaitForSemOrTO(&queue->sem_head, ticks)) {
-        asm volatile ( "cpsid if" );
-        *data = queue->buf[queue->head];
-        if (++queue->head >= queue->num_elm) queue->head = 0;
-        asm volatile (
-            "dmb\n\t"
-            "cpsie if\n\t"
-        );
+        CopyFromHead(queue, data);
         MosIncrementSem(&queue->sem_tail);
         return true;
     }

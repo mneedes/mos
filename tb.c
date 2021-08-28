@@ -901,7 +901,7 @@ static bool SemTests(void) {
         tests_all_pass = false;
     }
     //
-    //  Lots of semaphores
+    // Lots of semaphores
     //
     test_pass = true;
     MosPrint("Sem Test 4\n");
@@ -1062,8 +1062,7 @@ static s32 QueueTestThreadTx(s32 arg) {
 
 static s32 QueueTestThreadTxTimeout(s32 arg) {
     for (;;) {
-        if (MosSendToQueue32OrTO(&TestQueue, 2,
-                               queue_test_delay / 2 + 2)) {
+        if (MosSendToQueue32OrTO(&TestQueue, 2, queue_test_delay / 2 + 2)) {
             TestHisto[arg]++;
         } else {
             TestHisto[arg + 1]++;
@@ -1106,8 +1105,7 @@ static s32 QueueTestThreadRxSlow(s32 arg) {
 static s32 QueueTestThreadRxTimeout(s32 arg) {
     for (;;) {
         u32 val;
-        if (MosReceiveFromQueue32OrTO(&TestQueue, &val,
-                                    queue_test_delay / 2 + 2)) {
+        if (MosReceiveFromQueue32OrTO(&TestQueue, &val, queue_test_delay / 2 + 2)) {
             TestHisto[arg + val]++;
         } else {
             TestHisto[arg + 3]++;
@@ -1135,10 +1133,10 @@ static bool QueueTests(void) {
     MosDelayThread(test_time);
     MosRequestThreadStop(Threads[1]);
     MosRequestThreadStop(Threads[2]);
-    MosRequestThreadStop(Threads[3]);
-    MosSendToQueue32(&TestQueue, 2); // Unblock thread to stop
     if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
+    MosRequestThreadStop(Threads[3]);
+    MosSendToQueue32(&TestQueue, 2); // Unblock thread to stop
     if (MosWaitForThreadStop(Threads[3]) != TEST_PASS) test_pass = false;
     DisplayHistogram(5);
     if (TestHisto[3] != TestHisto[0]) test_pass = false;
