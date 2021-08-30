@@ -16,6 +16,7 @@
 // TODO: Waiting on multiple semaphores
 // TODO: Change wait queue position on priority change
 // TODO: Hooks for other timers such as LPTIM ?
+// TODO: MosAssert() -- only when compiled debug?
 
 #if (MOS_FP_CONTEXT_SWITCHING == true)
   #if (__FPU_USED == 1U)
