@@ -71,12 +71,18 @@ static s32 ContextRunner(s32 in) {
 static u8 AppStack[1024];
 static MosContextMessage myQueue[16];
 
-void MosStartContext(MosContext * context, MosThreadPriority prio, u32 stack_size, u32 msg_queue_depth) {
+void MosInitContext(MosContext * context, MosThreadPriority prio, u32 stack_size, u32 msg_queue_depth) {
     MosInitMutex(&context->mtx);
     MosInitList(&context->client_q);
     MosInitList(&context->resume_q);
     MosInitQueue(&context->msg_q, myQueue, sizeof(MosContextMessage), msg_queue_depth);
-    MosInitAndRunThread(&context->thd, prio, ContextRunner, (s32) context, AppStack, stack_size);
+    MosInitThread(&context->thd, prio, ContextRunner, (s32) context, AppStack, stack_size);
+}
+
+void MosStartContext(MosContext * context) {
+    MosRunThread(&context->thd);
+    MosContextMessage msg = { .id = MosContextMessageID_Start, .client = NULL };
+    MosSendMessageToContext(context, &msg);
 }
 
 void MosStopContext(MosContext * context) {
@@ -96,8 +102,10 @@ void MosStartClient(MosContext * context, MosClient * client, MosClientHandler *
     MosLockMutex(&context->mtx);
     MosAddToList(&context->client_q, &client->client_link);
     MosUnlockMutex(&context->mtx);
-    MosContextMessage msg = { .id = MosContextMessageID_Start, .client = client };
-    MosSendMessageToContext(context, &msg);
+    if (MosGetThreadState(&context->thd, NULL) != MOS_THREAD_NOT_STARTED) {
+        MosContextMessage msg = { .id = MosContextMessageID_Start, .client = client };
+        MosSendMessageToContext(context, &msg);
+    }
 }
 
 void MosStopClient(MosContext * context, MosClient * client) {

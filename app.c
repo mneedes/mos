@@ -29,19 +29,22 @@ enum {
 };
 
 //
-// This client example sends 1500 messages to other thread which
-//   would normally overwhelm the queue but uses the Resume feature
-//   to throttle transmission and allow the other client to consume.
+// This example sends 100 ping messages from one client to another.
+//   This would normally overwhelm the queue but the Resume feature is used to
+//   guarantee retransmission and allow the other client to consume messages
+//   before sending the next message. This code works even if the queue length
+//   is 1.
 //
 
 static bool SendMessages(MosContextMessage * msg) {
     static u32 count = 0;
     while (1) {
-        if (count < 1501) MosSetContextMessage(msg, &AppClient2, AppClientMessageID_Ping);
+        // After 100 pings are sent, context shuts itself down via broadcast
+        if (count < 101) MosSetContextMessage(msg, &AppClient2, AppClientMessageID_Ping);
         else MosSetContextBroadcastMessage(msg, MosContextMessageID_Stop);
         MosSetContextMessagePayload(msg, (void *) count);
         if (MosTrySendMessageToContext(&AppContext, msg)) {
-            if (count++ == 1501) return true;
+            if (count++ == 101) return true;
         } else break;
     }
     return false;
@@ -71,9 +74,11 @@ static bool ClientHandler(MosContextMessage * msg) {
 static s32 RunApp(s32 arg) {
     MOS_UNUSED(arg);
     // Start and stop a background app with a few clients
-    MosStartContext(&AppContext, 2, 1024, 1);
+    MosInitContext(&AppContext, 3, 1024, 1);
     MosStartClient(&AppContext, &AppClient, ClientHandler, (void *) 1);
     MosStartClient(&AppContext, &AppClient2, ClientHandler, (void *) 2);
+    MosStartContext(&AppContext);
+    // Context stops itself
     MosWaitForContextStop(&AppContext);
     MosPrintf("Application exit\n");
     return 0;
@@ -100,7 +105,7 @@ int main() {
                   (cpu_id >> 4) & 0xFFF);
 #endif
 
-    MosInitAndRunThread(&RunAppThread, 0, RunApp, 0, AppStack, sizeof(AppStack));
+    MosInitAndRunThread(&RunAppThread, 1, RunApp, 3, AppStack, sizeof(AppStack));
 
     // Initialize and Run test bench example Application.
     if (InitTestBench() == 0) {

@@ -8,10 +8,11 @@
 // (Shared) Context
 //   Shared contexts allow multiple client modules to share the same resources,
 //   including a single run thread, thread stack and message queue. In addition,
-//   shared contexts can reduce or eliminate mutex contention since clients are
-//   guaranteed to not preempt each other. Contexts are essentially a form of
-//   cooperative multitasking where memory savings are more important than
-//   deadlines.
+//   shared contexts can reduce or eliminate mutex contention since clients in
+//   the same shared context are guaranteed to not preempt each other.  In
+//   general, shared contexts should be implemented at lower thread priorities
+//   than most other functionality. Think of contexts as a form of cooperative
+//   multitasking where memory savings are a lot more important than deadlines.
 //
 //   Contexts use a shared message queue for inter-client communication. The
 //   maximum latency depends on the maximum processing time for all messages
@@ -21,6 +22,12 @@
 //   or wait very long otherwise they might starve other clients sharing the
 //   same context. The MosTrySendMessageToContext() call should be used when
 //   a client sends a message to another client in the same context.
+//
+//   If a client handler has not completed and desires a callback, it should
+//   return false. Note that the callback is implemented as a resume message on
+//   the same message queue. The resume message will be added to the end of the
+//   queue allowing the opportunity for other messages to drain first.
+//     TODO: Finish this
 //
 
 #ifndef _MOS_CONTEXT_H_
@@ -45,13 +52,16 @@ typedef enum {
 struct MosClient;
 
 typedef struct {
-    struct MosClient * client;  /* If NULL, message is broadcast to entire context */
-    u32                id;      /* Message ID */
-    u32              * payload; /* Message payload */
+    struct MosClient * client;   /* If NULL, message is broadcast to entire context */
+    u32                id;       /* Message ID */
+    u32              * payload;  /* Message payload */
 } MosContextMessage;
 
-// Context handler returns false if its task hasn't completed.
-//   The message queue will be allowed to drain and the handler will get a resume message.
+// Client handlers are callbacks that process incoming messages.
+//   Client handlers return false if their task hasn't completed and they desire another
+//   callback. The message queue will be allowed to drain and the handler will get a resume
+//   message.
+
 typedef bool (MosClientHandler)(MosContextMessage *);
 
 typedef struct MosClient {
@@ -71,10 +81,15 @@ typedef struct {
 } MosContext;
 
 // The following calls must not be invoked inside of Client Handlers (MOS_CLIENT_UNSAFE)
-MOS_CLIENT_UNSAFE void MosStartContext(MosContext * context, MosThreadPriority prio, u32 stack_size, u32 msg_queue_depth);
+
+// Queue depth should be ample enough to allow the contexts to initialize
+MOS_CLIENT_UNSAFE void MosInitContext(MosContext * context, MosThreadPriority prio,
+                                          u32 stack_size, u32 msg_queue_depth);
+MOS_CLIENT_UNSAFE void MosStartContext(MosContext * context);
 MOS_CLIENT_UNSAFE void MosStopContext(MosContext * context);
 MOS_CLIENT_UNSAFE void MosWaitForContextStop(MosContext * context);
-MOS_CLIENT_UNSAFE void MosStartClient(MosContext * context, MosClient * client, MosClientHandler * handler, void * priv_data);
+MOS_CLIENT_UNSAFE void MosStartClient(MosContext * context, MosClient * client,
+                                          MosClientHandler * handler, void * priv_data);
 MOS_CLIENT_UNSAFE void MosStopClient(MosContext * context, MosClient * client);
 
 MOS_ISR_SAFE MOS_INLINE void
@@ -95,7 +110,8 @@ MosSetContextMessagePayload(MosContextMessage * msg, void * payload) {
 }
 
 /* May safely be used in any context, recommended for inter-client messaging within the same context */
-MOS_ISR_SAFE MOS_INLINE bool MosTrySendMessageToContext(MosContext * context, MosContextMessage * msg) {
+MOS_ISR_SAFE MOS_INLINE bool
+MosTrySendMessageToContext(MosContext * context, MosContextMessage * msg) {
     return MosTrySendToQueue(&context->msg_q, msg);
 }
 
