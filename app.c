@@ -41,7 +41,7 @@ static bool SendMessages(MosContextMessage * msg) {
     while (1) {
         // After 100 pings are sent, context shuts itself down via broadcast
         if (count < 101) MosSetContextMessage(msg, &AppClient2, AppClientMessageID_Ping);
-        else MosSetContextBroadcastMessage(msg, MosContextMessageID_Stop);
+        else MosSetContextBroadcastMessage(msg, MosContextMessageID_StopContext);
         MosSetContextMessagePayload(msg, (void *) count);
         if (MosTrySendMessageToContext(&AppContext, msg)) {
             if (count++ == 101) return true;
@@ -53,16 +53,16 @@ static bool SendMessages(MosContextMessage * msg) {
 static bool ClientHandler(MosContextMessage * msg) {
     MosClient * client = msg->client;
     switch (msg->id) {
-    case MosContextMessageID_Start:
+    case MosContextMessageID_StartClient:
         MosPrintf("Start %d\n", (u32)client->priv_data);
         if (client == &AppClient) return SendMessages(msg);
         break;
     case AppClientMessageID_Ping:
         MosPrintf("Ping %d: %d\n", (u32)client->priv_data, (u32)msg->payload);
         break;
-    case MosContextMessageID_Resume:
+    case MosContextMessageID_ResumeClient:
         return SendMessages(msg);
-    case MosContextMessageID_Stop:
+    case MosContextMessageID_StopClient:
         MosPrintf("Stop %d\n", (u32)client->priv_data);
         break;
     default:

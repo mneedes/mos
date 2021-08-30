@@ -9,20 +9,20 @@
 //
 
 // TODO: should this all be part of the dynamic threads?
-// TODO: starting/stopping/restarting clients is problematic
-// TODO: what happens on resume on a client stop?
+// TODO: fix initialization (stack, etc).
 
 #include <mos/context.h>
 
 static s32 ContextRunner(s32 in) {
     MosContext * context = (MosContext *) in;
-    while (1) {
+    bool running = true;
+    while (running) {
         MosContextMessage msg;
         MosReceiveFromQueue(&context->msg_q, &msg);
         MosClient * client = msg.client;
         if (client) {
             // Only send queued resume message if client still needs it.
-            if (msg.id != MosContextMessageID_Resume || !client->completed) {
+            if (msg.id != MosContextMessageID_ResumeClient || !client->completed) {
                 // Unicast message
                 client->completed = (*client->handler)(&msg);
                 if (client->completed) {
@@ -34,6 +34,11 @@ static s32 ContextRunner(s32 in) {
             }
         } else {
             // Broadcast message
+            if (msg.id == MosContextMessageID_StopContext) {
+                // Stop all clients if stopping context and terminate thread
+                msg.id = MosContextMessageID_StopClient;
+                running = false;
+            }
             MosLink * elm;
             MosLockMutex(&context->mtx);
             for (elm = context->client_q.next; elm != &context->client_q; elm = elm->next) {
@@ -49,8 +54,6 @@ static s32 ContextRunner(s32 in) {
                 }
             }
             MosUnlockMutex(&context->mtx);
-            // Shutdown terminates thread
-            if (msg.id == MosContextMessageID_Stop) break;
         }
         // Attempt to resume clients
         MosLink * elm_save;
@@ -59,7 +62,7 @@ static s32 ContextRunner(s32 in) {
             msg.client = container_of(elm, MosClient, resume_link);
             // Don't bother resuming if client already completed
             if (!msg.client->completed) {
-                msg.id = MosContextMessageID_Resume;
+                msg.id = MosContextMessageID_ResumeClient;
                 if (!MosTrySendToQueue(&context->msg_q, &msg)) break;
             }
             MosRemoveFromList(&msg.client->resume_link);
@@ -68,6 +71,7 @@ static s32 ContextRunner(s32 in) {
     return 0;
 }
 
+// TODO: move to application
 static u8 AppStack[1024];
 static MosContextMessage myQueue[16];
 
@@ -81,12 +85,12 @@ void MosInitContext(MosContext * context, MosThreadPriority prio, u32 stack_size
 
 void MosStartContext(MosContext * context) {
     MosRunThread(&context->thd);
-    MosContextMessage msg = { .id = MosContextMessageID_Start, .client = NULL };
+    MosContextMessage msg = { .id = MosContextMessageID_StartClient, .client = NULL };
     MosSendMessageToContext(context, &msg);
 }
 
 void MosStopContext(MosContext * context) {
-    MosContextMessage msg = { .id = MosContextMessageID_Stop, .client = NULL };
+    MosContextMessage msg = { .id = MosContextMessageID_StopContext, .client = NULL };
     MosSendMessageToContext(context, &msg);
 }
 
@@ -103,12 +107,12 @@ void MosStartClient(MosContext * context, MosClient * client, MosClientHandler *
     MosAddToList(&context->client_q, &client->client_link);
     MosUnlockMutex(&context->mtx);
     if (MosGetThreadState(&context->thd, NULL) != MOS_THREAD_NOT_STARTED) {
-        MosContextMessage msg = { .id = MosContextMessageID_Start, .client = client };
+        MosContextMessage msg = { .id = MosContextMessageID_StartClient, .client = client };
         MosSendMessageToContext(context, &msg);
     }
 }
 
 void MosStopClient(MosContext * context, MosClient * client) {
-    MosContextMessage msg = { .id = MosContextMessageID_Stop, .client = client };
+    MosContextMessage msg = { .id = MosContextMessageID_StopClient, .client = client };
     MosSendMessageToContext(context, &msg);
 }
