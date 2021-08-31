@@ -73,7 +73,6 @@ typedef struct {
 //   Client handlers return false if their task hasn't completed and they desire another
 //   callback. The message queue will be allowed to drain and the handler will get a resume
 //   message.
-
 typedef bool (MosClientHandler)(MosContextMessage *);
 
 typedef struct MosClient {
@@ -96,8 +95,9 @@ typedef struct {
 
 // Initialize context thread and data structure
 // Queue depth should be ample enough to allow the contexts to initialize
-MOS_CLIENT_UNSAFE void MosInitContext(MosContext * context, MosThreadPriority prio,
-                                          u32 stack_size, u32 msg_queue_depth);
+MOS_CLIENT_UNSAFE void MosInitContext(MosContext * context, MosThreadPriority prio, u8 * stack_bottom,
+                                          u32 stack_size, MosContextMessage * msg_queue_buf,
+                                          u32 msg_queue_depth);
 // Start context thread
 MOS_CLIENT_UNSAFE void MosStartContext(MosContext * context);
 // Broadcast stop message to all clients to stop context and terminate context thread

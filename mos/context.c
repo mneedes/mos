@@ -9,7 +9,6 @@
 //
 
 // TODO: should this all be part of the dynamic threads?
-// TODO: fix initialization (stack, etc).
 
 #include <mos/context.h>
 
@@ -23,7 +22,7 @@ static s32 ContextRunner(s32 in) {
         if (client) {
             // Only send queued resume message if client still needs it.
             if (msg.id != MosContextMessageID_ResumeClient || !client->completed) {
-                // Unicast message
+                // Unicast message (NOTE: client is allowed to modify msg)
                 client->completed = (*client->handler)(&msg);
                 if (client->completed) {
                     if (MosIsOnList(&client->resume_link))
@@ -60,7 +59,7 @@ static s32 ContextRunner(s32 in) {
         for (MosLink * elm = context->resume_q.next; elm != &context->resume_q; elm = elm_save) {
             elm_save = elm->next;
             msg.client = container_of(elm, MosClient, resume_link);
-            // Don't bother resuming if client already completed
+            // Don't bother resuming if client already completed after processing a subsequent message
             if (!msg.client->completed) {
                 msg.id = MosContextMessageID_ResumeClient;
                 if (!MosTrySendToQueue(&context->msg_q, &msg)) break;
@@ -71,16 +70,13 @@ static s32 ContextRunner(s32 in) {
     return 0;
 }
 
-// TODO: move to application
-static u8 AppStack[1024];
-static MosContextMessage myQueue[16];
-
-void MosInitContext(MosContext * context, MosThreadPriority prio, u32 stack_size, u32 msg_queue_depth) {
+void MosInitContext(MosContext * context, MosThreadPriority prio, u8 * stack_bottom,
+                       u32 stack_size, MosContextMessage * msg_queue_buf, u32 msg_queue_depth) {
     MosInitMutex(&context->mtx);
     MosInitList(&context->client_q);
     MosInitList(&context->resume_q);
-    MosInitQueue(&context->msg_q, myQueue, sizeof(MosContextMessage), msg_queue_depth);
-    MosInitThread(&context->thd, prio, ContextRunner, (s32) context, AppStack, stack_size);
+    MosInitQueue(&context->msg_q, msg_queue_buf, sizeof(MosContextMessage), msg_queue_depth);
+    MosInitThread(&context->thd, prio, ContextRunner, (s32) context, stack_bottom, stack_size);
 }
 
 void MosStartContext(MosContext * context) {
