@@ -18,10 +18,11 @@ Included Primitives:
 * Recursive mutex with priority inheritance
 * Semaphores (counting / multi-bit binary)
 * Message queues
-* SysTick-based Message Timers
+* SysTick-based Timers
 
 Included Optional Modules:
 * Heap
+* Shared Context (multiple clients sharing same thread and message queue)
 * Logging
 * Command shell
 * Test bench
@@ -33,6 +34,7 @@ Supported toolchains / architectures:
 * ARM M23/M33/M55 (Arch v8-M) Non-Secure (No TrustZone (yet))
 
 Future
+* Better documentation...
 * TrustZone support
 * M0/M0+/M1
 * C++ bindings
