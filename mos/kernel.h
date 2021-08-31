@@ -239,8 +239,8 @@ void MosAssertAt(char * file, u32 line);
 static MOS_INLINE void MosCrash(void) {
     // Requires that divide by zero faults are enabled (see MosInit()).
     asm volatile (
-        "mov r0, #0\n\t"
-        "udiv r1, r1, r0\n\t"
+        "mov r0, #0\n"
+        "udiv r1, r1, r0"
             : : : "r0", "r1"
     );
 }

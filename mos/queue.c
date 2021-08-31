@@ -10,33 +10,13 @@
 
 #include <mos/queue.h>
 
-#define COPY_TO_TAIL \
-    u32 * from = (u32 *) data; \
-    asm volatile ( "cpsid if" ); \
-    for (u32 ix = 0; ix < queue->elm_size; ix++) *queue->tail++ = *from++; \
-    if (queue->tail == queue->end) queue->tail = queue->begin; \
-    asm volatile ( \
-        "dmb\n\t" \
-        "cpsie if\n\t" \
-    );
-
-#define COPY_FROM_HEAD \
-    u32 * to = (u32 *) data; \
-    asm volatile ( "cpsid if" ); \
-    for (u32 ix = 0; ix < queue->elm_size; ix++) *to++ = *queue->head++; \
-    if (queue->head == queue->end) queue->head = queue->begin; \
-    asm volatile ( \
-        "dmb\n\t" \
-        "cpsie if\n\t" \
-    );
-
 MOS_ISR_SAFE static void CopyToTail(MosQueue * queue, const u32 * data) {
     asm volatile ( "cpsid if" );
     for (u32 ix = 0; ix < queue->elm_size; ix++) *queue->tail++ = *data++;
     if (queue->tail == queue->end) queue->tail = queue->begin;
     asm volatile (
-        "dmb\n\t"
-        "cpsie if\n\t"
+        "dmb\n"
+        "cpsie if"
     );
 }
 
@@ -45,8 +25,8 @@ MOS_ISR_SAFE static void CopyFromHead(MosQueue * queue, u32 * data) {
     for (u32 ix = 0; ix < queue->elm_size; ix++) *data++ = *queue->head++;
     if (queue->head == queue->end) queue->head = queue->begin;
     asm volatile (
-        "dmb\n\t"
-        "cpsie if\n\t"
+        "dmb\n"
+        "cpsie if"
     );
 }
 
