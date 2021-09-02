@@ -53,21 +53,23 @@
 
 // TODO: should this all be part of the dynamic threads?
 
-typedef enum {
+typedef u32 MosContextMessageID;
+enum MosContextMessageID {
     MosContextMessageID_StartClient      = 0xFFFFFFFC,  /* Request client initialization */
     MosContextMessageID_StopClient       = 0xFFFFFFFD,  /* Request client shutdown */
     MosContextMessageID_ResumeClient     = 0xFFFFFFFE,  /* Request resumption of client handler */
     MosContextMessageID_StopContext      = 0xFFFFFFFF,  /* Shutdown entire context (broadcast only) */
     MosContextMessageID_FirstUserMessage = 0x00000000,  /* First user-defined message */
-} MosContextMessageID;
+};
 
 struct MosClient;
 
 typedef struct {
-    struct MosClient * client;   /* If NULL, message is broadcast to entire context */
-    u32                id;       /* Message ID */
-    u32              * payload;  /* Message payload */
+    struct MosClient    * client; /* Destination Client. If NULL, message is broadcast */
+    MosContextMessageID   id;     /* Message ID */
+    void                * data;   /* User data (e.g.: Message Payload) */
 } MosContextMessage;
+
 
 // Client handlers are callbacks that process incoming messages.
 //   Client handlers return false if their task hasn't completed and they desire another
@@ -76,10 +78,10 @@ typedef struct {
 typedef bool (MosClientHandler)(MosContextMessage *);
 
 typedef struct MosClient {
-    MosLink            client_link;
-    MosLink            resume_link;
     MosClientHandler * handler;
     void             * priv_data;
+    MosLink            client_link;
+    MosLink            resume_link;
     bool               completed;
 } MosClient;
 
@@ -90,6 +92,12 @@ typedef struct {
     MosList    resume_q;
     MosThread  thd;
 } MosContext;
+
+typedef struct {
+    MosTimer           tmr;      /* Timer */
+    MosContext       * context;  /* Context */
+    MosContextMessage  msg;      /* Message to send on Timer Expiration */
+} MosContextTimer;
 
 // The following calls must not be invoked inside of Client Handlers (MOS_CLIENT_UNSAFE)
 
@@ -121,28 +129,38 @@ MosSetContextMessage(MosContextMessage * msg, MosClient * client, MosContextMess
     msg->client = client;
     msg->id = id;
 }
-
 MOS_ISR_SAFE MOS_INLINE void
 MosSetContextBroadcastMessage(MosContextMessage * msg, MosContextMessageID id) {
     msg->client = NULL;
     msg->id = id;
 }
-
 MOS_ISR_SAFE MOS_INLINE void
-MosSetContextMessagePayload(MosContextMessage * msg, void * payload) {
-    msg->payload = payload;
+MosSetContextMessageData(MosContextMessage * msg, void * data) {
+    msg->data = data;
 }
-
 /* May safely be used in any context, recommended for inter-client messaging within the same context */
 MOS_ISR_SAFE MOS_INLINE bool
 MosTrySendMessageToContext(MosContext * context, MosContextMessage * msg) {
     return MosTrySendToQueue(&context->msg_q, msg);
 }
-
 /* May safely be used only inter-context (between contexts). */
 MOS_INLINE void MosSendMessageToContext(MosContext * context, MosContextMessage * msg) {
     MosAssert(MosGetThreadPtr() != &context->thd);
     MosSendToQueue(&context->msg_q, msg);
+}
+
+/* Context timer messages */
+
+void MosInitContextTimer(MosContextTimer * tmr, MosContext * context);
+MOS_INLINE void MosSetContextTimer(MosContextTimer * tmr, u32 ticks, MosContextMessage * msg) {
+    tmr->msg = *msg;
+    MosSetTimer(&tmr->tmr, ticks, NULL);
+}
+MOS_INLINE void MosCancelContextTimer(MosContextTimer * tmr) {
+    MosCancelTimer(&tmr->tmr);
+}
+MOS_INLINE void MosResetContextTimer(MosContextTimer * tmr) {
+    MosResetTimer(&tmr->tmr);
 }
 
 #endif

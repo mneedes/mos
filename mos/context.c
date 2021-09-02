@@ -8,7 +8,8 @@
 // (Shared) Context
 //
 
-// TODO: should this all be part of the dynamic threads?
+// TODO: Should support for this be added to dynamic threads?
+// TODO: Should they be ClientMessages or ContextMessages?  ClientTimers or ContextTimers?
 
 #include <mos/context.h>
 
@@ -43,7 +44,7 @@ static s32 ContextRunner(s32 in) {
             for (elm = context->client_q.next; elm != &context->client_q; elm = elm->next) {
                 MosClient * client = container_of(elm, MosClient, client_link);
                 // Copy the message since client is allowed to alter messages
-                MosContextMessage msg_copy = { .id = msg.id, .client = client, .payload = msg.payload };
+                MosContextMessage msg_copy = { .id = msg.id, .client = client, .data = msg.data };
                 client->completed = (*client->handler)(&msg_copy);
                 if (client->completed) {
                     if (MosIsOnList(&client->resume_link))
@@ -80,9 +81,11 @@ void MosInitContext(MosContext * context, MosThreadPriority prio, u8 * stack_bot
 }
 
 void MosStartContext(MosContext * context) {
+    MosLockMutex(&context->mtx);
     MosRunThread(&context->thd);
     MosContextMessage msg = { .id = MosContextMessageID_StartClient, .client = NULL };
     MosSendMessageToContext(context, &msg);
+    MosUnlockMutex(&context->mtx);
 }
 
 void MosStopContext(MosContext * context) {
@@ -101,14 +104,24 @@ void MosStartClient(MosContext * context, MosClient * client, MosClientHandler *
     MosInitList(&client->resume_link);
     MosLockMutex(&context->mtx);
     MosAddToList(&context->client_q, &client->client_link);
-    MosUnlockMutex(&context->mtx);
     if (MosGetThreadState(&context->thd, NULL) != MOS_THREAD_NOT_STARTED) {
         MosContextMessage msg = { .id = MosContextMessageID_StartClient, .client = client };
         MosSendMessageToContext(context, &msg);
     }
+    MosUnlockMutex(&context->mtx);
 }
 
 void MosStopClient(MosContext * context, MosClient * client) {
     MosContextMessage msg = { .id = MosContextMessageID_StopClient, .client = client };
     MosSendMessageToContext(context, &msg);
+}
+
+MOS_ISR_SAFE static bool ContextTimerCallback(MosTimer * _tmr) {
+    MosContextTimer * tmr = container_of(_tmr, MosContextTimer, tmr);
+    return MosTrySendMessageToContext(tmr->context, &tmr->msg);
+}
+
+void MosInitContextTimer(MosContextTimer * tmr, MosContext * context) {
+    tmr->context = context;
+    MosInitTimer(&tmr->tmr, ContextTimerCallback);
 }

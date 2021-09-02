@@ -12,75 +12,73 @@
 #include <mos/kernel.h>
 #include <mos/trace.h>
 #include <mos/context.h>
-
 #include <bsp_hal.h>
 
 #include "tb.h"
 
 static MosContext AppContext;
-static u8 AppStack[1024];
-
+static u8         AppStack[1024];
 static MosClient  AppClient;
 static MosClient  AppClient2;
+
 static MosContextMessage AppQueue[1];
-static MosTimer AppTimer;
+static MosContextTimer   AppTimer;
 
 static MosThread RunAppThread;
-static u8 RunAppStack[512];
+static u8        RunAppStack[512];
 
-enum {
+enum AppClientMessageID {
     AppClientMessageID_Ping = MosContextMessageID_FirstUserMessage,
     AppClientMessageID_SendBurst
 };
 
-static bool TimerCallback(MosTimer * timer) {
-    MOS_UNUSED(timer);
-    MosContextMessage msg;
-    MosSetContextMessage(&msg, &AppClient, AppClientMessageID_SendBurst);
-    return MosTrySendMessageToContext(&AppContext, &msg);
-}
-
 //
-// This example sends 100 ping messages in bursts of 5 from one client to another.
+// This example sends many ping messages in bursts of 5 from one client to another.
 //   Ping bursts can potentially overwhelm the queue but the Resume feature is used
 //   to guarantee retransmission and allow the other client to consume messages
 //   before sending the next message. This code works even if the queue length
-//   is 1.
+//   is 1. In this example the two clients share same handler but that is not
+//   required.
 //
 static bool ClientHandler(MosContextMessage * msg) {
+    // Number of pings plus final StopContext
+    const u16 max_count = 200 + 1;
     MosClient * client = msg->client;
     switch (msg->id) {
     case MosContextMessageID_StartClient:
         MosPrintf("Start %d\n", (u32)client->priv_data);
         if (client == &AppClient) {
-            MosInitTimer(&AppTimer, &TimerCallback);
-            MosSetTimer(&AppTimer, 500, 0);
+            MosInitContextTimer(&AppTimer, &AppContext);
+            MosSetContextMessage(msg, &AppClient, AppClientMessageID_SendBurst);
+            MosSetContextTimer(&AppTimer, 500, msg);
         }
         break;
     case AppClientMessageID_Ping:
-        MosPrintf("Ping %d: %d\n", (u32)client->priv_data, (u32)msg->payload);
+        MosPrintf("Ping %d: %d\n", (u32)client->priv_data, (u32)msg->data);
         break;
     case AppClientMessageID_SendBurst:
     case MosContextMessageID_ResumeClient: {
         static u32 count = 0;
         static u32 burst_count = 0;
         while (1) {
-            // After 100 pings are sent, context shuts itself down via broadcast
-            if (count < 101) MosSetContextMessage(msg, &AppClient2, AppClientMessageID_Ping);
+            // After pings are sent, context shuts itself down via broadcast
+            if (count < max_count) MosSetContextMessage(msg, &AppClient2, AppClientMessageID_Ping);
             else MosSetContextBroadcastMessage(msg, MosContextMessageID_StopContext);
-            MosSetContextMessagePayload(msg, (void *) count);
+            MosSetContextMessageData(msg, (void *)count);
             if (MosTrySendMessageToContext(&AppContext, msg)) {
-                if (count++ == 101) return true;
+                if (count++ == max_count) return true;
                 if (++burst_count == 5) {
                     burst_count = 0;
-                    MosSetTimer(&AppTimer, 500, 0);
+                    MosResetContextTimer(&AppTimer);
+                    // Done for now
                     return true;
                 }
-            } else return false;
+            } else return false; // request continuation
         }
         break;
     }
     case MosContextMessageID_StopClient:
+        MosCancelContextTimer(&AppTimer);
         MosPrintf("Stop %d\n", (u32)client->priv_data);
         break;
     default:

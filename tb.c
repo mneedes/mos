@@ -466,7 +466,7 @@ static s32 ThreadTimerTestBusyThread(s32 arg) {
 static MosTimer self_timer;
 
 static bool MOS_ISR_SAFE ThreadTimerCallback(MosTimer * tmr) {
-    return MosTrySendToQueue32(&TestQueue, tmr->arg);
+    return MosTrySendToQueue32(&TestQueue, (u32)tmr->priv_data);
 }
 
 static s32 MessageTimerTestThread(s32 arg) {
@@ -475,7 +475,7 @@ static s32 MessageTimerTestThread(s32 arg) {
     u32 cnt = 0xdeadbeef;
     for (;;) {
         if (MosIsStopRequested()) break;
-        MosSetTimer(&self_timer, timer_test_delay, cnt);
+        MosSetTimer(&self_timer, timer_test_delay, (void *)cnt);
         u32 val = MosReceiveFromQueue32(&TestQueue);
         if (val != cnt) return TEST_FAIL;
         cnt++;

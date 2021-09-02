@@ -587,46 +587,51 @@ void MOS_NAKED MosDelayMicroSec(u32 usec) {
 
 // Timers
 
-void MosInitTimer(MosTimer * timer, MosTimerCallback * callback) {
-    MosInitLinkHet(&timer->tmr_link, ELM_TIMER);
-    timer->callback = callback;
+void MosInitTimer(MosTimer * tmr, MosTimerCallback * callback) {
+    MosInitLinkHet(&tmr->tmr_link, ELM_TIMER);
+    tmr->callback = callback;
 }
 
-static void AddTimer(MosTimer * timer) {
-    MosLink * tmr;
-    SetBasePri(IntPriMaskLow);
+static void AddTimer(MosTimer * tmr) {
+    // NOTE: Must lock scheduler before calling
+    MosLink * elm;
     u32 tick_count = MosGetTickCount();
-    timer->wake_tick = tick_count + timer->ticks;
-    for (tmr = TimerQueue.next; tmr != &TimerQueue; tmr = tmr->next) {
-        if (((MosLinkHet *)tmr)->type == ELM_THREAD) {
-            Thread * thd = container_of(tmr, Thread, tmr_link);
+    tmr->wake_tick = tick_count + tmr->ticks;
+    for (elm = TimerQueue.next; elm != &TimerQueue; elm = elm->next) {
+        if (((MosLinkHet *)elm)->type == ELM_THREAD) {
+            Thread * thd = container_of(elm, Thread, tmr_link);
             s32 tmr_rem_ticks = (s32)thd->wake_tick - tick_count;
-            if ((s32)timer->ticks <= tmr_rem_ticks) break;
+            if ((s32)tmr->ticks <= tmr_rem_ticks) break;
         } else {
-            MosTimer * tmr_tmr = container_of(tmr, MosTimer, tmr_link);
+            MosTimer * tmr_tmr = container_of(elm, MosTimer, tmr_link);
             s32 tmr_rem_ticks = (s32)tmr_tmr->wake_tick - tick_count;
-            if ((s32)timer->ticks <= tmr_rem_ticks) break;
+            if ((s32)tmr->ticks <= tmr_rem_ticks) break;
         }
     }
-    MosAddToListBefore(tmr, &timer->tmr_link.link);
-    SetBasePri(0);
+    MosAddToListBefore(elm, &tmr->tmr_link.link);
 }
 
-void MosSetTimer(MosTimer * timer, u32 ticks, u32 arg) {
-    timer->ticks = ticks;
-    timer->arg = arg;
-    AddTimer(timer);
-}
-
-void MosCancelTimer(MosTimer * timer) {
+void MosSetTimer(MosTimer * tmr, u32 ticks, void * priv_data) {
     SetBasePri(IntPriMaskLow);
-    MosRemoveFromList(&timer->tmr_link.link);
+    tmr->ticks = ticks;
+    tmr->priv_data = priv_data;
+    AddTimer(tmr);
     SetBasePri(0);
 }
 
-void MosResetTimer(MosTimer * timer) {
-    MosCancelTimer(timer);
-    AddTimer(timer);
+void MosCancelTimer(MosTimer * tmr) {
+    SetBasePri(IntPriMaskLow);
+    if (MosIsOnList(&tmr->tmr_link.link))
+        MosRemoveFromList(&tmr->tmr_link.link);
+    SetBasePri(0);
+}
+
+void MosResetTimer(MosTimer * tmr) {
+    SetBasePri(IntPriMaskLow);
+    if (MosIsOnList(&tmr->tmr_link.link))
+        MosRemoveFromList(&tmr->tmr_link.link);
+    AddTimer(tmr);
+    SetBasePri(0);
 }
 
 static s32 IdleThreadEntry(s32 arg) {

@@ -32,7 +32,7 @@ typedef struct MosTimer MosTimer;
 
 // Callbacks
 typedef s32 (MosThreadEntry)(s32 arg);
-typedef bool MOS_ISR_SAFE (MosTimerCallback)(MosTimer * tmr);
+typedef MOS_ISR_SAFE bool (MosTimerCallback)(MosTimer * tmr);
 typedef void (MosRawPrintfHook)(const char * fmt, ...);
 typedef void (MosSleepHook)(void);
 typedef void (MosWakeHook)(void);
@@ -69,11 +69,11 @@ typedef struct MosSem {
 } MosSem;
 
 typedef struct MosTimer {
-    u32                arg;
     u32                ticks;
     u32                wake_tick;
-    MosTimerCallback * callback;
     MosLinkHet         tmr_link;
+    MosTimerCallback * callback;
+    void             * priv_data;
 } MosTimer;
 
 // Initialize and Run Scheduler
@@ -124,10 +124,10 @@ MOS_ISR_SAFE void MosDelayMicroSec(u32 usec);
 
 // Timers - Call specified callback at a period of time
 
-void MosInitTimer(MosTimer * timer, MosTimerCallback * callback);
-void MosSetTimer(MosTimer * timer, u32 ticks, u32 msg);
-void MosCancelTimer(MosTimer * timer);
-void MosResetTimer(MosTimer * timer);
+void MosInitTimer(MosTimer * tmr, MosTimerCallback * callback);
+void MosSetTimer(MosTimer * tmr, u32 ticks, void * priv_data);
+void MosCancelTimer(MosTimer * tmr);
+void MosResetTimer(MosTimer * tmr);
 
 // Thread Functions
 
