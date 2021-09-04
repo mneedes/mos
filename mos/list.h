@@ -1,8 +1,8 @@
 
-//  Copyright 2020-2021 Matthew C Needes
-//  You may not use this source file except in compliance with the
-//  terms and conditions contained within the LICENSE file (the
-//  "License") included under this distribution.
+// Copyright 2020-2021 Matthew C Needes
+// You may not use this source file except in compliance with the
+// terms and conditions contained within the LICENSE file (the
+// "License") included under this distribution.
 
 #ifndef _MOS_LIST_H_
 #define _MOS_LIST_H_

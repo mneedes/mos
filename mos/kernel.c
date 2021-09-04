@@ -1,15 +1,16 @@
 
-//  Copyright 2019-2021 Matthew C Needes
-//  You may not use this source file except in compliance with the
-//  terms and conditions contained within the LICENSE file (the
-//  "License") included under this distribution.
+// Copyright 2019-2021 Matthew C Needes
+// You may not use this source file except in compliance with the
+// terms and conditions contained within the LICENSE file (the
+// "License") included under this distribution.
 
 //
-//  MOS Microkernel
+// MOS Microkernel
 //
 
 #include <bsp_hal.h>
 #include <mos/kernel.h>
+#include <mos/arch.h>
 #include <errno.h>
 
 // TODO: multi-level priority inheritance / multiple mutexes at the same time
@@ -17,28 +18,6 @@
 // TODO: Change wait queue position on priority change
 // TODO: Hooks for other timers such as LPTIM ?
 // TODO: MosAssert() -- only when compiled debug?
-
-#if (MOS_FP_CONTEXT_SWITCHING == true)
-  #if (__FPU_USED == 1U)
-    #define ENABLE_FP_CONTEXT_SAVE    true
-  #else
-    #define ENABLE_FP_CONTEXT_SAVE    false
-  #endif
-#else
-  #define ENABLE_FP_CONTEXT_SAVE    false
-#endif
-
-#if (defined(__ARM_ARCH_8M_BASE__) || defined(__ARM_ARCH_8M_MAIN__))
-  #define DEFAULT_EXC_RETURN        0xffffffbc
-#else
-  #define DEFAULT_EXC_RETURN        0xfffffffd
-#endif
-
-#if (defined(__ARM_ARCH_8M_MAIN__) && __ARM_ARCH_8M_MAIN__ == 1U) || (defined(__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE >= 3))
-  #define ENABLE_SPLIM_SUPPORT      true
-#else
-  #define ENABLE_SPLIM_SUPPORT      false
-#endif
 
 #define NO_SUCH_THREAD       NULL
 #define STACK_FILL_VALUE     0xca5eca11
@@ -48,9 +27,6 @@
 
 #define EVENT(e, v) \
     { if (MOS_ENABLE_EVENTS) (*EventHook)((MOS_EVENT_ ## e), (v)); }
-
-#define SYSTICK_CTRL_ENABLE     (SysTick_CTRL_ENABLE_Msk | SysTick_CTRL_TICKINT_Msk | SysTick_CTRL_CLKSOURCE_Msk)
-#define SYSTICK_CTRL_DISABLE    (SysTick_CTRL_CLKSOURCE_Msk)
 
 // Element types for heterogeneous lists
 enum {
@@ -1125,7 +1101,7 @@ bool MOS_NAKED MosTryMutex(MosMutex * mtx) {
     );
 }
 
-static void MOS_USED YieldOnMutex(MosMutex * mtx) {
+static void MOS_USED ReleaseMutex(MosMutex * mtx) {
     SetBasePri(IntPriMaskLow);
     asm volatile ( "dsb" );
     if (!MosIsListEmpty(&mtx->pend_q)) {
@@ -1162,7 +1138,7 @@ void MOS_NAKED MosUnlockMutex(MosMutex * mtx) {
         "strex r2, r1, [r0]\n"
         "cmp r2, #0\n"
         "bne RetryGM\n"
-        "b YieldOnMutex\n"
+        "b ReleaseMutex\n"
         "SkipGM:\n"
         "bx lr"
             : : : "r0", "r1", "r2", "r3"
@@ -1307,7 +1283,7 @@ bool MOS_NAKED MOS_ISR_SAFE MosTrySem(MosSem * sem) {
 }
 
 // For yielding when semaphore is given
-static void MOS_USED MOS_ISR_SAFE YieldOnSem(MosSem * sem) {
+static void MOS_USED MOS_ISR_SAFE ReleaseOnSem(MosSem * sem) {
     // This places the semaphore on event queue to be processed by
     // scheduler to avoid direct manipulation of run queues.  If run
     // queues were manipulated here critical sections would be larger.
@@ -1333,7 +1309,7 @@ void MOS_NAKED MOS_ISR_SAFE MosIncrementSem(MosSem * sem) {
         "cmp r2, #0\n"
         "bne RetryGS\n"
         "dmb\n"
-        "bl YieldOnSem\n"
+        "bl ReleaseOnSem\n"
         "pop { pc }"
             : : : "r0", "r1", "r2", "r3"
     );
@@ -1423,7 +1399,7 @@ void MOS_NAKED MOS_ISR_SAFE MosRaiseSignal(MosSem * sem, u32 flags) {
         "cmp r3, #0\n"
         "bne RetryRS\n"
         "dmb\n"
-        "bl YieldOnSem\n"
+        "bl ReleaseOnSem\n"
         "pop { pc }"
             : : : "r0", "r1", "r2", "r3"
     );
