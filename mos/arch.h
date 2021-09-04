@@ -11,6 +11,17 @@
 #ifndef _MOS_ARCH_H_
 #define _MOS_ARCH_H_
 
+// Detect ARM architecture
+#define MOS_ARM_V6M   0
+#define MOS_ARM_V7M   1
+#if (defined(__ARM_ARCH_6M__) || defined(__ARM_ARCH_8M_BASE__))
+  #define MOS_ARCH   MOS_ARM_V6M
+#elif (defined(__ARM_ARCH_7M__) || defined(__ARM_ARCH_7EM__) || defined(__ARM_ARCH_8M_MAIN__))
+  #define MOS_ARCH   MOS_ARM_V7M
+#else
+  #error "Architecture not recognized"
+#endif
+
 // TODO: EXC Return actually depends on security mode on V8M
 #if (defined(__ARM_ARCH_8M_BASE__) || defined(__ARM_ARCH_8M_MAIN__))
   #define DEFAULT_EXC_RETURN        0xffffffbc
