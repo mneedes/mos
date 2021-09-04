@@ -232,8 +232,12 @@ MOS_ISR_SAFE static MOS_INLINE void MosRaiseBinarySem(MosSem * sem) {
     MosRaiseSignal(sem, 1);
 }
 
-#define MosAssert(c) { if (!(c)) MosAssertAt(__FILE__, __LINE__); }
 void MosAssertAt(char * file, u32 line);
+#ifdef DEBUG
+  #define MosAssert(c) { if (!(c)) MosAssertAt(__FILE__, __LINE__); }
+#else
+  #define MosAssert(c)
+#endif
 
 // Induces a divide by zero fault
 static MOS_INLINE void MosCrash(void) {

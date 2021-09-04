@@ -6,9 +6,9 @@
 
 //
 // MOS Configuration File
-//    MOS is intended to be easy to maintain, so rather than providing tons
-//    of options here and cluttering the code with #ifdefs, instead consider
-//    modifying the microkernel itself to suit system requirements.
+//   MOS is intended to be easy to maintain, so rather than providing tons
+//   of options here and cluttering the code with #ifdefs, instead consider
+//   modifying the microkernel itself to suit system requirements.
 //
 
 #ifndef _MOS_CONFIG_H_
@@ -20,11 +20,6 @@
 
 // Tick rate
 #define MOS_MICRO_SEC_PER_TICK      1000
-
-// Enable floating point context switch support
-//  Note that if false, floating point might still work
-//  if confined to a single context.
-#define MOS_FP_CONTEXT_SWITCHING    true
 
 // Monitor maximum stack usage on context switches
 #define MOS_STACK_USAGE_MONITOR     true

@@ -11,6 +11,7 @@
 #ifndef _MOS_ARCH_H_
 #define _MOS_ARCH_H_
 
+// TODO: EXC Return actually depends on security mode on V8M
 #if (defined(__ARM_ARCH_8M_BASE__) || defined(__ARM_ARCH_8M_MAIN__))
   #define DEFAULT_EXC_RETURN        0xffffffbc
 #else
@@ -23,14 +24,10 @@
   #define ENABLE_SPLIM_SUPPORT      false
 #endif
 
-#if (MOS_FP_CONTEXT_SWITCHING == true)
-  #if (__FPU_USED == 1U)
-    #define ENABLE_FP_CONTEXT_SAVE    true
-  #else
-    #define ENABLE_FP_CONTEXT_SAVE    false
-  #endif
+#if (defined(__VFP_FP__) && !defined(__SOFTFP__))
+  #define MOS_FP_LAZY_CONTEXT_SWITCHING  true
 #else
-  #define ENABLE_FP_CONTEXT_SAVE    false
+  #define MOS_FP_LAZY_CONTEXT_SWITCHING  false
 #endif
 
 #define SYSTICK_CTRL_ENABLE     (SysTick_CTRL_ENABLE_Msk | SysTick_CTRL_TICKINT_Msk | SysTick_CTRL_CLKSOURCE_Msk)

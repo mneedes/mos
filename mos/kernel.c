@@ -17,7 +17,6 @@
 // TODO: Waiting on multiple semaphores
 // TODO: Change wait queue position on priority change
 // TODO: Hooks for other timers such as LPTIM ?
-// TODO: MosAssert() -- only when compiled debug?
 
 #define NO_SUCH_THREAD       NULL
 #define STACK_FILL_VALUE     0xca5eca11
@@ -102,7 +101,7 @@ static MosParams Params = {
    .int_pri_hi         = 0,
    .int_pri_low        = 0,
    .micro_sec_per_tick = MOS_MICRO_SEC_PER_TICK,
-   .fp_support_en      = ENABLE_FP_CONTEXT_SAVE
+   .fp_support_en      = MOS_FP_LAZY_CONTEXT_SWITCHING
 };
 
 // Hooks
@@ -372,7 +371,7 @@ static u32 MOS_USED Scheduler(u32 sp) {
     return (u32)RunningThread->sp;
 }
 
-#if (ENABLE_FP_CONTEXT_SAVE == true)
+#if (MOS_FP_LAZY_CONTEXT_SWITCHING == true)
 
 void MOS_NAKED PendSV_Handler(void) {
     // Floating point context switch (lazy stacking)
@@ -682,7 +681,7 @@ void MosInit(void) {
     // Enable Bus, Memory and Usage Faults in general
     SCB->SHCSR |= (SCB_SHCSR_BUSFAULTENA_Msk | SCB_SHCSR_MEMFAULTENA_Msk |
                    SCB_SHCSR_USGFAULTENA_Msk);
-    if (ENABLE_FP_CONTEXT_SAVE) {
+    if (MOS_FP_LAZY_CONTEXT_SWITCHING) {
         // Ensure lazy stacking is enabled (for floating point)
         FPU->FPCCR |= (FPU_FPCCR_ASPEN_Msk | FPU_FPCCR_LSPEN_Msk);
     } else {
