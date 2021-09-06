@@ -52,11 +52,11 @@ static s32 HalPulseReceiverThread(s32 arg) {
 
 static MosThread * thread = { 0 };
 
-void EXTI0_IRQHandler(void) {
+void EXTI0_1_IRQHandler(void) {
     IRQ0_Callback();
 }
 
-void EXTI1_IRQHandler(void) {
+void EXTI2_3_IRQHandler(void) {
     IRQ1_Callback();
 }
 
