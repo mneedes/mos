@@ -19,7 +19,7 @@ void MOS_NAKED PendSV_Handler(void) {
         "vstmdbeq r0!, {s16-s31}\n"
         "stmdb r0!, {r4-r11, lr}\n"
         "bl Scheduler\n"
-        "ldmfd r0!, {r4-r11, lr}\n"
+        "ldmia r0!, {r4-r11, lr}\n"
         "tst lr, #16\n"
         "it eq\n"
         "vldmiaeq r0!, {s16-s31}\n"
@@ -36,13 +36,41 @@ void MOS_NAKED PendSV_Handler(void) {
         "mrs r0, psp\n"
         "stmdb r0!, {r4-r11, lr}\n"
         "bl Scheduler\n"
-        "ldmfd r0!, {r4-r11, lr}\n"
+        "ldmia r0!, {r4-r11, lr}\n"
         "msr psp, r0\n"
         "bx lr"
     );
 }
 
 #endif
+
+static void MOS_USED BlockOnMutex(MosMutex * mtx) {
+    SetBasePri(IntPriMaskLow);
+    asm volatile ( "dsb" );
+    // Retry (don't block) if mutex has since been given
+    if (mtx->owner != NO_SUCH_THREAD) {
+        // Add thread to pend queue
+        MosLink * elm = mtx->pend_q.next;
+        for (; elm != &mtx->pend_q; elm = elm->next) {
+            Thread * thd = container_of(elm, Thread, run_link);
+            if (thd->pri > RunningThread->pri) break;
+        }
+        MosRemoveFromList(&RunningThread->run_link);
+        MosAddToListBefore(elm, &RunningThread->run_link);
+        // Basic priority inheritance
+        Thread * thd = (Thread *) mtx->owner;
+        if (RunningThread->pri < thd->pri) {
+            thd->pri = RunningThread->pri;
+            if (thd->state == THREAD_RUNNABLE) {
+                MosRemoveFromList(&thd->run_link);
+                MosAddToFrontOfList(&RunQueues[thd->pri], &thd->run_link);
+            }
+        }
+        SetThreadState(RunningThread, THREAD_WAIT_FOR_MUTEX);
+        YieldThread();
+    }
+    SetBasePri(0);
+}
 
 void MOS_NAKED MosLockMutex(MosMutex * mtx) {
     MOS_USED_PARAM(mtx);
@@ -107,6 +135,29 @@ bool MOS_NAKED MosTryMutex(MosMutex * mtx) {
     );
 }
 
+static void MOS_USED ReleaseMutex(MosMutex * mtx) {
+    SetBasePri(IntPriMaskLow);
+    asm volatile ( "dsb" );
+    if (!MosIsListEmpty(&mtx->pend_q)) {
+        MosLink * elm = mtx->pend_q.next;
+        Thread * thd = container_of(elm, Thread, run_link);
+        MosRemoveFromList(elm);
+        MosAddToFrontOfList(&RunQueues[thd->pri], elm);
+        if (MosIsOnList(&thd->tmr_link.link))
+            MosRemoveFromList(&thd->tmr_link.link);
+        SetThreadState(thd, THREAD_RUNNABLE);
+        // Reset priority inheritance
+        if (RunningThread->pri != RunningThread->nom_pri) {
+            RunningThread->pri = RunningThread->nom_pri;
+            MosRemoveFromList(&RunningThread->run_link);
+            MosAddToFrontOfList(&RunQueues[RunningThread->pri],
+                                    &RunningThread->run_link);
+        }
+        if (thd->pri < RunningThread->pri) YieldThread();
+    }
+    SetBasePri(0);
+}
+
 void MOS_NAKED MosUnlockMutex(MosMutex * mtx) {
     MOS_USED_PARAM(mtx);
     asm volatile (
@@ -128,6 +179,26 @@ void MOS_NAKED MosUnlockMutex(MosMutex * mtx) {
     );
 }
 
+static void MOS_USED BlockOnSem(MosSem * sem) {
+    // Lock in case semaphore is about to be given by another context.
+    asm volatile ( "cpsid if" );
+    // Retry (don't block) if count has since incremented
+    if (sem->value == 0) {
+        MosLink * elm = sem->pend_q.next;
+        for (; elm != &sem->pend_q; elm = elm->next) {
+            Thread * thd = container_of(elm, Thread, run_link);
+            if (thd->pri > RunningThread->pri) break;
+        }
+        // Can directly manipulate run queues here since scheduler
+        // and other other interrupts are locked out.
+        MosRemoveFromList(&RunningThread->run_link);
+        MosAddToListBefore(elm, &RunningThread->run_link);
+        RunningThread->state = THREAD_WAIT_FOR_SEM;
+        YieldThread();
+    }
+    asm volatile ( "cpsie if" );
+}
+
 void MOS_NAKED MosWaitForSem(MosSem * sem) {
     MOS_USED_PARAM(sem);
     asm volatile (
@@ -147,6 +218,35 @@ void MOS_NAKED MosWaitForSem(MosSem * sem) {
         "b RetryTS"
             : : : "r0", "r1", "r2", "r3"
     );
+}
+
+static bool MOS_USED BlockOnSemOrTO(MosSem * sem) {
+    bool timeout = false;
+    // Lock in case semaphore is about to be given by another context.
+    asm volatile ( "cpsid if" );
+    // Immediately retry (don't block) if count has since incremented
+    if (sem->value == 0) {
+        RunningThread->timed_out = 0;
+        MosLink * elm = sem->pend_q.next;
+        for (; elm != &sem->pend_q; elm = elm->next) {
+            Thread * thd = container_of(elm, Thread, run_link);
+            if (thd->pri > RunningThread->pri) break;
+        }
+        // Can directly manipulate run queues here since scheduler
+        // and other other interrupts are locked out.
+        MosRemoveFromList(&RunningThread->run_link);
+        MosAddToListBefore(elm, &RunningThread->run_link);
+        RunningThread->state = THREAD_WAIT_FOR_SEM_OR_TICK;
+        YieldThread();
+        // Must enable interrupts before checking timeout to allow pend
+        // Barrier ensures that pend occurs before checking timeout.
+        asm volatile (
+            "cpsie if\n"
+            "isb"
+        );
+        if (RunningThread->timed_out) timeout = true;
+    } else asm volatile ( "cpsie if" );
+    return timeout;
 }
 
 bool MOS_NAKED MosWaitForSemOrTO(MosSem * sem, u32 ticks) {
@@ -197,6 +297,22 @@ bool MOS_NAKED MOS_ISR_SAFE MosTrySem(MosSem * sem) {
         "bx lr"
             : : : "r0", "r1", "r2", "r3"
     );
+}
+
+// For yielding when semaphore is given
+static void MOS_USED MOS_ISR_SAFE ReleaseOnSem(MosSem * sem) {
+    // This places the semaphore on event queue to be processed by
+    // scheduler to avoid direct manipulation of run queues.  If run
+    // queues were manipulated here critical sections would be larger.
+    asm volatile ( "cpsid if" );
+    // Only add event if pend_q is not empty and event not already queued
+    if (!MosIsListEmpty(&sem->pend_q) && !MosIsOnList(&sem->evt_link)) {
+        MosAddToList(&ISREventQueue, &sem->evt_link);
+        Thread * thd = container_of(sem->pend_q.next, Thread, run_link);
+        // Yield if released thread has higher priority than running thread
+        if (RunningThread && thd->pri < RunningThread->pri) YieldThread();
+    }
+    asm volatile ( "cpsie if" );
 }
 
 void MOS_NAKED MOS_ISR_SAFE MosIncrementSem(MosSem * sem) {
