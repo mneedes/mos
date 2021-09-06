@@ -223,16 +223,17 @@ static void MOS_USED SetTimeout(u32 ticks) {
 void MOS_NAKED MosDelayMicroSec(u32 usec) {
     MOS_UNUSED(usec);
     asm volatile (
+        ".syntax unified\n"
         "ldr r1, _CyclesPerMicroSec\n"
         "ldr r1, [r1]\n"
-        "mul r0, r0, r1\n"
-        "sub r0, #13\n"  // Overhead calibration
+        "muls r0, r0, r1\n"
+        "subs r0, #13\n"  // Overhead calibration
         "delay:\n"
         // It is possible that 6 is another valid value, non-cached flash stall?
 #if (MOS_CYCLES_PER_INNER_LOOP == 3)
-        "subs r0, #3\n"
+        "subs r0, r0, #3\n"
 #elif (MOS_CYCLES_PER_INNER_LOOP == 1)
-        "subs r0, #1\n"
+        "subs r0, r0, #1\n"
 #else
 #error "Invalid selection for inner loop cycles"
 #endif
