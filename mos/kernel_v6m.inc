@@ -270,7 +270,7 @@ u32 MosWaitForSignalOrTO(MosSem * sem, u32 ticks) {
     return mask;
 }
 
-u32 MOS_ISR_SAFE MosPollForSignal(MosSem * sem) {
+u32 MOS_ISR_SAFE MosPollSignal(MosSem * sem) {
     asm volatile ( "cpsid if" );
     u32 mask = sem->value;
     sem->value = 0;

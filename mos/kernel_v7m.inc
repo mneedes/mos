@@ -384,7 +384,7 @@ u32 MOS_NAKED MosWaitForSignalOrTO(MosSem * sem, u32 ticks) {
     );
 }
 
-u32 MOS_NAKED MOS_ISR_SAFE MosPollForSignal(MosSem * sem) {
+u32 MOS_NAKED MOS_ISR_SAFE MosPollSignal(MosSem * sem) {
     MOS_USED_PARAM(sem);
     asm volatile (
         "mov r3, #0\n"

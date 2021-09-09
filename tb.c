@@ -828,7 +828,7 @@ static s32 SignalTestThreadRxTimeout(s32 arg) {
 
 static s32 SignalTestPoll(s32 arg) {
     for (;;) {
-        u32 flags = MosPollForSignal(&TestSem);
+        u32 flags = MosPollSignal(&TestSem);
         if (flags) {
             if (flags & 0x1) TestHisto[arg]++;
             if (flags & 0x2) TestHisto[arg + 1]++;

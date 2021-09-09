@@ -214,7 +214,7 @@ MOS_ISR_SAFE void MosIncrementSem(MosSem * sem);
 
 u32 MosWaitForSignal(MosSem * sem);
 u32 MosWaitForSignalOrTO(MosSem * sem, u32 ticks);
-MOS_ISR_SAFE u32 MosPollForSignal(MosSem * sem);
+MOS_ISR_SAFE u32 MosPollSignal(MosSem * sem);
 MOS_ISR_SAFE void MosRaiseSignal(MosSem * sem, u32 flags);
 
 //   (3) Binary semaphores are 1-bit signals
@@ -225,8 +225,8 @@ static MOS_INLINE void MosWaitForBinarySem(MosSem * sem) {
 static MOS_INLINE bool MosWaitForBinarySemOrTO(MosSem * sem, u32 ticks) {
     return MosWaitForSignalOrTO(sem, ticks);
 }
-MOS_ISR_SAFE static MOS_INLINE bool MosPollForBinarySem(MosSem * sem) {
-    return MosPollForSignal(sem);
+MOS_ISR_SAFE static MOS_INLINE bool MosPollBinarySem(MosSem * sem) {
+    return MosPollSignal(sem);
 }
 MOS_ISR_SAFE static MOS_INLINE void MosRaiseBinarySem(MosSem * sem) {
     MosRaiseSignal(sem, 1);
