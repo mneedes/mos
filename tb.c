@@ -20,9 +20,11 @@
 #include <mos/format_string.h>
 #include <mos/trace.h>
 #include <mos/shell.h>
-#include <bsp_hal.h>
+#include <mos/arch.h>
 
+#include <bsp_hal.h>
 #include <bsp/hal_tb.h>
+
 #include "tb.h"
 
 #define DFT_STACK_SIZE           384
@@ -62,6 +64,25 @@ static MosMutex TestMutex;
 // Test Message Queue
 static u32 queue[4];
 static MosQueue TestQueue;
+
+// Induces a crash
+static MOS_INLINE void CauseCrash(void) {
+#if (MOS_ARCH == MOS_ARM_V6M)
+    // Unaligned access
+    asm volatile (
+        "mov r0, #3\n"
+        "ldr r1, [r0]"
+            : : : "r0", "r1"
+    );
+#elif (MOS_ARCH == MOS_ARM_V7M)
+    // Divide-by-zero
+    asm volatile (
+        "mov r0, #0\n"
+        "udiv r1, r1, r0"
+            : : : "r0", "r1"
+    );
+#endif
+}
 
 static void ClearHistogram(void) {
     for (u32 ix = 0; ix < count_of(TestHisto); ix++)
@@ -150,7 +171,7 @@ static s32 ExcTestThread(s32 arg) {
     MosPrintf("Running Exception Thread %X\n", arg);
     MosSetTermArg(MosGetThreadPtr(), TEST_PASS_HANDLER + 1);
     MosDelayThread(50);
-    MosCrash();
+    CauseCrash();
     return TEST_FAIL;
 }
 
@@ -366,6 +387,7 @@ static bool ThreadTests(void) {
     //
     // Assertion test
     //
+#if defined(DEBUG)
     test_pass = true;
     MosPrint("Assertion Test\n");
     ClearHistogram();
@@ -378,6 +400,7 @@ static bool ThreadTests(void) {
         MosPrint(" Failed\n");
         tests_all_pass = false;
     }
+#endif
     //
     // Try some floating point
     //
@@ -770,7 +793,6 @@ static s32 SemTestThreadRxTry(s32 arg) {
 
 static s32 SignalTestThreadTx(s32 arg) {
     for (;;) {
-        //if (arg) MosDelayThread(arg);
         MosRaiseSignal(&TestSem, 1 << arg);
         TestHisto[arg]++;
         MosDelayThread(sem_test_delay);

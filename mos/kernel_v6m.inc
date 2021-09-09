@@ -214,7 +214,7 @@ void MOS_ISR_SAFE MosIncrementSem(MosSem * sem) {
     asm volatile ( "cpsie if" );
 }
 
-u32 MOS_NAKED MosWaitForSignal(MosSem * sem) {
+u32 MosWaitForSignal(MosSem * sem) {
     asm volatile ( "cpsid if" );
     while (sem->value == 0) {
         MosLink * elm = sem->pend_q.next;
@@ -239,7 +239,7 @@ u32 MOS_NAKED MosWaitForSignal(MosSem * sem) {
     return mask;
 }
 
-u32 MOS_NAKED MosWaitForSignalOrTO(MosSem * sem, u32 ticks) {
+u32 MosWaitForSignalOrTO(MosSem * sem, u32 ticks) {
     SetTimeout(ticks);
     asm volatile ( "cpsid if" );
     while (sem->value == 0) {
@@ -294,4 +294,68 @@ void MOS_ISR_SAFE MosRaiseSignal(MosSem * sem, u32 flags) {
         if (RunningThread && thd->pri < RunningThread->pri) YieldThread();
     }
     asm volatile ( "cpsie if" );
+}
+
+//
+// Faults
+//
+
+// TODO: Limit MSP stack dump to end of MSP stack
+// TODO: Dump both stacks on ISR exception?
+static void MOS_USED FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 lr) {
+    bool in_isr = ((lr & 0x8) == 0x0);
+    if (PrintfHook) {
+        (*PrintfHook)("\n*** Hard Fault %s", in_isr ? "IN ISR " : "");
+        if (RunningThread == NO_SUCH_THREAD) (*PrintfHook)("(Pre-Scheduler) ***\n");
+        else if (RunningThread->name && RunningThread->name[0] != '\0')
+            (*PrintfHook)("(Thread %s) ***\n", RunningThread->name);
+        else
+            (*PrintfHook)("(Thread @%08X) ***\n", RunningThread);
+        bool use_psp = ((lr & 0x4) == 0x4);
+        u32 * sp = use_psp ? psp : msp;
+        s32 num_words = 16;
+        if (use_psp && RunningThread != NO_SUCH_THREAD) {
+            u8 * sp2 = RunningThread->stack_bottom;
+            if (*((u32 *)sp2) != STACK_FILL_VALUE)
+                (*PrintfHook)("!!! Thread Stack corruption (bottom) !!!\n");
+            sp2 = (u8 *) ((u32)(sp2 + RunningThread->stack_size - sizeof(u32)) & 0xfffffff8);
+            if (*((u32 *)sp2) != STACK_FILL_VALUE)
+                (*PrintfHook)("!!! Thread Stack corruption (top) !!!\n");
+            s32 rem_words = ((u32 *) sp2) - sp;
+            if (rem_words < 64) num_words = rem_words;
+            else num_words = 64;
+        }
+        (*PrintfHook)("%s Stack @%08X:\n", use_psp ? "Process" : "Main", (u32) sp);
+        (*PrintfHook)(" %08X %08X %08X %08X  (R0 R1 R2 R3)\n",  sp[0], sp[1], sp[2], sp[3]);
+        (*PrintfHook)(" %08X %08X %08X %08X (R12 LR PC PSR)\n", sp[4], sp[5], sp[6], sp[7]);
+        sp += 8;
+        for (s32 ix = 0; ix < (num_words - 8); ix++) {
+            (*PrintfHook)(" %08X", sp[ix]);
+            if ((ix & 0x3) == 0x3) (*PrintfHook)("\n");
+        }
+        (*PrintfHook)("\n\n");
+    }
+    if (MOS_HANG_ON_EXCEPTIONS) {
+        while (1);
+    } else {
+        if (RunningThread == NO_SUCH_THREAD || in_isr) {
+            // Hang if fault occurred anywhere but in thread context
+            while (1);
+        } else {
+            // Stop thread if fault occurred in thread context
+            SetThreadState(RunningThread, THREAD_TIME_TO_STOP);
+            YieldThread();
+        }
+    }
+}
+
+void MOS_NAKED MOS_WEAK HardFault_Handler(void) {
+    asm volatile (
+        "mrs r0, msp\n"
+        "mrs r1, psp\n"
+        "mrs r2, psr\n"
+        "mov r3, lr\n"
+        "b FaultHandler"
+            : : : "r0", "r1", "r2", "r3"
+    );
 }

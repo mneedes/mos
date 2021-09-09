@@ -17,6 +17,7 @@
 // TODO: Waiting on multiple semaphores
 // TODO: Change wait queue position on priority change
 // TODO: Hooks for other timers such as LPTIM ?
+// TODO: Independence from cmsis
 
 #define NO_SUCH_THREAD       NULL
 #define STACK_FILL_VALUE     0xca5eca11
@@ -681,6 +682,7 @@ void MosSetTermArg(MosThread * _thd, s32 arg) {
 
 // TODO: auto tick startup?
 void MosInit(void) {
+#if (MOS_ARCH == MOS_ARM_V7M)
     // Trap Divide By 0 and (optionally) "Unintentional" Unaligned Accesses
     if (MOS_ENABLE_UNALIGN_FAULTS) {
         SCB->CCR |= (SCB_CCR_DIV_0_TRP_Msk | SCB_CCR_UNALIGN_TRP_Msk);
@@ -697,6 +699,7 @@ void MosInit(void) {
     } else {
         FPU->FPCCR &= ~(FPU_FPCCR_ASPEN_Msk | FPU_FPCCR_LSPEN_Msk);
     }
+#endif
     // Save errno pointer for use during context switch
     ErrNo = __errno();
     // Set up timers with tick-reduction
@@ -895,16 +898,6 @@ static u32 MOS_USED Scheduler(u32 sp) {
 }
 
 //
-// Architecture specific
-//
-
-#if (MOS_ARCH == MOS_ARM_V6M)
-  #include "kernel_v6m.inc"
-#elif (MOS_ARCH == MOS_ARM_V7M)
-  #include "kernel_v7m.inc"
-#endif
-
-//
 // Mutex
 //
 
@@ -912,57 +905,6 @@ void MosInitMutex(MosMutex * mtx) {
     mtx->owner = NO_SUCH_THREAD;
     mtx->depth = 0;
     MosInitList(&mtx->pend_q);
-}
-
-static void MOS_USED BlockOnMutex(MosMutex * mtx) {
-    SetBasePri(IntPriMaskLow);
-    asm volatile ( "dsb" );
-    // Retry (don't block) if mutex has since been given
-    if (mtx->owner != NO_SUCH_THREAD) {
-        // Add thread to pend queue
-        MosLink * elm = mtx->pend_q.next;
-        for (; elm != &mtx->pend_q; elm = elm->next) {
-            Thread * thd = container_of(elm, Thread, run_link);
-            if (thd->pri > RunningThread->pri) break;
-        }
-        MosRemoveFromList(&RunningThread->run_link);
-        MosAddToListBefore(elm, &RunningThread->run_link);
-        // Basic priority inheritance
-        Thread * thd = (Thread *) mtx->owner;
-        if (RunningThread->pri < thd->pri) {
-            thd->pri = RunningThread->pri;
-            if (thd->state == THREAD_RUNNABLE) {
-                MosRemoveFromList(&thd->run_link);
-                MosAddToFrontOfList(&RunQueues[thd->pri], &thd->run_link);
-            }
-        }
-        SetThreadState(RunningThread, THREAD_WAIT_FOR_MUTEX);
-        YieldThread();
-    }
-    SetBasePri(0);
-}
-
-static void MOS_USED ReleaseMutex(MosMutex * mtx) {
-    SetBasePri(IntPriMaskLow);
-    asm volatile ( "dsb" );
-    if (!MosIsListEmpty(&mtx->pend_q)) {
-        MosLink * elm = mtx->pend_q.next;
-        Thread * thd = container_of(elm, Thread, run_link);
-        MosRemoveFromList(elm);
-        MosAddToFrontOfList(&RunQueues[thd->pri], elm);
-        if (MosIsOnList(&thd->tmr_link.link))
-            MosRemoveFromList(&thd->tmr_link.link);
-        SetThreadState(thd, THREAD_RUNNABLE);
-        // Reset priority inheritance
-        if (RunningThread->pri != RunningThread->nom_pri) {
-            RunningThread->pri = RunningThread->nom_pri;
-            MosRemoveFromList(&RunningThread->run_link);
-            MosAddToFrontOfList(&RunQueues[RunningThread->pri],
-                                    &RunningThread->run_link);
-        }
-        if (thd->pri < RunningThread->pri) YieldThread();
-    }
-    SetBasePri(0);
 }
 
 void MosRestoreMutex(MosMutex * mtx) {
@@ -986,169 +928,14 @@ void MosInitSem(MosSem * sem, u32 start_value) {
     MosInitList(&sem->evt_link);
 }
 
-static void MOS_USED BlockOnSem(MosSem * sem) {
-    // Lock in case semaphore is about to be given by another context.
-    asm volatile ( "cpsid if" );
-    // Retry (don't block) if count has since incremented
-    if (sem->value == 0) {
-        MosLink * elm = sem->pend_q.next;
-        for (; elm != &sem->pend_q; elm = elm->next) {
-            Thread * thd = container_of(elm, Thread, run_link);
-            if (thd->pri > RunningThread->pri) break;
-        }
-        // Can directly manipulate run queues here since scheduler
-        // and other other interrupts are locked out.
-        MosRemoveFromList(&RunningThread->run_link);
-        MosAddToListBefore(elm, &RunningThread->run_link);
-        RunningThread->state = THREAD_WAIT_FOR_SEM;
-        YieldThread();
-    }
-    asm volatile ( "cpsie if" );
-}
-
-static bool MOS_USED BlockOnSemOrTO(MosSem * sem) {
-    bool timeout = false;
-    // Lock in case semaphore is about to be given by another context.
-    asm volatile ( "cpsid if" );
-    // Immediately retry (don't block) if count has since incremented
-    if (sem->value == 0) {
-        RunningThread->timed_out = 0;
-        MosLink * elm = sem->pend_q.next;
-        for (; elm != &sem->pend_q; elm = elm->next) {
-            Thread * thd = container_of(elm, Thread, run_link);
-            if (thd->pri > RunningThread->pri) break;
-        }
-        // Can directly manipulate run queues here since scheduler
-        // and other other interrupts are locked out.
-        MosRemoveFromList(&RunningThread->run_link);
-        MosAddToListBefore(elm, &RunningThread->run_link);
-        RunningThread->state = THREAD_WAIT_FOR_SEM_OR_TICK;
-        YieldThread();
-        // Must enable interrupts before checking timeout to allow pend
-        // Barrier ensures that pend occurs before checking timeout.
-        asm volatile (
-            "cpsie if\n"
-            "isb"
-        );
-        if (RunningThread->timed_out) timeout = true;
-    } else asm volatile ( "cpsie if" );
-    return timeout;
-}
-
-// For yielding when semaphore is given
-static void MOS_USED MOS_ISR_SAFE ReleaseOnSem(MosSem * sem) {
-    // This places the semaphore on event queue to be processed by
-    // scheduler to avoid direct manipulation of run queues.  If run
-    // queues were manipulated here critical sections would be larger.
-    asm volatile ( "cpsid if" );
-    // Only add event if pend_q is not empty and event not already queued
-    if (!MosIsListEmpty(&sem->pend_q) && !MosIsOnList(&sem->evt_link)) {
-        MosAddToList(&ISREventQueue, &sem->evt_link);
-        Thread * thd = container_of(sem->pend_q.next, Thread, run_link);
-        // Yield if released thread has higher priority than running thread
-        if (RunningThread && thd->pri < RunningThread->pri) YieldThread();
-    }
-    asm volatile ( "cpsie if" );
-}
-
 //
-// Faults
+// Architecture specific
 //
 
-// TODO: Limit MSP stack dump to end of MSP stack
-// TODO: Dump more registers in general including FP registers ?
-// TODO: Dump security registers (if run in secure mode?)
-// TODO: Dump both stacks on exception?
-static void MOS_USED FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 lr) {
-    if (MOS_BKPT_IN_EXCEPTIONS) MosHaltIfDebugging();
-    char * fault_type[] = {
-        "Hard", "Mem", "Bus", "Usage", "Imprecise Bus"
-    };
-    bool in_isr = ((lr & 0x8) == 0x0);
-    bool fp_en = ((lr & 0x10) == 0x0);
-    u32 cfsr = SCB->CFSR;
-    if (PrintfHook) {
-        u32 fault_no = (psr & 0xf) - 3;
-        if (fault_no == 2 && (cfsr & 0x400)) fault_no = 4;
-        (*PrintfHook)("\n*** %s Fault %s", fault_type[fault_no],
-                          in_isr ? "IN ISR " : "");
-        if (RunningThread == NO_SUCH_THREAD) (*PrintfHook)("(Pre-Scheduler) ***\n");
-        else if (RunningThread->name && RunningThread->name[0] != '\0')
-            (*PrintfHook)("(Thread %s) ***\n", RunningThread->name);
-        else
-            (*PrintfHook)("(Thread @%08X) ***\n", RunningThread);
-
-        if (fp_en) (*PrintfHook)("*** Lazy Floating Point Enabled ***\n");
-
-        (*PrintfHook)(" HFSR: %08X  CFSR: %08X AFSR: %08X\n",
-                          SCB->HFSR, cfsr, SCB->AFSR);
-        (*PrintfHook)(" BFAR: %08X MMFAR: %08X\n\n", SCB->BFAR, SCB->MMFAR);
-
-        bool use_psp = ((lr & 0x4) == 0x4);
-        u32 * sp = use_psp ? psp : msp;
-        s32 num_words = 16;
-        if (use_psp && RunningThread != NO_SUCH_THREAD) {
-            u8 * sp2 = RunningThread->stack_bottom;
-            if (*((u32 *)sp2) != STACK_FILL_VALUE)
-                (*PrintfHook)("!!! Thread Stack corruption (bottom) !!!\n");
-            sp2 = (u8 *) ((u32)(sp2 + RunningThread->stack_size - sizeof(u32)) & 0xfffffff8);
-            if (*((u32 *)sp2) != STACK_FILL_VALUE)
-                (*PrintfHook)("!!! Thread Stack corruption (top) !!!\n");
-            s32 rem_words = ((u32 *) sp2) - sp;
-            if (rem_words < 64) num_words = rem_words;
-            else num_words = 64;
-        }
-        (*PrintfHook)("%s Stack @%08X:\n", use_psp ? "Process" : "Main", (u32) sp);
-        (*PrintfHook)(" %08X %08X %08X %08X  (R0 R1 R2 R3)\n",  sp[0], sp[1], sp[2], sp[3]);
-        (*PrintfHook)(" %08X %08X %08X %08X (R12 LR PC PSR)\n", sp[4], sp[5], sp[6], sp[7]);
-        sp += 8;
-        for (s32 ix = 0; ix < (num_words - 8); ix++) {
-            (*PrintfHook)(" %08X", sp[ix]);
-            if ((ix & 0x3) == 0x3) (*PrintfHook)("\n");
-        }
-        (*PrintfHook)("\n\n");
-    }
-    if (MOS_HANG_ON_EXCEPTIONS) {
-        while (1);
-    } else {
-        if (RunningThread == NO_SUCH_THREAD || in_isr) {
-            // Hang if fault occurred anywhere but in thread context
-            while (1);
-        } else {
-            // Clear CFSR bits
-            SCB->CFSR = cfsr;
-            // Stop thread if fault occurred in thread context
-            SetThreadState(RunningThread, THREAD_TIME_TO_STOP);
-            YieldThread();
-        }
-    }
-}
-
-void MOS_NAKED MOS_WEAK HardFault_Handler(void) {
-    asm volatile (
-        "mrs r0, msp\n"
-        "mrs r1, psp\n"
-        "mrs r2, psr\n"
-        "mov r3, lr\n"
-        "b FaultHandler"
-            : : : "r0", "r1", "r2", "r3"
-    );
-}
-
-void MOS_NAKED MOS_WEAK MemManage_Handler(void) {
-    asm volatile (
-        "b HardFault_Handler"
-    );
-}
-
-void MOS_NAKED MOS_WEAK BusFault_Handler(void) {
-    asm volatile (
-        "b HardFault_Handler"
-    );
-}
-
-void MOS_NAKED MOS_WEAK UsageFault_Handler(void) {
-    asm volatile (
-        "b HardFault_Handler"
-    );
-}
+#if (MOS_ARCH == MOS_ARM_V6M)
+  #include "kernel_v6m.inc"
+#elif (MOS_ARCH == MOS_ARM_V7M)
+  #include "kernel_v7m.inc"
+#else
+  #error "Unknown architecture"
+#endif

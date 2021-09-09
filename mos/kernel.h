@@ -239,19 +239,4 @@ void MosAssertAt(char * file, u32 line);
   #define MosAssert(c)
 #endif
 
-// Induces a divide by zero fault
-static MOS_INLINE void MosCrash(void) {
-    // Requires that divide by zero faults are enabled (see MosInit()).
-    asm volatile (
-        "mov r0, #0\n"
-        "udiv r1, r1, r0"
-            : : : "r0", "r1"
-    );
-}
-
-#define MosHaltIfDebugging() \
-  if (CoreDebug->DHCSR & CoreDebug_DHCSR_C_DEBUGEN_Msk) { \
-      asm volatile ( "bkpt 1" ); \
-  } \
-
 #endif

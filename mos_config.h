@@ -36,9 +36,6 @@
 // false for large, pre-existing code bases.
 #define MOS_ENABLE_UNALIGN_FAULTS   false
 
-// Enable breakpoint in exceptions if debugger detected
-#define MOS_BKPT_IN_EXCEPTIONS      false
-
 // Hang on exceptions
 // Can be used in systems with watchdog timer reset to reboot
 #define MOS_HANG_ON_EXCEPTIONS      false
