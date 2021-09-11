@@ -119,6 +119,7 @@ static Thread IdleThread;
 static MosList RunQueues[MOS_MAX_THREAD_PRIORITIES];
 static MosList ISREventQueue;
 static u32 IntDisableCount = 0;
+static u32 ExcReturnInitial = MOS_EXC_RETURN_DEFAULT;
 
 // Timers and Ticks
 static MosList TimerQueue;
@@ -141,7 +142,7 @@ void MosRegisterSleepHook(MosSleepHook * hook) { SleepHook = hook; }
 void MosRegisterWakeHook(MosWakeHook * hook) { WakeHook = hook; }
 void MosRegisterEventHook(MosEventHook * hook) { EventHook = hook; }
 
-#if (MOS_ARCH == MOS_ARM_V6M)
+#if (MOS_ARCH_CAT == MOS_ARCH_CORTEX_M_BASE)
 
 static MOS_INLINE void LockScheduler(u32 pri) {
     MOS_UNUSED(pri);
@@ -152,7 +153,7 @@ static MOS_INLINE void UnlockScheduler(void) {
     asm volatile ( "cpsie if" );
 }
 
-#elif (MOS_ARCH == MOS_ARM_V7M)
+#elif (MOS_ARCH == MOS_ARCH_CORTEX_M_MAIN)
 
 // Mask interrupts by priority, primarily for temporarily
 //   disabling context switches.
@@ -370,7 +371,7 @@ static void InitThread(Thread * thd, MosThreadPriority pri,
     sf->LR = (u32)ThreadExit;
     sf->R12 = 0;
     sf->HWSAVE[0] = arg;
-    sf->LR_EXC_RTN = DEFAULT_EXC_RETURN;
+    sf->LR_EXC_RTN = ExcReturnInitial;
     // Either fill lower stack OR just place canary value at bottom
     if (MOS_STACK_USAGE_MONITOR) {
         u32 * fill = (u32 *)sf - 1;
@@ -706,7 +707,7 @@ void MosSetTermArg(MosThread * _thd, s32 arg) {
 
 // TODO: auto tick startup?
 void MosInit(void) {
-#if (MOS_ARCH == MOS_ARM_V7M)
+#if (MOS_ARCH_CAT == MOS_ARCH_ARM_CORTEX_M_MAIN)
     // Trap Divide By 0 and (optionally) "Unintentional" Unaligned Accesses
     if (MOS_ENABLE_UNALIGN_FAULTS) {
         SCB->CCR |= (SCB_CCR_DIV_0_TRP_Msk | SCB_CCR_UNALIGN_TRP_Msk);
@@ -723,6 +724,10 @@ void MosInit(void) {
     } else {
         FPU->FPCCR &= ~(FPU_FPCCR_ASPEN_Msk | FPU_FPCCR_LSPEN_Msk);
     }
+#endif
+#if (MOS_ARM_SECURITY_SUPPORT == true)
+    // Detect security mode and set Exception Return accordingly
+    if (SCB->CPUID_NS == 0) ExcReturnInitial = MOS_EXC_RETURN_UNSECURE;
 #endif
     // Save errno pointer for use during context switch
     ErrNo = __errno();
@@ -911,7 +916,7 @@ static u32 MOS_USED Scheduler(u32 sp) {
         if (!MosIsLastElement(&RunQueues[run_thd->pri], &run_thd->run_link))
             MosMoveToEndOfList(&RunQueues[run_thd->pri], &run_thd->run_link);
     } else run_thd = &IdleThread;
-    if (ENABLE_SPLIM_SUPPORT) {
+    if (MOS_ENABLE_SPLIM_SUPPORT) {
         asm volatile ( "MSR psplim, %0" : : "r" (run_thd->stack_bottom) );
     }
     // Set next thread ID and errno and return its stack pointer
@@ -956,10 +961,11 @@ void MosInitSem(MosSem * sem, u32 start_value) {
 // Architecture specific
 //
 
-#if (MOS_ARCH == MOS_ARM_V6M)
-  #include "kernel_v6m.inc"
-#elif (MOS_ARCH == MOS_ARM_V7M)
-  #include "kernel_v7m.inc"
+#if (MOS_ARCH_CAT == MOS_ARCH_ARM_CORTEX_M_BASE)
+  #include "kernel_base.inc"
+#elif (MOS_ARCH_CAT == MOS_ARCH_ARM_CORTEX_M_MAIN)
+  #include "kernel_main.inc"
 #else
-  #error "Unknown architecture"
+  #error "Unknown architecture category"
 #endif
+

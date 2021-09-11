@@ -5,7 +5,7 @@
 // "License") included under this distribution.
 
 //
-// MOS Microkernel (ARM v7-m port)
+// MOS Microkernel - ARM v7-m / v8-m(main) port
 //
 
 #if (MOS_FP_LAZY_CONTEXT_SWITCHING == true)

@@ -5,7 +5,7 @@
 // "License") included under this distribution.
 
 //
-// MOS Microkernel (ARM v6-m port)
+// MOS Microkernel - ARM v6-m / v8-m(base) port
 //
 
 void MOS_NAKED PendSV_Handler(void) {
