@@ -4,9 +4,8 @@
 // terms and conditions contained within the LICENSE file (the
 // "License") included under this distribution.
 
-//
-// MOS Microkernel
-//
+/// \file  mos/kernel.h
+/// \brief MOS Microkernel
 
 #ifndef _MOS_KERNEL_H_
 #define _MOS_KERNEL_H_
@@ -76,24 +75,32 @@ typedef struct MosTimer {
     void             * priv_data;
 } MosTimer;
 
-// Initialize and Run Scheduler
-// NOTE: SysTick and NVIC priority groups should be enabled by HAL before running Init.
+/// Initialize MOS Microkernel.
+/// In general this call must precede all other calls into the MOS microkernel.
+/// \note The ARM SysTick (system tick) and interrupt priority group settings should be
+///       configured prior to this call.
 void MosInit(void);
+
+/// Run Scheduler.
+/// Enables multithreading, running all threads that been started prior to its
+/// to invocation. Any code following this call will normally be unreachable.
 void MosRunScheduler(void);
 
 // Hooks
+
 void MosRegisterRawPrintfHook(MosRawPrintfHook * hook);
 void MosRegisterSleepHook(MosSleepHook * hook);
 void MosRegisterWakeHook(MosWakeHook * hook);
 void MosRegisterEventHook(MosEventHook * hook);
 
-// Obtain Microkernel parameters
+/// Obtain Microkernel parameters.
+/// This allows applications to have insight into the MOS microkernel configuration.
 const MosParams * MosGetParams(void);
 
 // Interrupt methods
 
-// Used primarily to determine if in interrupt context.
-// Returns '0' if not in an interrupt, otherwise returns vector number
+/// Used primarily to determine if in interrupt context.
+/// \return '0' if not in an interrupt, otherwise returns vector number
 static MOS_INLINE u32 MOS_ISR_SAFE MosGetIRQNumber(void) {
     u32 irq;
     asm volatile (

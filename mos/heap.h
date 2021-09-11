@@ -4,10 +4,8 @@
 // terms and conditions contained within the LICENSE file (the
 // "License") included under this distribution.
 
-//
-// MOS Heap Allocation Methods:
-//  TODO
-//
+/// \file  mos/heap.h
+/// \brief MOS Heap
 
 #ifndef _MOS_HEAP_H_
 #define _MOS_HEAP_H_

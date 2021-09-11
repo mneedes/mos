@@ -4,9 +4,8 @@
 // terms and conditions contained within the LICENSE file (the
 // "License") included under this distribution.
 
-//
-// MOS Queues
-//
+/// \file  mos/queue.h
+/// \brief MOS Queue
 
 #ifndef _MOS_QUEUE_H_
 #define _MOS_QUEUE_H_

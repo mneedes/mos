@@ -4,42 +4,42 @@
 // terms and conditions contained within the LICENSE file (the
 // "License") included under this distribution.
 
-//
-// (Shared) Context
-//   Shared contexts allow multiple client modules to share the same resources,
-//   including a single run thread, thread stack and message queue. In addition,
-//   shared contexts can reduce or eliminate mutex contention since clients in
-//   the same shared context are guaranteed to not preempt each other.  In
-//   general, shared contexts should be implemented at lower thread priorities
-//   than most other functionality. Think of contexts as a form of cooperative
-//   multitasking where memory savings are a lot more important than deadlines.
-//
-//   Contexts use a shared message queue for inter-client communication. The
-//   maximum latency depends on the maximum processing time for all messages
-//   in the context. Context clients should be implemented as state machines
-//   that multiplex received messages. Contexts can send and receive messages
-//   to or from ISRs or other threads on the system. Clients should not block
-//   or wait very long otherwise they might starve other clients sharing the
-//   same context. The MosTrySendMessageToContext() call should be used when
-//   a client sends a message to another client in the same context.
-//
-//   If a client handler has not completed and desires a callback, it should
-//   return false. Note that the callback is implemented as a resume message on
-//   the same message queue. The resume message will be added to the end of the
-//   queue allowing the opportunity for other messages to drain first.
-//
-//   Client handlers state machines should tolerate receiving messages after
-//   being _individually_ stopped. This includes, but is not limited to
-//   broadcast stop messages, resume messages or potentially even user messages
-//   (depending on the system design and how the context is used).
-//
-//   The overall context will only shutdown upon receipt of a _broadcast_
-//   StopContext message and any messages that are queued beyond a _broadcast_
-//   StopContextmessage will be ignored. Any clients requesting resume after
-//   receiving a broadcast StopContext stop message will also be ignored. All
-//   clients will receive a StopClient message upon receipt of a _broadcast_
-//   StopContext message (even if already stopped).
-//
+/// \file  mos/context.h
+/// \brief Shared Contexts
+///
+/// Shared contexts allow multiple client modules to share the same resources,
+/// including a single run thread, thread stack and message queue. In addition,
+/// shared contexts can reduce or eliminate mutex contention since clients in
+/// the same shared context are guaranteed to not preempt each other.  In
+/// general, shared contexts should be implemented at lower thread priorities
+/// than most other functionality. Think of contexts as a form of cooperative
+/// multitasking where memory savings are a lot more important than deadlines.
+///
+/// Contexts use a shared message queue for inter-client communication. The
+/// maximum latency depends on the maximum processing time for all messages
+/// in the context. Context clients should be implemented as state machines
+/// that multiplex received messages. Contexts can send and receive messages
+/// to or from ISRs or other threads on the system. Clients should not block
+/// or wait very long otherwise they might starve other clients sharing the
+/// same context. The MosTrySendMessageToContext() call should be used when
+/// a client sends a message to another client in the same context.
+///
+/// If a client handler has not completed and desires a callback, it should
+/// return false. Note that the callback is implemented as a resume message on
+/// the same message queue. The resume message will be added to the end of the
+/// queue allowing the opportunity for other messages to drain first.
+///
+/// Client handlers state machines should tolerate receiving messages after
+/// being _individually_ stopped. This includes, but is not limited to
+/// broadcast stop messages, resume messages or potentially even user messages
+/// (depending on the system design and how the context is used).
+///
+/// The overall context will only shutdown upon receipt of a _broadcast_
+/// StopContext message and any messages that are queued beyond a _broadcast_
+/// StopContextmessage will be ignored. Any clients requesting resume after
+/// receiving a broadcast StopContext stop message will also be ignored. All
+/// clients will receive a StopClient message upon receipt of a _broadcast_
+/// StopContext message (even if already stopped).
 
 #ifndef _MOS_CONTEXT_H_
 #define _MOS_CONTEXT_H_
@@ -48,7 +48,7 @@
 #include <mos/queue.h>
 #include <mos/trace.h>
 
-// Marks calls that unsafe in client handlers
+// Marks calls that are unsafe in client handlers
 #define MOS_CLIENT_UNSAFE
 
 // TODO: should this all be part of the dynamic threads?

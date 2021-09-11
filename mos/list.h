@@ -4,12 +4,13 @@
 // terms and conditions contained within the LICENSE file (the
 // "License") included under this distribution.
 
+/// \file  mos/list.h
+/// \brief Doubly-Linked Circular Lists
+
 #ifndef _MOS_LIST_H_
 #define _MOS_LIST_H_
 
 #include <mos/defs.h>
-
-// Doubly-Linked Lists (idea borrowed from famous OS)
 
 // List descriptor and link*
 //   (*for homogeneous lists)
