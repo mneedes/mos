@@ -142,7 +142,7 @@ void MosRegisterSleepHook(MosSleepHook * hook) { SleepHook = hook; }
 void MosRegisterWakeHook(MosWakeHook * hook) { WakeHook = hook; }
 void MosRegisterEventHook(MosEventHook * hook) { EventHook = hook; }
 
-#if (MOS_ARCH_CAT == MOS_ARCH_CORTEX_M_BASE)
+#if (MOS_ARCH_CAT == MOS_ARCH_ARM_CORTEX_M_BASE)
 
 static MOS_INLINE void LockScheduler(u32 pri) {
     MOS_UNUSED(pri);
@@ -153,7 +153,7 @@ static MOS_INLINE void UnlockScheduler(void) {
     asm volatile ( "cpsie if" );
 }
 
-#elif (MOS_ARCH == MOS_ARCH_CORTEX_M_MAIN)
+#elif (MOS_ARCH == MOS_ARCH_ARM_CORTEX_M_MAIN)
 
 // Mask interrupts by priority, primarily for temporarily
 //   disabling context switches.
