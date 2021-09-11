@@ -40,16 +40,16 @@
 
 // Detect presence of security features
 #if (defined(__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE >= 3))
-  #define MOS_ARM_SECURITY_SUPPORT      true
+  #define MOS_ARM_SECURITY_SUPPORT       true
 #else
-  #define MOS_ARM_SECURITY_SUPPORT      false
+  #define MOS_ARM_SECURITY_SUPPORT       false
 #endif
 
 // Stack pointer overflow detection support
 #if ((MOS_ARCH == MOS_ARCH_ARM_CORTEX_V8M_MAIN) || (MOS_ARM_SECURITY_SUPPORT == true))
-  #define MOS_ENABLE_SPLIM_SUPPORT      true
+  #define MOS_ENABLE_SPLIM_SUPPORT       true
 #else
-  #define MOS_ENABLE_SPLIM_SUPPORT      false
+  #define MOS_ENABLE_SPLIM_SUPPORT       false
 #endif
 
 // Lazy floating point context switch
@@ -64,7 +64,41 @@
 #define MOS_EXC_RETURN_UNSECURE   0xffffffbc
 
 // Enable or disable system tick
-#define SYSTICK_CTRL_ENABLE       (SysTick_CTRL_ENABLE_Msk | SysTick_CTRL_TICKINT_Msk | SysTick_CTRL_CLKSOURCE_Msk)
-#define SYSTICK_CTRL_DISABLE      (SysTick_CTRL_CLKSOURCE_Msk)
+#define MOS_SYSTICK_CTRL_ENABLE   (SysTick_CTRL_ENABLE_Msk | SysTick_CTRL_TICKINT_Msk | SysTick_CTRL_CLKSOURCE_Msk)
+#define MOS_SYSTICK_CTRL_DISABLE  (SysTick_CTRL_CLKSOURCE_Msk)
+
+//
+// Scheduler Locking
+//
+#if (MOS_ARCH_CAT == MOS_ARCH_ARM_CORTEX_M_BASE)
+
+static MOS_INLINE void LockScheduler(u32 pri) {
+    MOS_UNUSED(pri);
+    asm volatile ( "cpsid if" );
+}
+
+static MOS_INLINE void UnlockScheduler(void) {
+    asm volatile ( "cpsie if" );
+}
+
+#elif (MOS_ARCH == MOS_ARCH_ARM_CORTEX_M_MAIN)
+
+static MOS_INLINE void LockScheduler(u32 pri) {
+    asm volatile (
+        "msr basepri, %0\n"
+        "isb"
+            : : "r" (pri) : "memory"
+    );
+}
+
+static MOS_INLINE void UnlockScheduler(void) {
+    asm volatile (
+        "msr basepri, %0\n"
+        "isb"
+            : : "r" (0) : "memory"
+    );
+}
+
+#endif
 
 #endif

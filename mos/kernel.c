@@ -142,40 +142,6 @@ void MosRegisterSleepHook(MosSleepHook * hook) { SleepHook = hook; }
 void MosRegisterWakeHook(MosWakeHook * hook) { WakeHook = hook; }
 void MosRegisterEventHook(MosEventHook * hook) { EventHook = hook; }
 
-#if (MOS_ARCH_CAT == MOS_ARCH_ARM_CORTEX_M_BASE)
-
-static MOS_INLINE void LockScheduler(u32 pri) {
-    MOS_UNUSED(pri);
-    asm volatile ( "cpsid if" );
-}
-
-static MOS_INLINE void UnlockScheduler(void) {
-    asm volatile ( "cpsie if" );
-}
-
-#elif (MOS_ARCH == MOS_ARCH_ARM_CORTEX_M_MAIN)
-
-// Mask interrupts by priority, primarily for temporarily
-//   disabling context switches.
-
-static MOS_INLINE void LockScheduler(u32 pri) {
-    asm volatile (
-        "msr basepri, %0\n"
-        "isb"
-            : : "r" (pri) : "memory"
-    );
-}
-
-static MOS_INLINE void UnlockScheduler(void) {
-    asm volatile (
-        "msr basepri, %0\n"
-        "isb"
-            : : "r" (0) : "memory"
-    );
-}
-
-#endif
-
 void MOS_ISR_SAFE MosDisableInterrupts(void) {
     if (IntDisableCount++ == 0) {
         asm volatile ( "cpsid if" );
@@ -400,7 +366,7 @@ static s32 IdleThreadEntry(s32 arg) {
     while (1) {
         // Disable interrupts and timer
         asm volatile ( "cpsid i" ::: "memory" );
-        SysTick->CTRL = SYSTICK_CTRL_DISABLE;
+        SysTick->CTRL = MOS_SYSTICK_CTRL_DISABLE;
         if (SysTick->CTRL & SysTick_CTRL_COUNTFLAG_Msk) Tick.count += 1;
         // Figure out how long to wait
         s32 tick_interval = MaxTickInterval;
@@ -425,14 +391,14 @@ static s32 IdleThreadEntry(s32 arg) {
             SysTick->VAL = 0;
         }
         if (SleepHook) (*SleepHook)();
-        SysTick->CTRL = SYSTICK_CTRL_ENABLE;
+        SysTick->CTRL = MOS_SYSTICK_CTRL_ENABLE;
         asm volatile (
             "dsb\n"
             "wfi" ::: "memory"
         );
         if (WakeHook) (*WakeHook)();
         if (load) {
-            SysTick->CTRL = SYSTICK_CTRL_DISABLE;
+            SysTick->CTRL = MOS_SYSTICK_CTRL_DISABLE;
             if (SysTick->CTRL & SysTick_CTRL_COUNTFLAG_Msk) {
                 // If counter rolled over then account for all ticks
                 SysTick->LOAD = CyclesPerTick - 1;
@@ -446,7 +412,7 @@ static s32 IdleThreadEntry(s32 arg) {
                 SysTick->LOAD = CyclesPerTick - 1;
                 Tick.count += adj_tick_interval; // or adj_tick_interval - 1 ?
             }
-            SysTick->CTRL = SYSTICK_CTRL_ENABLE;
+            SysTick->CTRL = MOS_SYSTICK_CTRL_ENABLE;
         }
         asm volatile ( "cpsie i\n"
                        "dsb\n"
