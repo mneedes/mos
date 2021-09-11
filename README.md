@@ -3,43 +3,48 @@ MOS, or Maintainable RTOS, is a simple and lightweight RTOS micro-kernel for ARM
 
 It is a work in progress and is intended for "fun personal projects."
 
-MOS was originally developed on a SGS-Thomson STM32F4Discovery and has been tested on the STM32F767ZI Nucleo-144 and STM32L562 Discovery Kit.  The HAL layer example should work immediately with the STM32F4Discovery or for similar boards with minimal modifications.
+MOS was originally developed on a SGS-Thomson STM32F4Discovery and has been tested on the following boards:
+* STM32F767ZI Nucleo-144 (ARM Cortex M7)
+* STM32L562 Discovery Kit (ARM Cortex M33)
+* STM32F4 Discovery (ARM Cortex M4F)
+* STM32G071RB Nucleo (ARM Cortex M0+)
 
 Design Goals:
-* RTOS: Hard priorities and bounded execution
-* Short critical sections: Interrupts are disabled for short sections, BASEPRI is instead used for scheduler locking-allowing high priority interrupts to interrupt scheduler.
+* RTOS: Hard priorities and bounded execution.
+* Short critical sections.
 * Simple configuration with low use of conditional compilation.
-* Tick reduction (_i.e.:_ the so-called "tickless" operation)
-* Small code size (_e.g.:_ mos/kernel.c compiled size is ~5KB)
-* Static kernel and (optionally) static application
-* Easily modifiable
+* Tick reduction (_i.e.:_ the so-called "tickless" operation).
+* Small code size (_e.g.:_ mos/kernel*.c compiled size is ~5KB).
+* Static kernel and (optionally) static application.
+* Easily customizable.
 
 Included Primitives:
 * Recursive mutex with priority inheritance
 * Semaphores (counting / multi-bit binary)
 * Message queues
-* SysTick-based Timers
+* SysTick-based timers
 
 Included Optional Modules:
 * Heap
-* Shared Context (multiple clients sharing same thread and message queue)
+* Shared context (multiple clients sharing same thread and message queue for small memory footprints)
 * Logging
 * Command shell
 * Test bench
 
 Supported toolchains / architectures:
 * GCC
+* ARM M0/M1/M0+ (Arch v6-M)
 * ARM M3/M4/M7 (Arch v7-M)
 * ARM M4F/M7F (Arch v7-M with hardware floating point using lazy stacking)
-* ARM M23/M33/M55 (Arch v8-M) Non-Secure (No TrustZone (yet))
+* ARM M23/M33/M55 (Arch v8-M) - currently supporting a single security mode: secure or non-secure.
+* TrustZone can be used but with interrupts disabled.
 
 Future
 * Better documentation...
-* TrustZone support
-* M0/M0+/M1
+* Support Context switches in TrustZone
 * C++ bindings
 
 Features it probably WILL NEVER have:
-* MPU support
+* Full MPU support
 * Non-ARM architecture support
 * Non-GCC toolchain support
