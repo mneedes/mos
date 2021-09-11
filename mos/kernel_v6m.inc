@@ -34,102 +34,83 @@ void MOS_NAKED PendSV_Handler(void) {
     );
 }
 
-#undef MOS_NAKED
-#define MOS_NAKED
-
-void MOS_NAKED MosLockMutex(MosMutex * mtx) {
-    MOS_USED_PARAM(mtx);
-#if 0
-    asm volatile (
-        "ldr r1, _ThreadID\n"
-        "ldr r1, [r1]\n"
-        "RetryTM:\n"
-        "ldrex r2, [r0]\n"
-        "cmp r2, r1\n"
-        "beq IncTM\n"
-        "cbnz r2, BlockTM\n"
-        "strex r2, r1, [r0]\n"
-        "cmp r2, #0\n"
-        "bne RetryTM\n"
-        "IncTM:\n"
-        "ldr r2, [r0, #4]\n"
-        "add r2, #1\n"
-        "str r2, [r0, #4]\n"
-        "dmb\n"
-        "bx lr\n"
-        "BlockTM:\n"
-        "push {r0, r1, lr}\n"
-        "bl BlockOnMutex\n"
-        "pop {r0, r1, lr}\n"
-        "b RetryTM\n"
-        ".balign 4\n"
-        "_ThreadID: .word RunningThread"
-            // Explicit clobber list prevents compiler from making
-            // assumptions about registers not being changed as
-            // this assembly code calls a C function.  Normally C
-            // ABI treats r0-r3 as input or scratch registers.
-            : : : "r0", "r1", "r2", "r3"
-    );
-#endif
+void MosLockMutex(MosMutex * mtx) {
+    LockScheduler(IntPriMaskLow);
+    if (mtx->owner == (MosThread *)RunningThread) {
+        mtx->depth++;
+        UnlockScheduler();
+        return;
+    }
+    while (mtx->owner != NO_SUCH_THREAD) {
+        // Add thread to pend queue
+        MosLink * elm = mtx->pend_q.next;
+        for (; elm != &mtx->pend_q; elm = elm->next) {
+            Thread * thd = container_of(elm, Thread, run_link);
+            if (thd->pri > RunningThread->pri) break;
+        }
+        MosRemoveFromList(&RunningThread->run_link);
+        MosAddToListBefore(elm, &RunningThread->run_link);
+        // Basic priority inheritance
+        Thread * thd = (Thread *) mtx->owner;
+        if (RunningThread->pri < thd->pri) {
+            thd->pri = RunningThread->pri;
+            if (thd->state == THREAD_RUNNABLE) {
+                MosRemoveFromList(&thd->run_link);
+                MosAddToFrontOfList(&RunQueues[thd->pri], &thd->run_link);
+            }
+        }
+        SetThreadState(RunningThread, THREAD_WAIT_FOR_MUTEX);
+        YieldThread();
+        UnlockScheduler();
+        // Scheduler is invoked here
+        LockScheduler(IntPriMaskLow);
+    }
+    // Take it
+    mtx->owner = (MosThread *)RunningThread;
+    mtx->depth = 1;
+    asm volatile ( "dmb" );
+    UnlockScheduler();
 }
 
-bool MOS_NAKED MosTryMutex(MosMutex * mtx) {
-    MOS_USED_PARAM(mtx);
-    return true;
-#if 0
-    asm volatile (
-        "ldr r1, _ThreadID2\n"
-        "ldr r1, [r1]\n"
-        "RetryTRM:\n"
-        "ldrex r2, [r0]\n"
-        "cmp r2, r1\n"
-        "beq IncTRM\n"
-        "cbnz r2, FailTRM\n"
-        "strex r2, r1, [r0]\n"
-        "cmp r2, #0\n"
-        "bne RetryTRM\n"
-        "IncTRM:\n"
-        "ldr r2, [r0, #4]\n"
-        "add r2, #1\n"
-        "str r2, [r0, #4]\n"
-        "dmb\n"
-        "mov r0, #1\n"
-        "bx lr\n"
-        "FailTRM:\n"
-        "mov r0, #0\n"
-        "bx lr\n"
-        ".balign 4\n"
-        "_ThreadID2: .word RunningThread"
-            : : : "r0", "r1", "r2", "r3"
-    );
-#endif
+bool MosTryMutex(MosMutex * mtx) {
+    LockScheduler(IntPriMaskLow);
+    asm volatile ( "dsb" );
+    if (mtx->owner == NO_SUCH_THREAD) mtx->owner = (MosThread *)RunningThread;
+    if (mtx->owner == (MosThread *)RunningThread) {
+        mtx->depth++;
+        UnlockScheduler();
+        asm volatile ( "dmb" );
+        return true;
+    }
+    UnlockScheduler();
+    return false;
 }
 
-void MOS_NAKED MosUnlockMutex(MosMutex * mtx) {
-    MOS_USED_PARAM(mtx);
-#if 0
-    asm volatile (
-        "dmb\n"
-        "ldr r1, [r0, #4]\n"
-        "sub r1, #1\n"
-        "str r1, [r0, #4]\n"
-        "cbnz r1, SkipGM\n"
-        "mov r1, #0\n"
-        "RetryGM:\n"
-        "ldrex r2, [r0]\n"
-        "strex r2, r1, [r0]\n"
-        "cmp r2, #0\n"
-        "bne RetryGM\n"
-        "b ReleaseMutex\n"
-        "SkipGM:\n"
-        "bx lr"
-            : : : "r0", "r1", "r2", "r3"
-    );
-#endif
+void MosUnlockMutex(MosMutex * mtx) {
+    LockScheduler(IntPriMaskLow);
+    asm volatile ( "dmb" );
+    if (--mtx->depth == 0) {
+        mtx->owner = NO_SUCH_THREAD;
+        if (!MosIsListEmpty(&mtx->pend_q)) {
+            MosLink * elm = mtx->pend_q.next;
+            Thread * thd = container_of(elm, Thread, run_link);
+            MosRemoveFromList(elm);
+            MosAddToFrontOfList(&RunQueues[thd->pri], elm);
+            if (MosIsOnList(&thd->tmr_link.link))
+                MosRemoveFromList(&thd->tmr_link.link);
+            SetThreadState(thd, THREAD_RUNNABLE);
+            // Reset priority inheritance
+            if (RunningThread->pri != RunningThread->nom_pri) {
+                RunningThread->pri = RunningThread->nom_pri;
+                MosRemoveFromList(&RunningThread->run_link);
+                MosAddToFrontOfList(&RunQueues[RunningThread->pri],
+                                        &RunningThread->run_link);
+            }
+            if (thd->pri < RunningThread->pri) YieldThread();
+        }
+    }
+    UnlockScheduler();
 }
-
-#undef MOS_NAKED
-#define MOS_NAKED __attribute__((naked))
 
 void MosWaitForSem(MosSem * sem) {
     asm volatile ( "cpsid if" );
