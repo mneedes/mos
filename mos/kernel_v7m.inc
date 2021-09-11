@@ -45,7 +45,7 @@ void MOS_NAKED PendSV_Handler(void) {
 #endif
 
 static void MOS_USED BlockOnMutex(MosMutex * mtx) {
-    SetBasePri(IntPriMaskLow);
+    LockScheduler(IntPriMaskLow);
     asm volatile ( "dsb" );
     // Retry (don't block) if mutex has since been given
     if (mtx->owner != NO_SUCH_THREAD) {
@@ -69,7 +69,7 @@ static void MOS_USED BlockOnMutex(MosMutex * mtx) {
         SetThreadState(RunningThread, THREAD_WAIT_FOR_MUTEX);
         YieldThread();
     }
-    SetBasePri(0);
+    UnlockScheduler();
 }
 
 void MOS_NAKED MosLockMutex(MosMutex * mtx) {
@@ -136,7 +136,7 @@ bool MOS_NAKED MosTryMutex(MosMutex * mtx) {
 }
 
 static void MOS_USED ReleaseMutex(MosMutex * mtx) {
-    SetBasePri(IntPriMaskLow);
+    LockScheduler(IntPriMaskLow);
     asm volatile ( "dsb" );
     if (!MosIsListEmpty(&mtx->pend_q)) {
         MosLink * elm = mtx->pend_q.next;
@@ -155,7 +155,7 @@ static void MOS_USED ReleaseMutex(MosMutex * mtx) {
         }
         if (thd->pri < RunningThread->pri) YieldThread();
     }
-    SetBasePri(0);
+    UnlockScheduler();
 }
 
 void MOS_NAKED MosUnlockMutex(MosMutex * mtx) {
@@ -430,9 +430,9 @@ void MOS_NAKED MOS_ISR_SAFE MosRaiseSignal(MosSem * sem, u32 flags) {
 // TODO: Dump security registers (if run in secure mode?)
 // TODO: Dump both stacks on ISR exception?
 static void MOS_USED FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 lr) {
-    if (CoreDebug->DHCSR & CoreDebug_DHCSR_C_DEBUGEN_Msk) {
-        asm volatile ( "bkpt 1" );
-    }
+    //if (CoreDebug->DHCSR & CoreDebug_DHCSR_C_DEBUGEN_Msk) {
+    //    asm volatile ( "bkpt 1" );
+    //}
     char * fault_type[] = {
         "Hard", "Mem", "Bus", "Usage", "Imprecise Bus"
     };
