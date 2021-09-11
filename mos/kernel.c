@@ -928,9 +928,9 @@ void MosInitSem(MosSem * sem, u32 start_value) {
 //
 
 #if (MOS_ARCH_CAT == MOS_ARCH_ARM_CORTEX_M_BASE)
-  #include "kernel_base.inc"
+  #include "internal/kernel_base.inc"
 #elif (MOS_ARCH_CAT == MOS_ARCH_ARM_CORTEX_M_MAIN)
-  #include "kernel_main.inc"
+  #include "internal/kernel_main.inc"
 #else
   #error "Unknown architecture category"
 #endif

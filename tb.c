@@ -1674,7 +1674,7 @@ static s32 StackPrintThread(s32 arg) {
     return TEST_PASS;
 }
 
-#if (__ARM_ARCH_8M_MAIN__ == 1U) || (defined(__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE >= 3))
+#if (MOS_ARM_SECURITY_SUPPORT == true)
 
 static s32 MOS_OPT(0) StackOverflowThread(s32 arg) {
     MosSetTermArg(MosGetThreadPtr(), TEST_PASS_HANDLER + 1);
