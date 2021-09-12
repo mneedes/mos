@@ -67,14 +67,14 @@ static MosQueue TestQueue;
 
 // Induces a crash
 static MOS_INLINE void CauseCrash(void) {
-#if (MOS_ARCH == MOS_ARM_V6M)
+#if (MOS_ARCH_CAT == MOS_ARCH_ARM_CORTEX_M_BASE)
     // Unaligned access
     asm volatile (
         "mov r0, #3\n"
         "ldr r1, [r0]"
             : : : "r0", "r1"
     );
-#elif (MOS_ARCH == MOS_ARM_V7M)
+#elif (MOS_ARCH_CAT == MOS_ARCH_ARM_CORTEX_M_MAIN)
     // Divide-by-zero
     asm volatile (
         "mov r0, #0\n"
@@ -175,11 +175,13 @@ static s32 ExcTestThread(s32 arg) {
     return TEST_FAIL;
 }
 
+#ifdef DEBUG
 static s32 AssertTestThread(s32 arg) {
     MosSetTermArg(MosGetThreadPtr(), TEST_PASS_HANDLER);
     MosAssert(arg == 0x1234);
     return TEST_FAIL;
 }
+#endif
 
 static s32 FPTestThread(s32 arg) {
     float x = 0.0;
@@ -1716,7 +1718,7 @@ static bool MiscTests(void) {
         MosPrint(" Failed\n");
         tests_all_pass = false;
     }
-#if (__ARM_ARCH_8M_MAIN__ == 1U) || (defined(__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE >= 3))
+#if (MOS_ENABLE_SPLIM_SUPPORT == true)
     //
     // PSPLIM tests
     //
