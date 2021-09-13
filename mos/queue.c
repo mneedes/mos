@@ -9,25 +9,22 @@
 //
 
 #include <mos/queue.h>
+#include <mos/arch.h>
 
 MOS_ISR_SAFE static void CopyToTail(MosQueue * queue, const u32 * data) {
-    asm volatile ( "cpsid if" );
+    DisableInterrupts();
     for (u32 ix = 0; ix < queue->elm_size; ix++) *queue->tail++ = *data++;
     if (queue->tail == queue->end) queue->tail = queue->begin;
-    asm volatile (
-        "dmb\n"
-        "cpsie if"
-    );
+    asm volatile ( "dmb" );
+    EnableInterrupts();
 }
 
 MOS_ISR_SAFE static void CopyFromHead(MosQueue * queue, u32 * data) {
-    asm volatile ( "cpsid if" );
+    DisableInterrupts();
     for (u32 ix = 0; ix < queue->elm_size; ix++) *data++ = *queue->head++;
     if (queue->head == queue->end) queue->head = queue->begin;
-    asm volatile (
-        "dmb\n"
-        "cpsie if"
-    );
+    asm volatile ( "dmb" );
+    EnableInterrupts();
 }
 
 void MosInitQueue(MosQueue * queue, void * begin, u32 elm_size, u32 num_elm) {

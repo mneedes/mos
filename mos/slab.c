@@ -5,6 +5,7 @@
 // "License") included under this distribution.
 
 #include <mos/slab.h>
+#include <mos/arch.h>
 
 /*
  * MOS Slab Allocator
@@ -94,10 +95,10 @@ u32 MosAddSlabsToPool(MosPool * pool, u32 max_to_add) {
             buf += pool->block_size;
         }
         slab->avail_blocks = pool->blocks_per_slab;
-        asm volatile ( "cpsid if" );
+        DisableInterrupts();
         MosAddToList(&pool->free_q, &slab->slab_link);
         pool->avail_blocks += pool->blocks_per_slab;
-        asm volatile ( "cpsie if" );
+        EnableInterrupts();
     }
     return slabs_added_cnt;
 }
@@ -107,15 +108,15 @@ u32 MosFreeUnallocatedSlabs(MosPool * pool, u32 max_to_remove) {
     u32 slabs_removed_cnt = 0;
     while (1) {
         if (slabs_removed_cnt == max_to_remove) break;
-        asm volatile ( "cpsid if" );
+        DisableInterrupts();
         if (MosIsListEmpty(&pool->free_q)) {
-            asm volatile ( "cpsie if" );
+            EnableInterrupts();
             break;
         }
         pool->avail_blocks -= pool->blocks_per_slab;
         MosList * elm = pool->free_q.next;
         MosRemoveFromList(elm);
-        asm volatile ( "cpsie if" );
+        EnableInterrupts();
         MosFree(pool->heap, container_of(elm, Slab, slab_link));
         slabs_removed_cnt++;
     }
@@ -123,7 +124,7 @@ u32 MosFreeUnallocatedSlabs(MosPool * pool, u32 max_to_remove) {
 }
 
 void * MosAllocFromSlab(MosPool * pool) {
-    asm volatile ( "cpsid if" );
+    DisableInterrupts();
     if (pool->avail_blocks) {
         pool->avail_blocks--;
         Slab * slab;
@@ -142,16 +143,16 @@ void * MosAllocFromSlab(MosPool * pool) {
         MosList * elm = slab->blk_q.next;
         MosRemoveFromList(elm);
         Block * block = container_of(elm, Block, fl_link);
-        asm volatile ( "cpsie if" );
+        EnableInterrupts();
         return &block->payload;
     }
-    asm volatile ( "cpsie if" );
+    EnableInterrupts();
     return NULL;
 }
 
 void MosFreeToSlab(MosPool * pool, void * _block) {
     Block * block = (Block *) ((u32 *) _block - 1);
-    asm volatile ( "cpsid if" );
+    DisableInterrupts();
     pool->avail_blocks++;
     MosAddToList(&block->slab->blk_q, &block->fl_link);
     block->slab->avail_blocks++;
@@ -162,5 +163,5 @@ void MosFreeToSlab(MosPool * pool, void * _block) {
         MosRemoveFromList(&block->slab->slab_link);
         MosAddToList(&pool->free_q, &block->slab->slab_link);
     }
-    asm volatile ( "cpsie if" );
+    EnableInterrupts();
 }
