@@ -148,7 +148,7 @@ void MOS_ISR_SAFE MosDisableInterrupts(void) {
 
 void MOS_ISR_SAFE MosEnableInterrupts(void) {
     if (IntDisableCount == 0) return;
-    if (--IntDisableCount == 0) EnableInterrupts();
+    if (--IntDisableCount == 0) EnableInterruptsWithBarrier();
 }
 
 static MOS_INLINE void SetThreadState(Thread * thd, ThreadState state) {
@@ -410,8 +410,8 @@ static s32 IdleThreadEntry(s32 arg) {
             }
             SysTick->CTRL = MOS_SYSTICK_CTRL_ENABLE;
         }
-        asm volatile ( "cpsie i\n"
-                       "dsb\n"                    //  TODO: Maybe dsb first
+        asm volatile ( "dsb\n"
+                       "cpsie i\n"
                        "isb" ::: "memory" );
     }
     return 0;
@@ -750,8 +750,7 @@ void MosRunScheduler(void) {
     );
     // Invoke PendSV handler to start scheduler (first context switch)
     SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
-    // Enable interrupts (with barrier)
-    EnableInterrupts();
+    EnableInterruptsWithBarrier();
     // Not reachable
     MosAssert(0);
 }

@@ -76,8 +76,20 @@ static MOS_INLINE void DisableInterrupts(void) {
 }
 
 static MOS_INLINE void EnableInterrupts(void) {
+    asm volatile ( "cpsie if" );
+}
+
+static MOS_INLINE void EnableInterruptsWithBarrier(void) {
+    // Provides barrier to ensure pending interrupt executes before
+    //   subsequent instructions.
     asm volatile ( "cpsie if\n"
                    "isb" );
+}
+
+static MOS_INLINE void ExecutePendingInterrupts(void) {
+    // Execute and pending interrupts (does not require isb)
+    asm volatile ( "cpsie if\n"
+                   "cpsid if" );
 }
 
 //
@@ -92,7 +104,8 @@ static MOS_INLINE void LockScheduler(u32 pri) {
 }
 
 static MOS_INLINE void UnlockScheduler(void) {
-    asm volatile ( "cpsie if" );
+    asm volatile ( "cpsie if\n"
+                   "isb" );
 }
 
 #elif (MOS_ARCH_CAT == MOS_ARCH_ARM_CORTEX_M_MAIN)

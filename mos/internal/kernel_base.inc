@@ -126,9 +126,7 @@ void MosWaitForSem(MosSem * sem) {
         MosAddToListBefore(elm, &RunningThread->run_link);
         RunningThread->state = THREAD_WAIT_FOR_SEM;
         YieldThread();
-        EnableInterrupts();
-        // Scheduler is invoked here
-        DisableInterrupts();
+        ExecutePendingInterrupts();
     }
     sem->value--;
     asm volatile ( "dmb" );
@@ -151,7 +149,7 @@ bool MosWaitForSemOrTO(MosSem * sem, u32 ticks) {
         MosAddToListBefore(elm, &RunningThread->run_link);
         RunningThread->state = THREAD_WAIT_FOR_SEM_OR_TICK;
         YieldThread();
-        EnableInterrupts();
+        EnableInterruptsWithBarrier();
         // Scheduler is invoked here
         if (RunningThread->timed_out) return false;
         DisableInterrupts();
@@ -206,9 +204,7 @@ u32 MosWaitForSignal(MosSem * sem) {
         MosAddToListBefore(elm, &RunningThread->run_link);
         RunningThread->state = THREAD_WAIT_FOR_SEM;
         YieldThread();
-        EnableInterrupts();
-        // Scheduler is invoked here
-        DisableInterrupts();
+        ExecutePendingInterrupts(); // Scheduler is invoked here
     }
     u32 mask = sem->value;
     sem->value = 0;
@@ -233,7 +229,7 @@ u32 MosWaitForSignalOrTO(MosSem * sem, u32 ticks) {
         MosAddToListBefore(elm, &RunningThread->run_link);
         RunningThread->state = THREAD_WAIT_FOR_SEM_OR_TICK;
         YieldThread();
-        EnableInterrupts();
+        EnableInterruptsWithBarrier();
         // Scheduler is invoked here
         if (RunningThread->timed_out) return 0;
         DisableInterrupts();
