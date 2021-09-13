@@ -81,7 +81,7 @@ static MOS_INLINE void UnlockScheduler(void) {
     asm volatile ( "cpsie if" );
 }
 
-#elif (MOS_ARCH == MOS_ARCH_ARM_CORTEX_M_MAIN)
+#elif (MOS_ARCH_CAT == MOS_ARCH_ARM_CORTEX_M_MAIN)
 
 static MOS_INLINE void LockScheduler(u32 pri) {
     asm volatile (
