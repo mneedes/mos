@@ -143,16 +143,12 @@ void MosRegisterWakeHook(MosWakeHook * hook) { WakeHook = hook; }
 void MosRegisterEventHook(MosEventHook * hook) { EventHook = hook; }
 
 void MOS_ISR_SAFE MosDisableInterrupts(void) {
-    if (IntDisableCount++ == 0) {
-        asm volatile ( "cpsid if" );
-    }
+    if (IntDisableCount++ == 0) DisableInterrupts();
 }
 
 void MOS_ISR_SAFE MosEnableInterrupts(void) {
     if (IntDisableCount == 0) return;
-    if (--IntDisableCount == 0) {
-        asm volatile ( "cpsie if" );
-    }
+    if (--IntDisableCount == 0) EnableInterrupts();
 }
 
 static MOS_INLINE void SetThreadState(Thread * thd, ThreadState state) {
@@ -191,20 +187,20 @@ u32 MosGetTickCount(void) {
 }
 
 u64 MosGetCycleCount(void) {
-    asm volatile ( "cpsid if" );
+    DisableInterrupts();
     if (SysTick->CTRL & SysTick_CTRL_COUNTFLAG_Msk) Tick.count++;
     s64 tmp = Tick.count;
     u32 val = SysTick->VAL;
-    asm volatile ( "cpsie if" );
+    EnableInterrupts();
     return (tmp * CyclesPerTick) - val;
 }
 
 void MosAdvanceTickCount(u32 ticks) {
     if (ticks) {
-        asm volatile ( "cpsid if" );
+        DisableInterrupts();
         Tick.count += ticks;
         SCB->ICSR = SCB_ICSR_PENDSTSET_Msk;
-        asm volatile ( "cpsie if" );
+        EnableInterrupts();
     }
 }
 
@@ -415,7 +411,7 @@ static s32 IdleThreadEntry(s32 arg) {
             SysTick->CTRL = MOS_SYSTICK_CTRL_ENABLE;
         }
         asm volatile ( "cpsie i\n"
-                       "dsb\n"
+                       "dsb\n"                    //  TODO: Maybe dsb first
                        "isb" ::: "memory" );
     }
     return 0;
@@ -503,9 +499,9 @@ bool MosInitThread(MosThread * _thd, MosThreadPriority pri,
         if (MosIsOnList(&thd->tmr_link.link))
             MosRemoveFromList(&thd->tmr_link.link);
         // Lock because thread might be on semaphore pend queue
-        asm volatile ( "cpsid if" );
+        DisableInterrupts();
         MosRemoveFromList(&thd->run_link);
-        asm volatile ( "cpsie if" );
+        EnableInterrupts();
         break;
     }
     SetThreadState(thd, THREAD_UNINIT);
@@ -739,13 +735,12 @@ void MosInit(void) {
 //
 
 void MosRunScheduler(void) {
-    // Start PSP in a safe place for first PendSV and then enable interrupts
+    // Start PSP in a safe place for first PendSV
     asm volatile (
         "ldr r0, psp_start\n"
         "msr psp, r0\n"
         "mov r0, #0\n"
         "msr basepri, r0\n"
-        "cpsie if\n"
         "b SkipRS\n"
         ".balign 4\n"
         // 112 (28 words) is enough to store a dummy FP stack frame
@@ -755,15 +750,16 @@ void MosRunScheduler(void) {
     );
     // Invoke PendSV handler to start scheduler (first context switch)
     SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
-    asm volatile ( "isb" );
+    // Enable interrupts (with barrier)
+    EnableInterrupts();
     // Not reachable
     MosAssert(0);
 }
 
 void SysTick_Handler(void) {
-    asm volatile ( "cpsid if" );
+    DisableInterrupts();
     if (SysTick->CTRL & SysTick_CTRL_COUNTFLAG_Msk) Tick.count += 1;
-    asm volatile ( "cpsie if" );
+    EnableInterrupts();
     if (RunningThread == NO_SUCH_THREAD) return;
     // Process timer queue
     //  Timer queues can contain threads or message timers
@@ -776,9 +772,9 @@ void SysTick_Handler(void) {
             if (rem_ticks <= 0) {
                 MosRemoveFromList(elm);
                 // Lock interrupts since thread could be on semaphore pend queue
-                asm volatile ( "cpsid if" );
+                DisableInterrupts();
                 MosRemoveFromList(&thd->run_link);
-                asm volatile ( "cpsie if" );
+                EnableInterrupts();
                 MosAddToList(&RunQueues[thd->pri], &thd->run_link);
                 thd->timed_out = 1;
                 SetThreadState(thd, THREAD_RUNNABLE);
@@ -845,7 +841,7 @@ static u32 MOS_USED Scheduler(u32 sp) {
     //  Event queue allows ISRs to signal semaphores without directly
     //  manipulating run queues, making critical sections shorter
     while (1) {
-        asm volatile ( "cpsid if" );
+        DisableInterrupts();
         if (!MosIsListEmpty(&ISREventQueue)) {
             MosLink * elm = ISREventQueue.next;
             MosRemoveFromList(elm);
@@ -855,15 +851,15 @@ static u32 MOS_USED Scheduler(u32 sp) {
             if (!MosIsListEmpty(&sem->pend_q)) {
                 MosLink * elm = sem->pend_q.next;
                 MosRemoveFromList(elm);
-                asm volatile ( "cpsie if" );
+                EnableInterrupts();
                 Thread * thd = container_of(elm, Thread, run_link);
                 MosAddToFrontOfList(&RunQueues[thd->pri], elm);
                 if (MosIsOnList(&thd->tmr_link.link))
                     MosRemoveFromList(&thd->tmr_link.link);
                 SetThreadState(thd, THREAD_RUNNABLE);
-            } else asm volatile ( "cpsie if" );
+            } else EnableInterrupts();
         } else {
-            asm volatile ( "cpsie if" );
+            EnableInterrupts();
             break;
         }
     }
@@ -883,7 +879,7 @@ static u32 MOS_USED Scheduler(u32 sp) {
             MosMoveToEndOfList(&RunQueues[run_thd->pri], &run_thd->run_link);
     } else run_thd = &IdleThread;
     if (MOS_ENABLE_SPLIM_SUPPORT) {
-        asm volatile ( "MSR psplim, %0" : : "r" (run_thd->stack_bottom) );
+        asm volatile ( "msr psplim, %0" : : "r" (run_thd->stack_bottom) );
     }
     // Set next thread ID and errno and return its stack pointer
     RunningThread = run_thd;

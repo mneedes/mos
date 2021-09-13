@@ -68,8 +68,22 @@
 #define MOS_SYSTICK_CTRL_DISABLE  (SysTick_CTRL_CLKSOURCE_Msk)
 
 //
-// Scheduler Locking
+// Interrupt locking
 //
+
+static MOS_INLINE void DisableInterrupts(void) {
+    asm volatile ( "cpsid if" );
+}
+
+static MOS_INLINE void EnableInterrupts(void) {
+    asm volatile ( "cpsie if\n"
+                   "isb" );
+}
+
+//
+// Scheduler locking
+//
+
 #if (MOS_ARCH_CAT == MOS_ARCH_ARM_CORTEX_M_BASE)
 
 static MOS_INLINE void LockScheduler(u32 pri) {

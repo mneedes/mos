@@ -113,7 +113,7 @@ void MosUnlockMutex(MosMutex * mtx) {
 }
 
 void MosWaitForSem(MosSem * sem) {
-    asm volatile ( "cpsid if" );
+    DisableInterrupts();
     while (sem->value == 0) {
         MosLink * elm = sem->pend_q.next;
         for (; elm != &sem->pend_q; elm = elm->next) {
@@ -126,18 +126,18 @@ void MosWaitForSem(MosSem * sem) {
         MosAddToListBefore(elm, &RunningThread->run_link);
         RunningThread->state = THREAD_WAIT_FOR_SEM;
         YieldThread();
-        asm volatile ( "cpsie if" );
+        EnableInterrupts();
         // Scheduler is invoked here
-        asm volatile ( "cpsid if" );
+        DisableInterrupts();
     }
     sem->value--;
     asm volatile ( "dmb" );
-    asm volatile ( "cpsie if" );
+    EnableInterrupts();
 }
 
 bool MosWaitForSemOrTO(MosSem * sem, u32 ticks) {
     SetTimeout(ticks);
-    asm volatile ( "cpsid if" );
+    DisableInterrupts();
     while (sem->value == 0) {
         RunningThread->timed_out = 0;
         MosLink * elm = sem->pend_q.next;
@@ -151,35 +151,32 @@ bool MosWaitForSemOrTO(MosSem * sem, u32 ticks) {
         MosAddToListBefore(elm, &RunningThread->run_link);
         RunningThread->state = THREAD_WAIT_FOR_SEM_OR_TICK;
         YieldThread();
-        asm volatile (
-            "cpsie if\n"
-            "isb"
-        );
+        EnableInterrupts();
         // Scheduler is invoked here
         if (RunningThread->timed_out) return false;
-        asm volatile ( "cpsid if" );
+        DisableInterrupts();
     }
     sem->value--;
     asm volatile ( "dmb" );
-    asm volatile ( "cpsie if" );
+    EnableInterrupts();
     return true;
 }
 
 bool MOS_ISR_SAFE MosTrySem(MosSem * sem) {
     bool success = true;
-    asm volatile ( "cpsid if" );
+    DisableInterrupts();
     if (sem->value > 0) {
         sem->value--;
         asm volatile ( "dmb" );
     } else {
         success = false;
     }
-    asm volatile ( "cpsie if" );
+    EnableInterrupts();
     return success;
 }
 
 void MOS_ISR_SAFE MosIncrementSem(MosSem * sem) {
-    asm volatile ( "cpsid if" );
+    DisableInterrupts();
     sem->value++;
     asm volatile ( "dmb" );
     // This places the semaphore on event queue to be processed by
@@ -192,11 +189,11 @@ void MOS_ISR_SAFE MosIncrementSem(MosSem * sem) {
         // Yield if released thread has higher priority than running thread
         if (RunningThread && thd->pri < RunningThread->pri) YieldThread();
     }
-    asm volatile ( "cpsie if" );
+    EnableInterrupts();
 }
 
 u32 MosWaitForSignal(MosSem * sem) {
-    asm volatile ( "cpsid if" );
+    DisableInterrupts();
     while (sem->value == 0) {
         MosLink * elm = sem->pend_q.next;
         for (; elm != &sem->pend_q; elm = elm->next) {
@@ -209,20 +206,20 @@ u32 MosWaitForSignal(MosSem * sem) {
         MosAddToListBefore(elm, &RunningThread->run_link);
         RunningThread->state = THREAD_WAIT_FOR_SEM;
         YieldThread();
-        asm volatile ( "cpsie if" );
+        EnableInterrupts();
         // Scheduler is invoked here
-        asm volatile ( "cpsid if" );
+        DisableInterrupts();
     }
     u32 mask = sem->value;
     sem->value = 0;
     asm volatile ( "dmb" );
-    asm volatile ( "cpsie if" );
+    EnableInterrupts();
     return mask;
 }
 
 u32 MosWaitForSignalOrTO(MosSem * sem, u32 ticks) {
     SetTimeout(ticks);
-    asm volatile ( "cpsid if" );
+    DisableInterrupts();
     while (sem->value == 0) {
         RunningThread->timed_out = 0;
         MosLink * elm = sem->pend_q.next;
@@ -236,32 +233,29 @@ u32 MosWaitForSignalOrTO(MosSem * sem, u32 ticks) {
         MosAddToListBefore(elm, &RunningThread->run_link);
         RunningThread->state = THREAD_WAIT_FOR_SEM_OR_TICK;
         YieldThread();
-        asm volatile (
-            "cpsie if\n"
-            "isb"
-        );
+        EnableInterrupts();
         // Scheduler is invoked here
         if (RunningThread->timed_out) return 0;
-        asm volatile ( "cpsid if" );
+        DisableInterrupts();
     }
     u32 mask = sem->value;
     sem->value = 0;
     asm volatile ( "dmb" );
-    asm volatile ( "cpsie if" );
+    EnableInterrupts();
     return mask;
 }
 
 u32 MOS_ISR_SAFE MosPollSignal(MosSem * sem) {
-    asm volatile ( "cpsid if" );
+    DisableInterrupts();
     u32 mask = sem->value;
     sem->value = 0;
     asm volatile ( "dmb" );
-    asm volatile ( "cpsie if" );
+    EnableInterrupts();
     return mask;
 }
 
 void MOS_ISR_SAFE MosRaiseSignal(MosSem * sem, u32 flags) {
-    asm volatile ( "cpsid if" );
+    DisableInterrupts();
     sem->value |= flags;
     asm volatile ( "dmb" );
     // This places the semaphore on event queue to be processed by
@@ -274,7 +268,7 @@ void MOS_ISR_SAFE MosRaiseSignal(MosSem * sem, u32 flags) {
         // Yield if released thread has higher priority than running thread
         if (RunningThread && thd->pri < RunningThread->pri) YieldThread();
     }
-    asm volatile ( "cpsie if" );
+    EnableInterrupts();
 }
 
 //
