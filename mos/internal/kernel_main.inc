@@ -223,7 +223,7 @@ void MOS_NAKED MosWaitForSem(MosSem * sem) {
 static bool MOS_USED BlockOnSemOrTO(MosSem * sem) {
     bool timeout = false;
     // Lock in case semaphore is about to be given by another context.
-    asm volatile ( "cpsid if" );
+    DisableInterrupts();
     // Immediately retry (don't block) if count has since incremented
     if (sem->value == 0) {
         RunningThread->timed_out = 0;
@@ -239,13 +239,10 @@ static bool MOS_USED BlockOnSemOrTO(MosSem * sem) {
         RunningThread->state = THREAD_WAIT_FOR_SEM_OR_TICK;
         YieldThread();
         // Must enable interrupts before checking timeout to allow pend
-        // Barrier ensures that pend occurs before checking timeout.
-        asm volatile (
-            "cpsie if\n"
-            "isb"
-        );
+        // Barrier ensures that pend occurs before checking timeoutj.
+        EnableInterrupts();
         if (RunningThread->timed_out) timeout = true;
-    } else asm volatile ( "cpsie if" );
+    } else EnableInterrupts();
     return timeout;
 }
 
@@ -304,7 +301,7 @@ static void MOS_USED MOS_ISR_SAFE ReleaseOnSem(MosSem * sem) {
     // This places the semaphore on event queue to be processed by
     // scheduler to avoid direct manipulation of run queues.  If run
     // queues were manipulated here critical sections would be larger.
-    asm volatile ( "cpsid if" );
+    DisableInterrupts();
     // Only add event if pend_q is not empty and event not already queued
     if (!MosIsListEmpty(&sem->pend_q) && !MosIsOnList(&sem->evt_link)) {
         MosAddToList(&ISREventQueue, &sem->evt_link);
@@ -312,7 +309,7 @@ static void MOS_USED MOS_ISR_SAFE ReleaseOnSem(MosSem * sem) {
         // Yield if released thread has higher priority than running thread
         if (RunningThread && thd->pri < RunningThread->pri) YieldThread();
     }
-    asm volatile ( "cpsie if" );
+    EnableInterrupts();
 }
 
 void MOS_NAKED MOS_ISR_SAFE MosIncrementSem(MosSem * sem) {
