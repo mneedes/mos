@@ -14,13 +14,15 @@
 
 // Multi-writer / multi-reader blocking FIFO
 typedef struct MosQueue {
-    MosSem   sem_tail;
-    MosSem   sem_head;
-    u32    * begin;
-    u32    * end;
-    u32    * tail;
-    u32    * head;
-    u16      elm_size;
+    MosSem      sem_tail;
+    MosSem      sem_head;
+    u32       * begin;
+    u32       * end;
+    u32       * tail;
+    u32       * head;
+    u16         elm_size;
+    u16         channel;
+    MosSignal * signal;
 } MosQueue;
 
 // General Queue
@@ -35,6 +37,10 @@ void MosReceiveFromQueue(MosQueue * queue, void * data);
 MOS_ISR_SAFE bool MosTryReceiveFromQueue(MosQueue * queue, void * data);
 // Returns false on timeout, true if received
 bool MosReceiveFromQueueOrTO(MosQueue * queue, void * data, u32 ticks);
+
+/// Sets channel of signal to raise on queue send.
+/// \param channel channel number to set.  Signal bit is (1 << channel).
+void MosSetQueueChannel(MosQueue * queue, MosSignal * signal, u16 channel);
 
 // Easy to use queues with 32 bit data
 

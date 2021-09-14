@@ -14,7 +14,6 @@
 #include <errno.h>
 
 // TODO: multi-level priority inheritance / multiple mutexes at the same time
-// TODO: Waiting on multiple semaphores
 // TODO: Change wait queue position on priority change
 // TODO: Hooks for other timers such as LPTIM ?
 // TODO: Independence from cmsis
@@ -406,7 +405,7 @@ static s32 IdleThreadEntry(s32 arg) {
                 SysTick->LOAD = SysTick->VAL;
                 SysTick->VAL = 0;
                 SysTick->LOAD = CyclesPerTick - 1;
-                Tick.count += adj_tick_interval; // or adj_tick_interval - 1 ?
+                Tick.count += adj_tick_interval;
             }
             SysTick->CTRL = MOS_SYSTICK_CTRL_ENABLE;
         }

@@ -30,12 +30,18 @@ MOS_ISR_SAFE static void CopyFromHead(MosQueue * queue, u32 * data) {
 void MosInitQueue(MosQueue * queue, void * begin, u32 elm_size, u32 num_elm) {
     MosAssert((elm_size & 0x3) == 0x0);
     queue->elm_size = elm_size >> 2;
-    queue->begin    = (u32 *) begin;
+    queue->begin    = (u32 *)begin;
     queue->end      = queue->begin + (num_elm * queue->elm_size);
     queue->tail     = queue->begin;
     queue->head     = queue->begin;
+    queue->signal   = NULL;
     MosInitSem(&queue->sem_tail, num_elm);
     MosInitSem(&queue->sem_head, 0);
+}
+
+void MosSetQueueChannel(MosQueue * queue, MosSignal * signal, u16 channel) {
+    queue->channel = channel;
+    queue->signal  = signal;
 }
 
 void MosSendToQueue(MosQueue * queue, const void * data) {
@@ -45,6 +51,7 @@ void MosSendToQueue(MosQueue * queue, const void * data) {
     MosWaitForSem(&queue->sem_tail);
     CopyToTail(queue, data);
     MosIncrementSem(&queue->sem_head);
+    if (queue->signal) MosRaiseSignalForChannel(queue->signal, queue->channel);
 }
 
 MOS_ISR_SAFE bool MosTrySendToQueue(MosQueue * queue, const void * data) {
@@ -54,6 +61,7 @@ MOS_ISR_SAFE bool MosTrySendToQueue(MosQueue * queue, const void * data) {
     if (!MosTrySem(&queue->sem_tail)) return false;
     CopyToTail(queue, data);
     MosIncrementSem(&queue->sem_head);
+    if (queue->signal) MosRaiseSignalForChannel(queue->signal, queue->channel);
     return true;
 }
 
@@ -61,6 +69,7 @@ bool MosSendToQueueOrTO(MosQueue * queue, const void * data, u32 ticks) {
     if (MosWaitForSemOrTO(&queue->sem_tail, ticks)) {
         CopyToTail(queue, data);
         MosIncrementSem(&queue->sem_head);
+        if (queue->signal) MosRaiseSignalForChannel(queue->signal, queue->channel);
         return true;
     }
     return false;

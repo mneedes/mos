@@ -1261,6 +1261,43 @@ static bool QueueTests(void) {
 }
 
 //
+// Multiple Queue / Semaphore Tests
+//
+static bool MultiTests(void) {
+    bool tests_all_pass = true;
+    bool test_pass;
+
+    MosQueue  queue[3];
+    u32       queueBuf[3][4];
+    MosSignal signal;
+
+    test_pass = true;
+    MosPrint("Multi Queue Test 1\n");
+    MosInitSem(&signal, 0);
+    for (u16 chan = 0; chan < count_of(queue); chan++) {
+        MosInitQueue32(&queue[chan], queueBuf[chan], count_of(queueBuf[chan]));
+        MosSetQueueChannel(&queue[chan], &signal, chan);
+    }
+    MosSendToQueue32(&queue[0], 0);
+    MosSendToQueue32(&queue[1], 1);
+    MosSendToQueue32(&queue[2], 2);
+    u32 flags = MosWaitForSignal(&signal);
+    if (flags != 0x7) test_pass = false;
+    while (flags) {
+        u16 chan = MosGetNextChannel(&flags);
+        MosClearChannel(flags, chan);
+        u32 val = MosReceiveFromQueue32(&queue[chan]);
+        if (val != (u16)chan) test_pass = false;
+    }
+    if (test_pass) MosPrint(" Passed\n");
+    else {
+        MosPrint(" Failed\n");
+        tests_all_pass = false;
+    }
+    return tests_all_pass;
+}
+
+//
 // Mutex Tests
 //
 
@@ -1841,6 +1878,8 @@ static s32 CmdTest(s32 argc, char * argv[]) {
             test_pass = SemTests();
         } else if (strcmp(argv[1], "queue") == 0) {
             test_pass = QueueTests();
+        } else if (strcmp(argv[1], "multi") == 0) {
+            test_pass = MultiTests();
         } else if (strcmp(argv[1], "mutex") == 0) {
             test_pass = MutexTests();
         } else if (strcmp(argv[1], "heap") == 0) {

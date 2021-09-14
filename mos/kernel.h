@@ -67,6 +67,8 @@ typedef struct MosSem {
     MosLink evt_link;
 } MosSem;
 
+typedef MosSem MosSignal;
+
 typedef struct MosTimer {
     u32                ticks;
     u32                wake_tick;
@@ -218,11 +220,28 @@ MOS_ISR_SAFE void MosIncrementSem(MosSem * sem);
 //   (2) A Signal is a ganged 32-bit binary semaphore
 //       Single-reader / multiple-writer
 //       zero is returned for timeout or nothing polled
+//       Can be used for receiving data on multiple prioritized queues
+static MOS_INLINE void MosInitSignal(MosSignal * signal, u32 start_value) {
+    MosInitSem(signal, start_value);
+}
+u32 MosWaitForSignal(MosSignal * signal);
+u32 MosWaitForSignalOrTO(MosSignal * signal, u32 ticks);
+MOS_ISR_SAFE u32 MosPollSignal(MosSignal * signal);
+MOS_ISR_SAFE void MosRaiseSignal(MosSignal * signal, u32 flags);
+// A channel is one bit in a signal
+MOS_ISR_SAFE static MOS_INLINE void MosRaiseSignalForChannel(MosSignal * signal, u16 channel) {
+    MosRaiseSignal(signal, 1 << channel);
+}
+/// Obtain next set channel from flags
+///
+MOS_ISR_SAFE static MOS_INLINE s16 MosGetNextChannel(u32 * flags) {
+    if (*flags == 0) return -1;
+    return (s16)__builtin_ctz(*flags);
+}
+MOS_ISR_SAFE static MOS_INLINE void MosClearChannel(u32 * flags, s16 channel) {
+    if (channel > 0) *flags &= ~(1 << channel);
+}
 
-u32 MosWaitForSignal(MosSem * sem);
-u32 MosWaitForSignalOrTO(MosSem * sem, u32 ticks);
-MOS_ISR_SAFE u32 MosPollSignal(MosSem * sem);
-MOS_ISR_SAFE void MosRaiseSignal(MosSem * sem, u32 flags);
 
 //   (3) Binary semaphores are 1-bit signals
 
