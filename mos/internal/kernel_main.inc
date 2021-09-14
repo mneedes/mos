@@ -46,7 +46,6 @@ void MOS_NAKED PendSV_Handler(void) {
 
 static void MOS_USED BlockOnMutex(MosMutex * mtx) {
     LockScheduler(IntPriMaskLow);
-    asm volatile ( "dsb" );
     // Retry (don't block) if mutex has since been given
     if (mtx->owner != NO_SUCH_THREAD) {
         // Add thread to pend queue
@@ -137,7 +136,6 @@ bool MOS_NAKED MosTryMutex(MosMutex * mtx) {
 
 static void MOS_USED ReleaseMutex(MosMutex * mtx) {
     LockScheduler(IntPriMaskLow);
-    asm volatile ( "dsb" );
     if (!MosIsListEmpty(&mtx->pend_q)) {
         MosLink * elm = mtx->pend_q.next;
         Thread * thd = container_of(elm, Thread, run_link);
@@ -181,7 +179,7 @@ void MOS_NAKED MosUnlockMutex(MosMutex * mtx) {
 
 static void MOS_USED BlockOnSem(MosSem * sem) {
     // Lock in case semaphore is about to be given by another context.
-    asm volatile ( "cpsid if" );
+    DisableInterrupts();
     // Retry (don't block) if count has since incremented
     if (sem->value == 0) {
         MosLink * elm = sem->pend_q.next;
@@ -196,7 +194,7 @@ static void MOS_USED BlockOnSem(MosSem * sem) {
         RunningThread->state = THREAD_WAIT_FOR_SEM;
         YieldThread();
     }
-    asm volatile ( "cpsie if" );
+    EnableInterrupts();
 }
 
 void MOS_NAKED MosWaitForSem(MosSem * sem) {
@@ -239,8 +237,8 @@ static bool MOS_USED BlockOnSemOrTO(MosSem * sem) {
         RunningThread->state = THREAD_WAIT_FOR_SEM_OR_TICK;
         YieldThread();
         // Must enable interrupts before checking timeout to allow pend
-        // Barrier ensures that pend occurs before checking timeoutj.
-        EnableInterrupts();
+        // Barrier ensures that pend occurs before checking timeout.
+        EnableInterruptsWithBarrier();
         if (RunningThread->timed_out) timeout = true;
     } else EnableInterrupts();
     return timeout;
