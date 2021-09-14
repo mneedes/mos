@@ -1267,6 +1267,7 @@ static bool MultiTests(void) {
     bool tests_all_pass = true;
     bool test_pass;
 
+    // Three priority queues and shared signal
     MosQueue  queue[3];
     u32       queueBuf[3][4];
     MosSignal signal;
@@ -1285,7 +1286,7 @@ static bool MultiTests(void) {
     if (flags != 0x7) test_pass = false;
     while (flags) {
         u16 chan = MosGetNextChannel(&flags);
-        MosClearChannel(flags, chan);
+        MosClearChannel(&flags, chan);
         u32 val = MosReceiveFromQueue32(&queue[chan]);
         if (val != (u16)chan) test_pass = false;
     }

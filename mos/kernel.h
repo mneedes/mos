@@ -239,9 +239,8 @@ MOS_ISR_SAFE static MOS_INLINE s16 MosGetNextChannel(u32 * flags) {
     return (s16)__builtin_ctz(*flags);
 }
 MOS_ISR_SAFE static MOS_INLINE void MosClearChannel(u32 * flags, s16 channel) {
-    if (channel > 0) *flags &= ~(1 << channel);
+    if (channel >= 0) *flags &= ~(1 << channel);
 }
-
 
 //   (3) Binary semaphores are 1-bit signals
 
