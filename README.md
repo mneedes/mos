@@ -22,7 +22,7 @@ Design Goals:
 Included Primitives:
 * Recursive mutex with priority inheritance
 * Semaphores (counting / multi-bit binary)
-* Message queues
+* Message queues (multi-priority)
 * SysTick-based timers
 
 Included Optional Modules:
