@@ -159,7 +159,7 @@ static MOS_INLINE void SetThreadState(Thread * thd, ThreadState state) {
 static MOS_INLINE MOS_ISR_SAFE void YieldThread(void) {
     // Invoke PendSV handler to potentially perform context switch
     SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
-    asm volatile ( "isb" );
+    asm volatile ( "dsb" );
 }
 
 static MOS_INLINE void SetRunningThreadStateAndYield(ThreadState state) {

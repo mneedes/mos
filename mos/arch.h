@@ -87,7 +87,7 @@ static MOS_INLINE void EnableInterruptsWithBarrier(void) {
 }
 
 static MOS_INLINE void ExecutePendingInterrupts(void) {
-    // Execute and pending interrupts (does not require isb)
+    // Execute any pending interrupts (does not require isb)
     asm volatile ( "cpsie if\n"
                    "cpsid if" );
 }
