@@ -433,7 +433,7 @@ static void MOS_USED FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 lr) {
     };
     bool in_isr = ((lr & 0x8) == 0x0);
     bool fp_en = ((lr & 0x10) == 0x0);
-    u32 cfsr = SCB->CFSR;
+    u32 cfsr = MOS_REG(CFSR);
     if (PrintfHook) {
         u32 fault_no = (psr & 0xf) - 3;
         if (fault_no == 2 && (cfsr & 0x400)) fault_no = 4;
@@ -448,8 +448,8 @@ static void MOS_USED FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 lr) {
         if (fp_en) (*PrintfHook)("*** Lazy Floating Point Enabled ***\n");
 
         (*PrintfHook)(" HFSR: %08X  CFSR: %08X AFSR: %08X\n",
-                          SCB->HFSR, cfsr, SCB->AFSR);
-        (*PrintfHook)(" BFAR: %08X MMFAR: %08X\n\n", SCB->BFAR, SCB->MMFAR);
+                          MOS_REG(HFSR), cfsr, MOS_REG(AFSR));
+        (*PrintfHook)(" BFAR: %08X MMFAR: %08X\n\n", MOS_REG(BFAR), MOS_REG(MMFAR));
 
         bool use_psp = ((lr & 0x4) == 0x4);
         u32 * sp = use_psp ? psp : msp;
@@ -483,7 +483,7 @@ static void MOS_USED FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 lr) {
             while (1);
         } else {
             // Clear CFSR bits
-            SCB->CFSR = cfsr;
+            MOS_REG(CFSR) = cfsr;
             // Stop thread if fault occurred in thread context
             SetThreadState(RunningThread, THREAD_TIME_TO_STOP);
             YieldThread();

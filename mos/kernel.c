@@ -157,7 +157,7 @@ static MOS_INLINE void SetThreadState(Thread * thd, ThreadState state) {
 
 static MOS_INLINE MOS_ISR_SAFE void YieldThread(void) {
     // Invoke PendSV handler to potentially perform context switch
-    SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
+    MOS_REG(ICSR) = MOS_REG_VALUE(ICSR_PENDSV);
     asm volatile ( "dsb" );
 }
 
@@ -187,9 +187,9 @@ u32 MosGetTickCount(void) {
 
 u64 MosGetCycleCount(void) {
     DisableInterrupts();
-    if (SysTick->CTRL & SysTick_CTRL_COUNTFLAG_Msk) Tick.count++;
+    if (MOS_REG(TICK_CTRL) & MOS_REG_VALUE(TICK_FLAG)) Tick.count++;
     s64 tmp = Tick.count;
-    u32 val = SysTick->VAL;
+    u32 val = MOS_REG(TICK_VAL);
     EnableInterrupts();
     return (tmp * CyclesPerTick) - val;
 }
@@ -198,7 +198,7 @@ void MosAdvanceTickCount(u32 ticks) {
     if (ticks) {
         DisableInterrupts();
         Tick.count += ticks;
-        SCB->ICSR = SCB_ICSR_PENDSTSET_Msk;
+        MOS_REG(ICSR) = MOS_REG_VALUE(ICSR_PENDST);
         EnableInterrupts();
     }
 }
@@ -361,8 +361,8 @@ static s32 IdleThreadEntry(s32 arg) {
     while (1) {
         // Disable interrupts and timer
         asm volatile ( "cpsid i" ::: "memory" );
-        SysTick->CTRL = MOS_SYSTICK_CTRL_DISABLE;
-        if (SysTick->CTRL & SysTick_CTRL_COUNTFLAG_Msk) Tick.count += 1;
+        MOS_REG(TICK_CTRL) = MOS_REG_VALUE(TICK_DISABLE);
+        if (MOS_REG(TICK_CTRL) & MOS_REG_VALUE(TICK_FLAG)) Tick.count += 1;
         // Figure out how long to wait
         s32 tick_interval = MaxTickInterval;
         if (!MosIsListEmpty(&TimerQueue)) {
@@ -381,33 +381,33 @@ static s32 IdleThreadEntry(s32 arg) {
         }
         u32 load = 0;
         if (tick_interval != 1) {
-            load = (tick_interval - 1) * CyclesPerTick + SysTick->VAL - 1;
-            SysTick->LOAD = load;
-            SysTick->VAL = 0;
+            load = (tick_interval - 1) * CyclesPerTick + MOS_REG(TICK_VAL) - 1;
+            MOS_REG(TICK_LOAD) = load;
+            MOS_REG(TICK_VAL) = 0;
         }
         if (SleepHook) (*SleepHook)();
-        SysTick->CTRL = MOS_SYSTICK_CTRL_ENABLE;
+        MOS_REG(TICK_CTRL) = MOS_REG_VALUE(TICK_ENABLE);
         asm volatile (
             "dsb\n"
             "wfi" ::: "memory"
         );
         if (WakeHook) (*WakeHook)();
         if (load) {
-            SysTick->CTRL = MOS_SYSTICK_CTRL_DISABLE;
-            if (SysTick->CTRL & SysTick_CTRL_COUNTFLAG_Msk) {
+            MOS_REG(TICK_CTRL) = MOS_REG_VALUE(TICK_DISABLE);
+            if (MOS_REG(TICK_CTRL) & MOS_REG_VALUE(TICK_FLAG)) {
                 // If counter rolled over then account for all ticks
-                SysTick->LOAD = CyclesPerTick - 1;
-                SysTick->VAL = 0;
+                MOS_REG(TICK_LOAD) = CyclesPerTick - 1;
+                MOS_REG(TICK_VAL) = 0;
                 Tick.count += tick_interval;
             } else {
                 // Interrupt was early so account for elapsed ticks
-                u32 adj_tick_interval = (load - SysTick->VAL) / CyclesPerTick;
-                SysTick->LOAD = SysTick->VAL;
-                SysTick->VAL = 0;
-                SysTick->LOAD = CyclesPerTick - 1;
+                u32 adj_tick_interval = (load - MOS_REG(TICK_VAL)) / CyclesPerTick;
+                MOS_REG(TICK_LOAD) = MOS_REG(TICK_VAL);
+                MOS_REG(TICK_VAL) = 0;
+                MOS_REG(TICK_LOAD) = CyclesPerTick - 1;
                 Tick.count += adj_tick_interval;
             }
-            SysTick->CTRL = MOS_SYSTICK_CTRL_ENABLE;
+            MOS_REG(TICK_CTRL) = MOS_REG_VALUE(TICK_ENABLE);
         }
         asm volatile ( "dsb\n"
                        "cpsie i\n"
@@ -419,8 +419,8 @@ static s32 IdleThreadEntry(s32 arg) {
 void MOS_ISR_SAFE MosYieldThread(void) {
     if (RunningThread == NO_SUCH_THREAD) return;
     // Invoke PendSV handler to potentially perform context switch
-    SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
-    asm volatile ( "isb" );
+    MOS_REG(ICSR) = MOS_REG_VALUE(ICSR_PENDSV);
+    asm volatile ( "dsb" );
 }
 
 MosThread * MosGetThreadPtr(void) {
@@ -671,29 +671,28 @@ void MosInit(void) {
 #if (MOS_ARCH_CAT == MOS_ARCH_ARM_CORTEX_M_MAIN)
     // Trap Divide By 0 and (optionally) "Unintentional" Unaligned Accesses
     if (MOS_ENABLE_UNALIGN_FAULTS) {
-        SCB->CCR |= (SCB_CCR_DIV_0_TRP_Msk | SCB_CCR_UNALIGN_TRP_Msk);
+        MOS_REG(CCR) |= (MOS_REG_VALUE(DIV0_TRAP) | MOS_REG_VALUE(UNALIGN_TRAP));
     } else {
-        SCB->CCR |=  (SCB_CCR_DIV_0_TRP_Msk);
-        SCB->CCR &= ~(SCB_CCR_UNALIGN_TRP_Msk);
+        MOS_REG(CCR) |=  MOS_REG_VALUE(DIV0_TRAP);
+        MOS_REG(CCR) &= ~MOS_REG_VALUE(UNALIGN_TRAP);
     }
     // Enable Bus, Memory and Usage Faults in general
-    SCB->SHCSR |= (SCB_SHCSR_BUSFAULTENA_Msk | SCB_SHCSR_MEMFAULTENA_Msk |
-                   SCB_SHCSR_USGFAULTENA_Msk);
+    MOS_REG(SHCSR) |= MOS_REG_VALUE(FAULT_ENABLE);
     if (MOS_FP_LAZY_CONTEXT_SWITCHING) {
         // Ensure lazy stacking is enabled (for floating point)
-        FPU->FPCCR |= (FPU_FPCCR_ASPEN_Msk | FPU_FPCCR_LSPEN_Msk);
+        MOS_REG(FPCCR) |=  MOS_REG_VALUE(LAZY_STACKING);
     } else {
-        FPU->FPCCR &= ~(FPU_FPCCR_ASPEN_Msk | FPU_FPCCR_LSPEN_Msk);
+        MOS_REG(FPCCR) &= ~MOS_REG_VALUE(LAZY_STACKING);
     }
 #endif
 #if (MOS_ARM_SECURITY_SUPPORT == true)
     // Detect security mode and set Exception Return accordingly
-    if (SCB->CPUID_NS == 0) ExcReturnInitial = MOS_EXC_RETURN_UNSECURE;
+    if (MOS_REG(CPUID_NS) == 0) ExcReturnInitial = MOS_EXC_RETURN_UNSECURE;
 #endif
     // Save errno pointer for use during context switch
     ErrNo = __errno();
     // Set up timers with tick-reduction
-    CyclesPerTick = SysTick->LOAD + 1;
+    CyclesPerTick = MOS_REG(TICK_LOAD) + 1;
     MaxTickInterval = ((1 << 24) - 1) / CyclesPerTick;
     CyclesPerMicroSec = CyclesPerTick / MOS_MICRO_SEC_PER_TICK;
     // Set lowest preemption priority for SysTick and PendSV (highest number).
@@ -748,7 +747,7 @@ void MosRunScheduler(void) {
             : : : "r0"
     );
     // Invoke PendSV handler to start scheduler (first context switch)
-    SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
+    YieldThread();
     EnableInterruptsWithBarrier();
     // Not reachable
     MosAssert(0);
@@ -756,7 +755,7 @@ void MosRunScheduler(void) {
 
 void SysTick_Handler(void) {
     DisableInterrupts();
-    if (SysTick->CTRL & SysTick_CTRL_COUNTFLAG_Msk) Tick.count += 1;
+    if (MOS_REG(TICK_CTRL) & MOS_REG_VALUE(TICK_FLAG)) Tick.count += 1;
     EnableInterrupts();
     if (RunningThread == NO_SUCH_THREAD) return;
     // Process timer queue
