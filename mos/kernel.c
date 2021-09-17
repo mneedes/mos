@@ -669,6 +669,12 @@ void MosSetTermArg(MosThread * _thd, s32 arg) {
 
 // TODO: auto tick startup?
 void MosInit(void) {
+    // Save errno pointer for use during context switch
+    ErrNo = __errno();
+    // Set up timers with tick-reduction
+    CyclesPerTick = SysTick->LOAD + 1;
+    MaxTickInterval = ((1 << 24) - 1) / CyclesPerTick;
+    CyclesPerMicroSec = CyclesPerTick / MOS_MICRO_SEC_PER_TICK;
 #if (MOS_ARCH_CAT == MOS_ARCH_ARM_CORTEX_M_MAIN)
     // Trap Divide By 0 and (optionally) "Unintentional" Unaligned Accesses
     if (MOS_ENABLE_UNALIGN_FAULTS) {
@@ -686,17 +692,6 @@ void MosInit(void) {
     } else {
         FPU->FPCCR &= ~(FPU_FPCCR_ASPEN_Msk | FPU_FPCCR_LSPEN_Msk);
     }
-#endif
-#if (MOS_ARM_SECURITY_SUPPORT == true)
-    // Detect security mode and set Exception Return accordingly
-    if (SCB->CPUID_NS == 0) ExcReturnInitial = MOS_EXC_RETURN_UNSECURE;
-#endif
-    // Save errno pointer for use during context switch
-    ErrNo = __errno();
-    // Set up timers with tick-reduction
-    CyclesPerTick = SysTick->LOAD + 1;
-    MaxTickInterval = ((1 << 24) - 1) / CyclesPerTick;
-    CyclesPerMicroSec = CyclesPerTick / MOS_MICRO_SEC_PER_TICK;
     // Set lowest preemption priority for SysTick and PendSV (highest number).
     // MOS requires that SysTick and PendSV share the same priority.
     u32 pri_grp = NVIC_GetPriorityGrouping();
@@ -718,6 +713,16 @@ void MosInit(void) {
         NVIC_SetPriority(SysTick_IRQn, pri);
         NVIC_SetPriority(PendSV_IRQn, NVIC_EncodePriority(pri_grp, pri_low, subpri + 1));
     }
+#elif (MOS_ARCH_CAT == MOS_ARCH_ARM_CORTEX_M_BASE)
+    /* Set lowest priority for SysTick and PendSV */
+    volatile u32 * shpr3 = (volatile u32 *)0xe000ed20;
+    *shpr3 = 0xc0c00000;
+    u32 pri_low = 3;
+#endif
+#if (MOS_ARM_SECURITY_SUPPORT == true)
+    // Detect security mode and set Exception Return accordingly
+    if (SCB->CPUID_NS == 0) ExcReturnInitial = MOS_EXC_RETURN_UNSECURE;
+#endif
     // Initialize empty queues
     for (MosThreadPriority pri = 0; pri < MOS_MAX_THREAD_PRIORITIES; pri++)
         MosInitList(&RunQueues[pri]);
