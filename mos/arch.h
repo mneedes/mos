@@ -130,6 +130,7 @@ static MOS_INLINE void UnlockScheduler(void) {
 #define MOS_VAL_ICSR_PENDSV    (0x1 << 28)
 
 #define MOS_REG_AIRCR          (*(volatile u32 *)0xe000ed0c)
+#define MOS_GET_PRI_GROUP_NUM  ((MOS_REG_AIRCR >> 8) & 0x7)
 #define MOS_VAL_AIRCR_MASK     0x00006030
 #define MOS_VAL_VECTKEY        0x05fa0000
 
@@ -160,6 +161,8 @@ static MOS_INLINE void UnlockScheduler(void) {
 #define MOS_VAL_DEBUG_ENABLED  (0x1)
 
 // Interrupts
+#define MOS_REG_SHPR(x)        (*((volatile u8 *)0xe000ed18 + (x)))
+#define MOS_REG_SHPR3          (*((volatile u32 *)0xe000ed20)
 #define MOS_PENDSV_IRQ         14
 #define MOS_SYSTICK_IRQ        15
 

@@ -1868,6 +1868,7 @@ static s32 CmdTest(s32 argc, char * argv[]) {
             if (TimerTests() == false) test_pass = false;
             if (SemTests() == false) test_pass = false;
             if (QueueTests() == false) test_pass = false;
+            if (MultiTests() == false) test_pass = false;
             if (MutexTests() == false) test_pass = false;
             if (HeapTests() == false) test_pass = false;
             if (MiscTests() == false) test_pass = false;
@@ -1965,7 +1966,16 @@ static s32 TestShell(s32 arg) {
 int InitTestBench() {
     HalTestsInit();
 
-    //DWT->CYCCNT -> COOL, High resolution timer built-in
+#if 0
+    // Try out cycle counter (if implemented)
+    MosPrintf("%X . %X\n", DWT->CTRL, CoreDebug->DEMCR);
+    DWT->CTRL = 0x1;
+    CoreDebug->DEMCR = 1 << 24;
+    MosPrintf("%X = %X\n", &DWT->CTRL, DWT->CTRL);
+    MosPrintf("%X = %X\n", &DWT->CYCCNT, DWT->CYCCNT);
+    MosPrintf("%X = %X\n", &DWT->CYCCNT, DWT->CYCCNT);
+#endif
+
     MosRegisterEventHook(EventCallback);
 
     MosInitHeap(&TestThreadHeapDesc, TestThreadHeap, sizeof(TestThreadHeap), MOS_STACK_ALIGNMENT);
