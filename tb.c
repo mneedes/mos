@@ -1714,7 +1714,7 @@ static s32 StackPrintThread(s32 arg) {
     return TEST_PASS;
 }
 
-#if (MOS_ARM_SECURITY_SUPPORT == true)
+#if (MOS_ENABLE_SPLIM_SUPPORT == true)
 
 static s32 MOS_OPT(0) StackOverflowThread(s32 arg) {
     MosSetTermArg(MosGetThreadPtr(), TEST_PASS_HANDLER + 1);
