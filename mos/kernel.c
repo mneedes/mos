@@ -712,7 +712,7 @@ void MosInit(void) {
 #elif (MOS_ARCH_CAT == MOS_ARCH_ARM_CORTEX_M_BASE)
     // NOTE: BASEPRI isn't implemented on baseline architectures, hence IntPriMaskLow is not used
     // Set lowest preemption priority for SysTick and PendSV
-    MOS_REG(SHPR2) = MOS_REG_VALUE(EXC_PRIORITY);
+    MOS_REG(SHPR3) = MOS_REG_VALUE(EXC_PRIORITY);
     // Only two implemented priority bits on baseline
     u8 pri_low = 3;
 #endif

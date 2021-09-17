@@ -160,9 +160,10 @@ static MOS_INLINE void UnlockScheduler(void) {
 #define MOS_REG_DHCSR          (*(volatile u32 *)0xe000edf0)
 #define MOS_VAL_DEBUG_ENABLED  (0x1)
 
-// Interrupts
+// Interrupts / Exceptions
 #define MOS_REG_SHPR(x)        (*((volatile u8 *)0xe000ed18 + (x)))
-#define MOS_REG_SHPR3          (*((volatile u32 *)0xe000ed20)
+#define MOS_REG_SHPR3          (*(volatile u32 *)0xe000ed20)
+#define MOS_VAL_EXC_PRIORITY   0xc0c00000
 #define MOS_PENDSV_IRQ         14
 #define MOS_SYSTICK_IRQ        15
 
