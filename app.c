@@ -91,8 +91,8 @@ static s32 RunApp(s32 arg) {
     MOS_UNUSED(arg);
     // Start and stop a background app with a few clients
     MosInitContext(&AppContext, 2, AppStack, sizeof(AppStack), AppQueue, count_of(AppQueue));
-    MosStartClient(&AppContext, &AppClient, ClientHandler, (void *) 1);
-    MosStartClient(&AppContext, &AppClient2, ClientHandler, (void *) 2);
+    MosStartClient(&AppContext, &AppClient, ClientHandler, (void *)1);
+    MosStartClient(&AppContext, &AppClient2, ClientHandler, (void *)2);
     MosStartContext(&AppContext);
     // In this case, context stops itself
     MosWaitForContextStop(&AppContext);
@@ -103,6 +103,14 @@ static s32 RunApp(s32 arg) {
 int main() {
     // Initialize hardware, set up SysTick, NVIC priority groups, etc.
     HalInit();
+
+#if 0
+    // Subpriority group testing
+    u32 subpri_group_num = 4;
+    u32 tmp = (MOS_REG(AIRCR) & MOS_REG_VALUE(AIRCR_MASK)) | MOS_REG_VALUE(VECTKEY);
+    tmp |= (subpri_group_num << 8);
+    MOS_REG(AIRCR) = tmp;
+#endif
 
     // Run init before calling any MOS functions
     MosInit();

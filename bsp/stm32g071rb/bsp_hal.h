@@ -18,11 +18,6 @@
 #include <mos/hal.h>
 
 //
-// Processor HAL including CMSIS definitions
-//
-#include <stm32g071xx.h>
-
-//
 // Processor-specific definitions
 //
 // Cycles per inner loop iteration (1 or 3, typically 3)

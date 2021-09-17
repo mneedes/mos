@@ -16,7 +16,7 @@
 // TODO: multi-level priority inheritance / multiple mutexes at the same time
 // TODO: Change wait queue position on priority change
 // TODO: Hooks for other timers such as LPTIM ?
-// TODO: Independence from cmsis
+// TODO: auto tick startup?
 
 #define NO_SUCH_THREAD       NULL
 #define STACK_FILL_VALUE     0xca5eca11
@@ -666,8 +666,14 @@ void MosSetTermArg(MosThread * _thd, s32 arg) {
 // Initialization
 //
 
-// TODO: auto tick startup?
 void MosInit(void) {
+    // Save errno pointer for use during context switch
+    ErrNo = __errno();
+    // Set up timers with tick-reduction
+    CyclesPerTick = MOS_REG(TICK_LOAD) + 1;
+    MaxTickInterval = ((1 << 24) - 1) / CyclesPerTick;
+    CyclesPerMicroSec = CyclesPerTick / MOS_MICRO_SEC_PER_TICK;
+    // Architecture-specific setup
 #if (MOS_ARCH_CAT == MOS_ARCH_ARM_CORTEX_M_MAIN)
     // Trap Divide By 0 and (optionally) "Unintentional" Unaligned Accesses
     if (MOS_ENABLE_UNALIGN_FAULTS) {
@@ -684,38 +690,36 @@ void MosInit(void) {
     } else {
         MOS_REG(FPCCR) &= ~MOS_REG_VALUE(LAZY_STACKING);
     }
+    // Set lowest preemption priority for SysTick and PendSV.
+    //   MOS requires that SysTick and PendSV share the same priority,
+    MOS_REG(SHPR)(MOS_PENDSV_IRQ - 4) = 0xff;
+    // Read back register to determine mask (and number of implemented priority bits)
+    u8 pri_mask = MOS_REG(SHPR)(MOS_PENDSV_IRQ - 4);
+    u8 nvic_pri_bits = 8 - __builtin_ctz(pri_mask);
+    // If priority groups are enabled SysTick will be set to the
+    //   2nd lowest priority group, and PendSV the lowest.
+    u32 pri_bits = 7 - MOS_GET_PRI_GROUP_NUM;
+    if (pri_bits > nvic_pri_bits) pri_bits = nvic_pri_bits;
+    u32 pri_low = (1 << pri_bits) - 1;
+    u8 pri_systick = pri_mask;
+    // If there are sub-priority bits give SysTick higher sub-priority (one lower number).
+    if (pri_bits < nvic_pri_bits) {
+        // Clear lowest set bit in mask
+        pri_systick = pri_mask - (1 << (8 - nvic_pri_bits));
+    }
+    MOS_REG(SHPR)(MOS_SYSTICK_IRQ  - 4) = pri_systick;
+    IntPriMaskLow = pri_systick;
+#elif (MOS_ARCH_CAT == MOS_ARCH_ARM_CORTEX_M_BASE)
+    // NOTE: BASEPRI isn't implemented on baseline architectures, hence IntPriMaskLow is not used
+    // Set lowest preemption priority for SysTick and PendSV
+    MOS_REG(SHPR2) = MOS_REG_VALUE(EXC_PRIORITY);
+    // Only two implemented priority bits on baseline
+    u8 pri_low = 3;
 #endif
 #if (MOS_ARM_SECURITY_SUPPORT == true)
     // Detect security mode and set Exception Return accordingly
     if (MOS_REG(CPUID_NS) == 0) ExcReturnInitial = MOS_EXC_RETURN_UNSECURE;
 #endif
-    // Save errno pointer for use during context switch
-    ErrNo = __errno();
-    // Set up timers with tick-reduction
-    CyclesPerTick = MOS_REG(TICK_LOAD) + 1;
-    MaxTickInterval = ((1 << 24) - 1) / CyclesPerTick;
-    CyclesPerMicroSec = CyclesPerTick / MOS_MICRO_SEC_PER_TICK;
-    // Set lowest preemption priority for SysTick and PendSV (highest number).
-    // MOS requires that SysTick and PendSV share the same priority.
-    u32 pri_grp = NVIC_GetPriorityGrouping();
-    u32 pri_bits = 7 - pri_grp;
-    if (pri_bits > __NVIC_PRIO_BITS) pri_bits = __NVIC_PRIO_BITS;
-    u32 pri_low = (1 << pri_bits) - 1;
-    // If there are subpriorities give SysTick higher subpriority (lower number).
-    u32 subpri_bits = pri_grp - 7 + __NVIC_PRIO_BITS;
-    if (pri_grp + __NVIC_PRIO_BITS < 7) subpri_bits = 0;
-    if (subpri_bits == 0) {
-        u32 pri = NVIC_EncodePriority(pri_grp, pri_low, 0);
-        IntPriMaskLow = (pri << (8 - __NVIC_PRIO_BITS));
-        NVIC_SetPriority(SysTick_IRQn, pri);
-        NVIC_SetPriority(PendSV_IRQn, pri);
-    } else {
-        u32 subpri = (1 << subpri_bits) - 2;
-        u32 pri = NVIC_EncodePriority(pri_grp, pri_low, subpri);
-        IntPriMaskLow = (pri << (8 - __NVIC_PRIO_BITS));
-        NVIC_SetPriority(SysTick_IRQn, pri);
-        NVIC_SetPriority(PendSV_IRQn, NVIC_EncodePriority(pri_grp, pri_low, subpri + 1));
-    }
     // Initialize empty queues
     for (MosThreadPriority pri = 0; pri < MOS_MAX_THREAD_PRIORITIES; pri++)
         MosInitList(&RunQueues[pri]);

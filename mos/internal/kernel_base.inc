@@ -274,7 +274,6 @@ void MOS_ISR_SAFE MosRaiseSignal(MosSem * sem, u32 flags) {
 // TODO: Limit MSP stack dump to end of MSP stack
 // TODO: Dump both stacks on ISR exception?
 static void MOS_USED FaultHandler(u32 * msp, u32 * psp, u32 lr) {
-    MOS_UNUSED(psr);
     bool in_isr = ((lr & 0x8) == 0x0);
     if (PrintfHook) {
         (*PrintfHook)("\n*** Hard Fault %s", in_isr ? "IN ISR " : "");
@@ -330,3 +329,4 @@ void MOS_NAKED MOS_WEAK HardFault_Handler(void) {
             : : : "r0", "r1", "r2", "r3"
     );
 }
+
