@@ -1,24 +1,26 @@
-
 # Introduction
 
-..Intended for ARM M3/M4/M7 Series
+The Maintainable RTOS (MOS) microkernel is an exercise in writing a user-maintainable RTOS with a necessary and sufficient set of primitives.
 
-This so far has been an exercise to see how well a simple scheduler implementing tick reduction can perform assuming:
+MOS has a modular construction, the kernel can either stand alone or optionally use provided trace, shell, heap and dynamic thread modules. There are some dependencies: for example the shell module requires the trace module and the dynamic thread module requires the heap.
 
-1. Scheduler polls state of blocked threads instead of being event driven.
-2. Yield flags are maintained instead of wait lists on the blocked resources such as semaphores and mutex.
+MOS is currently intended only for ARM Cortex M.
 
-MOS has a modular construction, kernel can either stand alone or optionally use trace, shell, heap and dynamic thread modules. There are some dependencies: for example the shell module requires the trace module and the dynamic thread module requires heap.
+# Configuration
 
-## MOS configuration (mos_config.h)
+## MOS configuration file (mos_config.h)
 
-Edit configuration file to suit application requirements.
+Edit mos_config.h to suit application requirements.
 
-## Processor HAL (mos_phal.h)
+## Exception handlers
 
-Edit mos_phal.h file to include the configuration file for the specific processor implementation including CMSIS definitions.
+The SysTick_Handler(), PendSV_Handler() and desired fault handlers should be properly assigned in BSP source and linker configuration files, otherwise MOS will not function correctly.
 
-## HAL/BSP
+## Board Support Package (BSP) HAL (bsp_hal.h)
+
+Edit bsp_hal.h file for the specific processor implementation and board features.
+
+## HAL/BSP Initialization
 
 Before invoking MosInit() the HAL or BSP should perform the following tasks:
 
@@ -37,17 +39,11 @@ Any time a thread blocks it will yield to the MOS scheduler by invoking the Pend
 
 A thread may cooperatively yield at any time by invoking MosYieldThread().
 
-## Round-Robin RT
+## Round-Robin Thread Commutation
 
 A separate priority queue is maintained for each thread priority level that MOS is configured for. Just before a thread is scheduled to run its entry is placed at the end of its priority queue (round-robin commutation).
 
-Threads are scanned (polled) from highest to lowest priority to determine the next thread ready to run (first scan).  Threads are scanned a second time but ONLY in the same priority as the ready-to-run thread.  The purpose of the second scan is to determine whether tick reduction should be enabled.
-
 ## Tick Reduction
-
-Tick is enabled if there are 2 or more threads that are ready to run on the highest priority, or if there is 1 thread ready-to-run or at least 1 thread waiting on a mutex or semaphore.  In the case of mutex this may not be a big issue if mutexes are held for a short period of time, however this is not the most optimal operation for a semaphore that is not incremented very often.
-
-If a wait list were maintained for each resource then the above algorithm could be optimized and less ticks would result.
 
 # Primitives
 
@@ -58,13 +54,7 @@ MOS mutexes have the following properties:
 1. Recursion:
  + Each mutex maintains a counter; every time a tread takes a mutex, the counter is incremented. Every time a mutex is given, the counter is decremented. A mutex is only released when the counter reaches zero.
 
-2. Indirect multiple-level priority inheritance:
- + The priority of the (lower priority) mutex-owning threads are not changed directly, rather the owning threads are run in place of higher priority threads when the higher priority threads are scheduled to run. Round-robin thread commutation is still preserved at the high priority if multiple threads are ready to run.
- + The scheduler is recursive and therefore capable of performing multiple levels of priority inheritance in the rare situations there are multiple threads at several priorities potentially deadlocked.
-
-If a higher priority thread is attempting to obtain a mutex owned by a lower priority thread, the scheduler will set the "to_yield" flag on the mutex indicating that when it is released the thread should immediately yield; thus running the scheduler and potentially running the high priority thread.
-
-If a thread at a given priority is attempting to obtain a mutex owned by a thread of the same priority, the to_yield flag will *NOT* be set. The scheduler will just naturally run the owning thread until it releases the mutex. This avoids unnecessary yields and reduces scheduler overhead. It also potentially smooths out round-robin commutation.  NOTE: For this to work the tick must be enabled even if only one thread is ready to run at the highest priority. Otherwise the thread needing the mutex will not get to run in a timely fashion.
+2. Priority inheritance:
 
 ## Semaphores
 
