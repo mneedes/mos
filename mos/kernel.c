@@ -430,6 +430,9 @@ MosThread * MosGetThreadPtr(void) {
 void MosGetStackStats(MosThread * _thd, u32 * stack_size, u32 * stack_usage, u32 * max_stack_usage) {
     Thread * thd = (Thread *)_thd;
     LockScheduler(IntPriMaskLow);
+    // Detect uninitialized thread state
+    u32 state = thd->state;
+    if (state == THREAD_UNINIT || (state & THREAD_STATE_BASE_MASK) != THREAD_STATE_BASE) return;
     *stack_size = thd->stack_size;
     u8 * stack_top = thd->stack_bottom + *stack_size;
     if (thd == RunningThread)
@@ -931,4 +934,3 @@ void MosInitSem(MosSem * sem, u32 start_value) {
 #else
   #error "Unknown architecture category"
 #endif
-
