@@ -9,7 +9,6 @@
 //
 
 #include <mos/queue.h>
-#include <mos/arch.h>
 
 MOS_ISR_SAFE static void CopyToTail(MosQueue * queue, const u32 * data) {
     DisableInterrupts();

@@ -5,7 +5,6 @@
 // "License") included under this distribution.
 
 #include <mos/slab.h>
-#include <mos/arch.h>
 
 /*
  * MOS Slab Allocator

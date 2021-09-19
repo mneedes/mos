@@ -20,7 +20,6 @@
 #include <mos/format_string.h>
 #include <mos/trace.h>
 #include <mos/shell.h>
-#include <mos/arch.h>
 
 #include <bsp_hal.h>
 #include <bsp/hal_tb.h>

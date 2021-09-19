@@ -10,7 +10,7 @@
 
 #include <bsp_hal.h>
 #include <mos/kernel.h>
-#include <mos/arch.h>
+#include <mos/internal/arch.h>
 #include <errno.h>
 
 // TODO: multi-level priority inheritance / multiple mutexes at the same time
