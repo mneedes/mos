@@ -39,7 +39,7 @@ void MosInitQueue(MosQueue * queue, void * begin, u32 elm_size, u32 num_elm) {
     MosInitSem(&queue->sem_head, 0);
 }
 
-void MosSetQueueChannel(MosQueue * queue, MosSignal * signal, u16 channel) {
+void MosSetMultiQueueChannel(MosQueue * queue, MosSignal * signal, u16 channel) {
     queue->channel = channel;
     queue->signal  = signal;
 }
@@ -97,4 +97,21 @@ bool MosReceiveFromQueueOrTO(MosQueue * queue, void * data, u32 ticks) {
         return true;
     }
     return false;
+}
+
+s16 MosWaitOnMultiQueue(MosSignal * signal, u32 * flags) {
+    // Update flags in case some are still set, then block if needed
+    *flags |= MosPollSignal(signal);
+    if (*flags == 0) *flags = MosWaitForSignal(signal);
+    return MosGetNextChannelFromFlags(flags);
+}
+
+s16 MosWaitOnMultiQueueOrTO(MosSignal * signal, u32 * flags, u32 ticks) {
+    // Update flags in case some are still set, then block if needed
+    *flags |= MosPollSignal(signal);
+    if (*flags == 0) {
+        *flags = MosWaitForSignalOrTO(signal, ticks);
+        if (*flags == 0) return -1;
+    }
+    return MosGetNextChannelFromFlags(flags);
 }

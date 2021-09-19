@@ -1260,6 +1260,32 @@ static bool QueueTests(void) {
     return tests_all_pass;
 }
 
+s32 MultiTestThreadTx(s32 arg) {
+    return TEST_PASS;
+}
+
+s32 MultiTestThreadRx(s32 arg) {
+    return TEST_PASS;
+}
+
+#if 0
+void test() {
+    u32 flags = 0;
+    // Three priority queues and shared signal
+    MosQueue  queue[3];
+    //u32       queueBuf[3][4];
+    MosSignal signal;
+    while (1) {
+        s16 chan = MosWaitOnMultiQueue(&signal, &flags);
+        if (MosTryReceiveFromQueue32(&queue[chan], &val)) {
+
+        } else {
+            MosClearChannel(&flags, chan);
+        }
+    }
+}
+#endif
+
 //
 // Multiple Queue / Semaphore Tests
 //
@@ -1277,19 +1303,27 @@ static bool MultiTests(void) {
     MosInitSem(&signal, 0);
     for (u16 chan = 0; chan < count_of(queue); chan++) {
         MosInitQueue32(&queue[chan], queueBuf[chan], count_of(queueBuf[chan]));
-        MosSetQueueChannel(&queue[chan], &signal, chan);
+        MosSetMultiQueueChannel(&queue[chan], &signal, chan);
     }
     MosSendToQueue32(&queue[0], 0);
     MosSendToQueue32(&queue[1], 1);
     MosSendToQueue32(&queue[2], 2);
-    u32 flags = MosWaitForSignal(&signal);
-    if (flags != 0x7) test_pass = false;
-    while (flags) {
-        u16 chan = MosGetNextChannel(&flags);
-        MosClearChannel(&flags, chan);
-        u32 val = MosReceiveFromQueue32(&queue[chan]);
-        if (val != (u16)chan) test_pass = false;
-    }
+    u32 flags = 0;
+    u32 cleared_flags = 0;
+    u32 received_flags = 0;
+    do {
+        u32 val;
+        s16 chan = MosWaitOnMultiQueue(&signal, &flags);
+        if (MosTryReceiveFromQueue32(&queue[chan], &val)) {
+            if (val != (u16)chan) test_pass = false;
+            received_flags |= (1 << chan);
+        } else {
+            MosClearChannelFlag(&flags, chan);
+            cleared_flags |= (1 << chan);
+        }
+    } while (flags);
+    if (received_flags != 0x7) test_pass = false;
+    if (cleared_flags != 0x7) test_pass = false;
     if (test_pass) MosPrint(" Passed\n");
     else {
         MosPrint(" Failed\n");
