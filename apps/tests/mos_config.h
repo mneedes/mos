@@ -19,19 +19,15 @@
 /// The lower the number the higher the priority
 #define MOS_MAX_THREAD_PRIORITIES   4
 
-/// Tick rate
 /// Interrupt tick rate
+///
 #define MOS_MICRO_SEC_PER_TICK      1000
 
-/// Monitor maximum stack usage on context switches
+/// Monitor maximum stack usage on context switches.
 ///
 #define MOS_STACK_USAGE_MONITOR     true
 
-/// Keep tick interrupt running at slowest rate to maintain
-/// time even when there are no timer events scheduled.
-#define MOS_KEEP_TICKS_RUNNING      false
-
-/// Enable events (required for MOS profiling)
+/// Enable events (required for MOS profiling).
 ///
 #define MOS_ENABLE_EVENTS           false
 
@@ -41,6 +37,7 @@
 #define MOS_ENABLE_UNALIGN_FAULTS   false
 
 /// Hang on exceptions.
+/// Generally set to true unless this is a testbench.
 /// Can be used in systems with watchdog timer reset to reboot
 #define MOS_HANG_ON_EXCEPTIONS      false
 

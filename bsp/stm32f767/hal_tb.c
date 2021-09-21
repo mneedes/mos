@@ -5,8 +5,8 @@
 //  "License") included under this distribution.
 
 //
-//  The HAL TB is intended for analyzing performance using a logic analyzer.
-//    It uses the HAL primarily for toggling GPIOs.
+// The HAL TB is intended for analyzing performance using a logic analyzer.
+//   It uses the HAL primarily for toggling GPIOs.
 //
 
 #include <string.h>
@@ -21,8 +21,8 @@ static MosSem pulse_sem;
 static u32 pulse_counter;
 
 void EXTI15_10_IRQHandler(void) {
-	__HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_13);
-	MosIncrementSem(&pulse_sem);
+    __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_13);
+    MosIncrementSem(&pulse_sem);
 }
 
 static s32 HalPulseReceiverTermHandler(s32 arg) {
@@ -39,7 +39,7 @@ static s32 HalPulseReceiverThread(s32 arg) {
     NVIC_SetPriority(EXTI15_10_IRQn, 0);
     NVIC_EnableIRQ(EXTI15_10_IRQn);
     for (;;) {
-    	MosWaitForSem(&pulse_sem);
+        MosWaitForSem(&pulse_sem);
         pulse_counter++;
         if ((pulse_counter % (1 << 12)) == 0) {
             MosPrintf("Pulses: %08x\n", pulse_counter);
@@ -77,25 +77,25 @@ void HalTestsTriggerInterrupt(u32 num) {
 }
 
 bool HalTests(int argc, char * argv[]) {
-	if (argc == 0) {
-		MosPrint("Not enough arguments\n");
-		return false;
-	}
-	bool success = true;
-	if (strcmp(argv[0], "start") == 0) {
-		if (MosAllocAndRunThread(&thread, 0, HalPulseReceiverThread, 0, 512)) {
-		    MosPrint("Hal Pulse Receiver Test START\n");
-		}
-	    if (!thread) success = false;
-	} else if (strcmp(argv[0], "stop") == 0) {
-		if (thread == NULL) {
-			success = false;
-		} else {
+    if (argc == 0) {
+        MosPrint("Not enough arguments\n");
+        return false;
+    }
+    bool success = true;
+    if (strcmp(argv[0], "start") == 0) {
+        if (MosAllocAndRunThread(&thread, 0, HalPulseReceiverThread, 0, 512)) {
+            MosPrint("Hal Pulse Receiver Test START\n");
+        }
+        if (!thread) success = false;
+    } else if (strcmp(argv[0], "stop") == 0) {
+        if (thread == NULL) {
+            success = false;
+        } else {
             MosKillThread(thread);
             if (MosWaitForThreadStop(thread) != TEST_PASS) success = false;
             MosDecThreadRefCount(&thread);
             MosPrint("Hal Pulse Receiver Test STOP\n");
-		}
-	}
+        }
+    }
     return success;
 }

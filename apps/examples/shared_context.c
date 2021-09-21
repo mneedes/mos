@@ -5,7 +5,7 @@
 // "License") included under this distribution.
 
 //
-// MOS Application Entry
+// Shared Context Example
 //
 
 #include <mos/hal.h>
@@ -104,14 +104,6 @@ int main() {
     // Initialize hardware, set up SysTick, NVIC priority groups, etc.
     HalInit();
 
-#if 0
-    // Subpriority group testing
-    u32 subpri_group_num = 4;
-    u32 tmp = (MOS_REG(AIRCR) & MOS_REG_VALUE(AIRCR_MASK)) | MOS_REG_VALUE(VECTKEY);
-    tmp |= (subpri_group_num << 8);
-    MOS_REG(AIRCR) = tmp;
-#endif
-
     // Run init before calling any MOS functions
     MosInit();
 
@@ -120,21 +112,7 @@ int main() {
     MosPrintf("\nMaintainable OS (Version %s)\n", MosGetParams()->version);
     MosPrint("Copyright 2019-2021, Matthew Needes  All Rights Reserved\n");
 
-#if 0
-    if (CoreDebug->DHCSR & CoreDebug_DHCSR_C_DEBUGEN_Msk) {
-        MosPrint("Debug Enabled\n");
-    }
-    u32 cpu_id = SCB->CPUID;
-    MosPrintf("CPU ID(0x%08X) ARCH(%1X) PART_NO(%02X)\n", cpu_id, (cpu_id >> 16) & 0xF,
-                  (cpu_id >> 4) & 0xFFF);
-#endif
-
     MosInitAndRunThread(&RunAppThread, 1, RunApp, 3, RunAppStack, sizeof(RunAppStack));
-
-    // Initialize and Run test bench example Application.
-    if (InitTestBench() == 0) {
-        // Start multitasking, running App threads.
-        MosRunScheduler();
-    }
+    MosRunScheduler();
     return -1;
 }
