@@ -245,9 +245,13 @@ static void MX_RNG_Init(void)
 static HalRxUARTCallback * rx_callback = NULL;
 
 void USART3_IRQHandler(void) {
-    if (huart3.Instance->ISR & USART_ISR_RXNE) {
+    u32 isr = huart3.Instance->ISR;
+    if (isr & USART_ISR_RXNE) {
         char ch = huart3.Instance->RDR;
         if (rx_callback) (*rx_callback)(ch);
+    }
+    if (isr & USART_ISR_ORE) {
+        huart3.Instance->ICR = USART_ICR_ORECF;
     }
 }
 

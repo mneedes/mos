@@ -462,9 +462,13 @@ static void MX_LPUART1_UART_Init(void)
 static HalRxUARTCallback * rx_callback = NULL;
 
 void USART1_IRQHandler(void) {
-    if (huart1.Instance->ISR & USART_ISR_RXNE) {
+    u32 isr = huart1.Instance->ISR;
+    if (isr & USART_ISR_RXNE) {
         char ch = huart1.Instance->RDR;
         if (rx_callback) (*rx_callback)(ch);
+    }
+    if (isr & USART_ISR_ORE) {
+        huart1.Instance->ICR = USART_ICR_ORECF;
     }
 }
 

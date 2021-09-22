@@ -39,7 +39,9 @@
 #endif
 
 // Detect presence of security features
-#if (defined(__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE >= 3))
+//   Bit 0 = presence of TT (test target) instruction
+//   Bit 1 = target secure state (presence of -mcmse compiler flag)
+#if (defined(__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE == 3))
   #define MOS_ARM_SECURITY_SUPPORT       true
 #else
   #define MOS_ARM_SECURITY_SUPPORT       false
@@ -58,8 +60,6 @@
 #else
   #define MOS_FP_LAZY_CONTEXT_SWITCHING  false
 #endif
-
-
 
 //
 // Interrupt locking
@@ -85,7 +85,5 @@ static MOS_INLINE void ExecutePendingInterrupts(void) {
     asm volatile ( "cpsie if\n"
                    "cpsid if" );
 }
-
-
 
 #endif
