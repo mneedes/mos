@@ -719,7 +719,7 @@ void MosInit(void) {
     // Only two implemented priority bits on baseline
     u8 pri_low = 3;
 #endif
-#if (MOS_ARM_SECURITY_SUPPORT == true)
+#if (MOS_ARM_AUTODETECT_EXC_RETURN == true)
     // Detect security mode and set Exception Return accordingly
     if (MOS_REG(CPUID_NS) == 0) ExcReturnInitial = MOS_EXC_RETURN_UNSECURE;
 #endif

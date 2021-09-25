@@ -38,17 +38,19 @@
   #error "Architecture not recognized"
 #endif
 
-// Detect presence of security features
-//   Bit 0 = presence of TT (test target) instruction
-//   Bit 1 = target secure state (presence of -mcmse compiler flag)
-#if (defined(__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE == 3))
-  #define MOS_ARM_SECURITY_SUPPORT       true
+// Auto detect correct EXC Return setting value
+#if ((MOS_ARCH == MOS_ARCH_ARM_CORTEX_V8M_MAIN) || (MOS_ARCH == MOS_ARCH_ARM_CORTEX_V8M_BASE))
+  #define MOS_ARM_AUTODETECT_EXC_RETURN    true
 #else
-  #define MOS_ARM_SECURITY_SUPPORT       false
+  #define MOS_ARM_AUTODETECT_EXC_RETURN    false
 #endif
 
 // Stack pointer overflow detection support
-#if ((MOS_ARCH == MOS_ARCH_ARM_CORTEX_V8M_MAIN) || (MOS_ARM_SECURITY_SUPPORT == true))
+//   (1) Only v8-mainline supports splim_ns and additionally splim_s (with security extensions).
+//   (2) v8-baseline only supports splim_s (with security extensions)
+//     NOTE: CMSE Bit 0 = presence of TT (test target) instruction
+//     NOTE: CMSE Bit 1 = target secure state (presence of -mcmse compiler flag)
+#if ((MOS_ARCH == MOS_ARCH_ARM_CORTEX_V8M_MAIN) || (defined(__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE == 3)))
   #define MOS_ENABLE_SPLIM_SUPPORT       true
 #else
   #define MOS_ENABLE_SPLIM_SUPPORT       false
