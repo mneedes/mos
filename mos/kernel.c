@@ -11,6 +11,7 @@
 #include <bsp_hal.h>
 #include <mos/kernel.h>
 #include <mos/internal/arch.h>
+#include <mos/internal/security.h>
 #include <errno.h>
 
 // TODO: multi-level priority inheritance / multiple mutexes at the same time
@@ -722,6 +723,9 @@ void MosInit(void) {
 #if (MOS_ARM_AUTODETECT_EXC_RETURN == true)
     // Detect security mode and set Exception Return accordingly
     if (MOS_REG(CPUID_NS) == 0) ExcReturnInitial = MOS_EXC_RETURN_UNSECURE;
+#endif
+#if (MOS_ARM_RTOS_ON_NON_SECURE_SIDE == true)
+    MosSecurityInit(1);
 #endif
     // Initialize empty queues
     for (MosThreadPriority pri = 0; pri < MOS_MAX_THREAD_PRIORITIES; pri++)
