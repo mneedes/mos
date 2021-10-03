@@ -1748,14 +1748,17 @@ static bool HeapTests(void) {
 static s32 SecurityThread(s32 arg) {
     while (1) {
         MosDelayMicroSec(100000);
-        //MosReserveSecureContext();
+        MosReserveSecureContext();
+        MosDelayMicroSec(100000);
         SECURE_TakeSomeTime();
-        //MosReleaseSecureContext();
+        MosReleaseSecureContext();
         TestHisto[arg]++;
         if (MosIsStopRequested()) break;
     }
     return TEST_PASS;
 }
+
+// TODO: Floating point !
 
 static s32 NotSecurityThread(s32 arg) {
     while (1) {
@@ -1769,17 +1772,13 @@ static bool SecurityTests(void) {
     bool tests_all_pass = true;
     bool test_pass;
     //
-    // Secure Context switch
+    // Secure Context switch (2 threads)
     //
     test_pass = true;
     MosPrint("Security Test: Context Switch (2 secure threads)\n");
     ClearHistogram();
-    MosInitThread(Threads[1], 2, SecurityThread, 0, Stacks[1], DFT_STACK_SIZE);
-    MosInitThreadSecurity(Threads[1], 1);
-    MosRunThread(Threads[1]);
-    MosInitThread(Threads[2], 2, SecurityThread, 1, Stacks[2], DFT_STACK_SIZE);
-    MosInitThreadSecurity(Threads[2], 2);
-    MosRunThread(Threads[2]);
+    MosInitAndRunThread(Threads[1], 2, SecurityThread, 0, Stacks[1], DFT_STACK_SIZE);
+    MosInitAndRunThread(Threads[2], 2, SecurityThread, 1, Stacks[2], DFT_STACK_SIZE);
     MosInitAndRunThread(Threads[3], 2, NotSecurityThread, 2, Stacks[3], DFT_STACK_SIZE);
     MosDelayThread(10000);
     MosRequestThreadStop(Threads[1]);
@@ -1789,26 +1788,6 @@ static bool SecurityTests(void) {
     if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[3]) != TEST_PASS) test_pass = false;
     DisplayHistogram(3);
-    if (test_pass) MosPrint(" Passed\n");
-    else {
-        MosPrint(" Failed\n");
-        tests_all_pass = false;
-    }
-#if 0
-    //
-    // Secure Context switch
-    //
-    test_pass = true;
-    MosPrint("Security Test: Context Switch (1 secure threads)\n");
-    ClearHistogram();
-    MosInitAndRunThread(Threads[1], 2, SecurityThread, 0, Stacks[1], DFT_STACK_SIZE);
-    MosInitAndRunThread(Threads[2], 2, NotSecurityThread, 1, Stacks[2], DFT_STACK_SIZE);
-    MosDelayThread(10000);
-    MosRequestThreadStop(Threads[1]);
-    MosRequestThreadStop(Threads[2]);
-    if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
-    if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
-    DisplayHistogram(2);
     if (test_pass) MosPrint(" Passed\n");
     else {
         MosPrint(" Failed\n");
@@ -1839,7 +1818,6 @@ static bool SecurityTests(void) {
         MosPrint(" Failed\n");
         tests_all_pass = false;
     }
-#endif
     return tests_all_pass;
 }
 

@@ -5,7 +5,7 @@
 // "License") included under this distribution.
 
 //
-// MOS Microkernel Secure-side
+// MOS Microkernel Secure-side Implementation
 //
 
 #include <mos/kernel.h>
@@ -25,7 +25,6 @@ static u8 MOS_STACK_ALIGNED Stacks[MOS_NUM_SECURE_CONTEXTS][MOS_SECURE_CONTEXT_S
 
 // Stack pointer storage for context switches.
 static SecureContext Contexts[MOS_NUM_SECURE_CONTEXTS + 1];
-static u32 Reservation = (1 << (MOS_NUM_SECURE_CONTEXTS + 1)) - 2;
 
 // Secure stack size must be multiple of 8
 MOS_STATIC_ASSERT(sec_stack_size, (MOS_SECURE_CONTEXT_STACK_SIZE & 0x7) == 0x0);
@@ -48,6 +47,8 @@ static MOS_INLINE void SetControl(u32 control) {
     asm volatile ( "msr control, %0" : "=r" (control) );
 }
 
+// NOTE: This should be run in handler mode since it is
+//       manipulating stack pointers and the CONTROL register.
 void MOS_NSC_ENTRY _MosInitSecureContexts(void) {
     // Initialize stack pointers
     Contexts[0].sp    = (u32)DefaultStack + sizeof(DefaultStack);
@@ -62,18 +63,13 @@ void MOS_NSC_ENTRY _MosInitSecureContexts(void) {
     SetControl(0x2);
 }
 
-// NOTE: Must lock scheduler before calling
-s32 MOS_NSC_ENTRY _MosReserveSecureContext(void) {
-    u32 context = __builtin_ctz(Reservation);
-    Reservation &= ~(1 << context);
-    return context;
+// NOTE: This can be run in thread mode as long as the scheduler is locked
+//       during the call as it is not manipulating stack pointers directly.
+void MOS_NSC_ENTRY _MosResetSecureContext(s32 context) {
+    Contexts[context].sp = (u32)&Stacks[context][0];
 }
 
-// NOTE: Must lock scheduler before calling
-void MOS_NSC_ENTRY _MosReleaseSecureContext(s32 context) {
-    Reservation |= (1 << context);
-}
-
+// NOTE: This must be run in handler mode since it is manipulating stack pointers.
 void MOS_NSC_ENTRY _MosSwitchSecureContext(s32 save_context, s32 restore_context) {
     if (save_context >= 0) Contexts[save_context].sp = GetPSP();
     SetPSP(Contexts[restore_context].sp);
@@ -186,5 +182,3 @@ void MOS_NAKED MOS_WEAK UsageFault_Handler(void) {
         "b HardFault_Handler"
     );
 }
-
-

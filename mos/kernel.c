@@ -124,6 +124,7 @@ static MosList ISREventQueue;
 static u32 IntDisableCount = 0;
 static u32 ExcReturnInitial = MOS_EXC_RETURN_DEFAULT;
 #if (MOS_ARM_RTOS_ON_NON_SECURE_SIDE == true)
+static u32 SecureContextReservation = (1 << (MOS_NUM_SECURE_CONTEXTS + 1)) - 2;
 static MosSem SecureContextCounter;
 #endif
 
@@ -365,8 +366,6 @@ static void InitThread(Thread * thd, MosThreadPriority pri,
     // ref_cnt is not initialized here, it is manipulated externally
 }
 
-
-
 static s32 IdleThreadEntry(s32 arg) {
     MOS_UNUSED(arg);
     while (1) {
@@ -522,11 +521,6 @@ bool MosInitThread(MosThread * _thd, MosThreadPriority pri,
     InitThread(thd, pri, entry, arg, stack_bottom, stack_size);
     SetThreadState(thd, THREAD_INIT);
     return true;
-}
-
-void MosInitThreadSecurity(MosThread * _thd, u32 context) {
-    Thread * thd = (Thread *)_thd;
-    thd->secure_context_new = context;
 }
 
 bool MosRunThread(MosThread * _thd) {
@@ -915,7 +909,7 @@ static u32 MOS_USED Scheduler(u32 sp) {
     if (RunningThread->secure_context_new != RunningThread->secure_context) {
         _MosSwitchSecureContext(-1, run_thd->secure_context);
         RunningThread->secure_context = RunningThread->secure_context_new;
-    } else //if (RunningThread->secure_context != run_thd->secure_context)
+    } else if (RunningThread->secure_context != run_thd->secure_context)
         _MosSwitchSecureContext(RunningThread->secure_context, run_thd->secure_context);
 #endif
     // Set next thread ID and errno and return its stack pointer
@@ -960,10 +954,14 @@ void MosInitSem(MosSem * sem, u32 start_value) {
 // Security
 //
 
+#if (MOS_ARM_RTOS_ON_NON_SECURE_SIDE == true)
+
 void MosReserveSecureContext(void) {
     MosWaitForSem(&SecureContextCounter);
     LockScheduler(IntPriMaskLow);
-    RunningThread->secure_context_new = _MosReserveSecureContext();
+    u32 context = __builtin_ctz(SecureContextReservation);
+    RunningThread->secure_context_new = context;
+    SecureContextReservation &= ~(1 << RunningThread->secure_context_new);
     YieldThread();
     UnlockScheduler();
 }
@@ -971,7 +969,9 @@ void MosReserveSecureContext(void) {
 bool MosTryReserveSecureContext(void) {
     if (MosTrySem(&SecureContextCounter)) {
         LockScheduler(IntPriMaskLow);
-        RunningThread->secure_context_new = _MosReserveSecureContext();
+        u32 context = __builtin_ctz(SecureContextReservation);
+        RunningThread->secure_context_new = context;
+        SecureContextReservation &= ~(1 << RunningThread->secure_context_new);
         YieldThread();
         UnlockScheduler();
         return true;
@@ -982,13 +982,15 @@ bool MosTryReserveSecureContext(void) {
 void MosReleaseSecureContext(void) {
     LockScheduler(IntPriMaskLow);
     u32 context = RunningThread->secure_context;
-    if (context == 0) while(1);
+    _MosResetSecureContext(context);
     RunningThread->secure_context_new = MOS_DEFAULT_SECURE_CONTEXT;
-    _MosReleaseSecureContext(context);
+    SecureContextReservation |= (1 << context);
     YieldThread();
     UnlockScheduler();
     MosIncrementSem(&SecureContextCounter);
 }
+
+#endif
 
 //
 // Architecture specific
