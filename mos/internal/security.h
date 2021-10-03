@@ -9,7 +9,11 @@
 #ifndef _MOS_INTERNAL_SECURITY_H_
 #define _MOS_INTERNAL_SECURITY_H_
 
-void MosSecurityInit(u32 num_contexts);
+#define MOS_DEFAULT_SECURE_CONTEXT        0
+
+void _MosInitSecureContexts(void);
+s32 _MosReserveSecureContext(void);
+void _MosReleaseSecureContext(s32 context);
+void _MosSwitchSecureContext(s32 save_context, s32 restore_context);
 
 #endif
-

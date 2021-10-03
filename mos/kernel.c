@@ -79,6 +79,9 @@ typedef struct Thread {
     u8                * stack_bottom;
     u32                 stack_size;
     const char        * name;
+    s8                  secure_context;
+    s8                  secure_context_new;
+    u16                 pad;
     s32                 ref_cnt;
 } Thread;
 
@@ -120,6 +123,9 @@ static MosList RunQueues[MOS_MAX_THREAD_PRIORITIES];
 static MosList ISREventQueue;
 static u32 IntDisableCount = 0;
 static u32 ExcReturnInitial = MOS_EXC_RETURN_DEFAULT;
+#if (MOS_ARM_RTOS_ON_NON_SECURE_SIDE == true)
+static MosSem SecureContextCounter;
+#endif
 
 // Timers and Ticks
 static MosList TimerQueue;
@@ -354,8 +360,12 @@ static void InitThread(Thread * thd, MosThreadPriority pri,
     thd->stack_bottom = stack_bottom;
     thd->stack_size = stack_size;
     thd->name = "";
+    thd->secure_context     = MOS_DEFAULT_SECURE_CONTEXT;
+    thd->secure_context_new = MOS_DEFAULT_SECURE_CONTEXT;
     // ref_cnt is not initialized here, it is manipulated externally
 }
+
+
 
 static s32 IdleThreadEntry(s32 arg) {
     MOS_UNUSED(arg);
@@ -512,6 +522,11 @@ bool MosInitThread(MosThread * _thd, MosThreadPriority pri,
     InitThread(thd, pri, entry, arg, stack_bottom, stack_size);
     SetThreadState(thd, THREAD_INIT);
     return true;
+}
+
+void MosInitThreadSecurity(MosThread * _thd, u32 context) {
+    Thread * thd = (Thread *)_thd;
+    thd->secure_context_new = context;
 }
 
 bool MosRunThread(MosThread * _thd) {
@@ -725,7 +740,7 @@ void MosInit(void) {
     if (MOS_REG(CPUID_NS) == 0) ExcReturnInitial = MOS_EXC_RETURN_UNSECURE;
 #endif
 #if (MOS_ARM_RTOS_ON_NON_SECURE_SIDE == true)
-    MosSecurityInit(1);
+    MosInitSem(&SecureContextCounter, MOS_NUM_SECURE_CONTEXTS);
 #endif
     // Initialize empty queues
     for (MosThreadPriority pri = 0; pri < MOS_MAX_THREAD_PRIORITIES; pri++)
@@ -812,7 +827,12 @@ static u32 MOS_USED Scheduler(u32 sp) {
     if (RunningThread != NO_SUCH_THREAD) {
         RunningThread->sp = sp;
         RunningThread->err_no = *ErrNo;
-    } else RunningThread = &IdleThread;
+    } else {
+        RunningThread = &IdleThread;
+#if (MOS_ARM_RTOS_ON_NON_SECURE_SIDE == true)
+        _MosInitSecureContexts();
+#endif
+    }
     // Update Running Thread state
     //   Threads can't directly kill themselves, so do it here.
     //   If thread needs to go onto timer queue, do it here.
@@ -889,6 +909,15 @@ static u32 MOS_USED Scheduler(u32 sp) {
     if (MOS_ENABLE_SPLIM_SUPPORT) {
         asm volatile ( "msr psplim, %0" : : "r" (run_thd->stack_bottom) );
     }
+#if (MOS_ARM_RTOS_ON_NON_SECURE_SIDE == true)
+    // If there is a new secure context, only load the next context, don't save it.
+    // otherwise only save/load the context if it is different.
+    if (RunningThread->secure_context_new != RunningThread->secure_context) {
+        _MosSwitchSecureContext(-1, run_thd->secure_context);
+        RunningThread->secure_context = RunningThread->secure_context_new;
+    } else //if (RunningThread->secure_context != run_thd->secure_context)
+        _MosSwitchSecureContext(RunningThread->secure_context, run_thd->secure_context);
+#endif
     // Set next thread ID and errno and return its stack pointer
     RunningThread = run_thd;
     *ErrNo = RunningThread->err_no;
@@ -925,6 +954,40 @@ void MosInitSem(MosSem * sem, u32 start_value) {
     sem->value = start_value;
     MosInitList(&sem->pend_q);
     MosInitList(&sem->evt_link);
+}
+
+//
+// Security
+//
+
+void MosReserveSecureContext(void) {
+    MosWaitForSem(&SecureContextCounter);
+    LockScheduler(IntPriMaskLow);
+    RunningThread->secure_context_new = _MosReserveSecureContext();
+    YieldThread();
+    UnlockScheduler();
+}
+
+bool MosTryReserveSecureContext(void) {
+    if (MosTrySem(&SecureContextCounter)) {
+        LockScheduler(IntPriMaskLow);
+        RunningThread->secure_context_new = _MosReserveSecureContext();
+        YieldThread();
+        UnlockScheduler();
+        return true;
+    }
+    return false;
+}
+
+void MosReleaseSecureContext(void) {
+    LockScheduler(IntPriMaskLow);
+    u32 context = RunningThread->secure_context;
+    if (context == 0) while(1);
+    RunningThread->secure_context_new = MOS_DEFAULT_SECURE_CONTEXT;
+    _MosReleaseSecureContext(context);
+    YieldThread();
+    UnlockScheduler();
+    MosIncrementSem(&SecureContextCounter);
 }
 
 //

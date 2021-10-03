@@ -5,7 +5,7 @@
 // "License") included under this distribution.
 
 /// \file  mos/security.h
-/// \brief Security context management
+/// \brief Security context management.
 ///
 /// Allows reservation of security contexts from non-secure side
 

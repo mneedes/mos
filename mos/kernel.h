@@ -52,7 +52,7 @@ typedef struct MosParams {
 
 // Mos Thread (opaque container)
 typedef struct MosThread {
-    u32 rsvd[18];
+    u32 rsvd[19];
     s32 ref_cnt;
 } MosThread;
 
@@ -165,6 +165,7 @@ void MosSetStack(MosThread * thd, u8 * stack_bottom, u32 stack_size);
 void MosSetThreadName(MosThread * thd, const char * name);
 bool MosInitThread(MosThread * thd, MosThreadPriority pri, MosThreadEntry * entry,
                    s32 arg, u8 * stack_bottom, u32 stack_size);
+void MosInitThreadSecurity(MosThread * _thd, u32 sec_context);
 bool MosRunThread(MosThread * thd);
 bool MosInitAndRunThread(MosThread * thd, MosThreadPriority pri,
                          MosThreadEntry * entry, s32 arg, u8 * stack_bottom,
