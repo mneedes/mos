@@ -37,12 +37,10 @@ Supported toolchains / architectures:
 * ARM M0/M1/M0+ (Arch v6-M)
 * ARM M3/M4/M7 (Arch v7-M)
 * ARM M4F/M7F (Arch v7-M with hardware floating point using lazy stacking)
-* ARM M23/M33/M55 (Arch v8-M) - currently supporting a single security mode: secure or non-secure.
-* TrustZone can be used with interrupts disabled.
+* ARM M23/M33/M55 (Arch v8-M) - TrustZone context switches
 
 Future
 * Better documentation...
-* Support Context switches in TrustZone
 * C++ bindings
 
 Features it probably WILL NEVER have:
