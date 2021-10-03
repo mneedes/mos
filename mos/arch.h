@@ -47,6 +47,14 @@
 
 #if (defined(__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE == 1))
   #define MOS_ARM_RTOS_ON_NON_SECURE_SIDE    true
+#else
+  #define MOS_ARM_RTOS_ON_NON_SECURE_SIDE    false
+#endif
+
+#if (defined(__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE == 3))
+  #define MOS_ARM_RTOS_ON_SECURE_SIDE        true
+#else
+  #define MOS_ARM_RTOS_ON_SECURE_SIDE        false
 #endif
 
 // Stack pointer overflow detection support

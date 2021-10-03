@@ -8,6 +8,8 @@
 // MOS Microkernel Secure-side Implementation
 //
 
+#if (MOS_ARM_RTOS_ON_SECURE_SIDE == true)
+
 #include <mos/kernel.h>
 #include <mos/internal/arch.h>
 #include <mos/internal/security.h>
@@ -18,9 +20,10 @@ typedef struct {
     u32 splim;
 } SecureContext;
 
-// Default stack is used for allocating/freeing secure contexts.
-// Secure context stacks are for user applications.
+// TODO: Default Stack???
 static u8 MOS_STACK_ALIGNED DefaultStack[256];
+
+// Secure context stacks are for user applications.
 static u8 MOS_STACK_ALIGNED Stacks[MOS_NUM_SECURE_CONTEXTS][MOS_SECURE_CONTEXT_STACK_SIZE];
 
 // Stack pointer storage for context switches.
@@ -182,3 +185,6 @@ void MOS_NAKED MOS_WEAK UsageFault_Handler(void) {
         "b HardFault_Handler"
     );
 }
+
+#endif
+
