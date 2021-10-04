@@ -72,7 +72,7 @@ SRAM_HandleTypeDef hsram1;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 void PeriphCommonClock_Config(void);
-static void MX_GPIO_Init(void);
+//static void MX_GPIO_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_FMC_Init(void);
 static void MX_I2C1_Init(void);
@@ -137,7 +137,7 @@ void HalInit(void)
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
-  MX_GPIO_Init();
+  //MX_GPIO_Init();
   MX_ADC1_Init();
   MX_FMC_Init();
   MX_I2C1_Init();
@@ -881,6 +881,8 @@ static void MX_FMC_Init(void)
   /* USER CODE END FMC_Init 2 */
 }
 
+#if 0
+
 /**
   * @brief GPIO Initialization Function
   * @param None
@@ -1036,6 +1038,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
 }
+#endif
 
 /* USER CODE BEGIN 4 */
 

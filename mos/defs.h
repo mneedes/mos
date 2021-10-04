@@ -46,6 +46,7 @@
 #define MOS_OPT(x)             __attribute__((optimize(x)))
 #define MOS_ALIGNED(x)         __attribute__((aligned(x)))
 #define MOS_NSC_ENTRY          __attribute__((cmse_nonsecure_entry))
+#define MOS_NS_CALL            __attribute__((cmse_nonsecure_call))
 #define MOS_ISR_SAFE
 
 #define MOS_UNUSED(x)          (void)(x)

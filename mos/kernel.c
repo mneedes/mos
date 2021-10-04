@@ -124,7 +124,7 @@ static MosList ISREventQueue;
 static u32 IntDisableCount = 0;
 static u32 ExcReturnInitial = MOS_EXC_RETURN_DEFAULT;
 #if (MOS_ARM_RTOS_ON_NON_SECURE_SIDE == true)
-static u32 SecureContextReservation = (1 << (MOS_NUM_SECURE_CONTEXTS + 1)) - 2;
+static u32 SecureContextReservation = (1 << MOS_NUM_SECURE_CONTEXTS) - 1;
 static MosSem SecureContextCounter;
 #endif
 
@@ -956,12 +956,16 @@ void MosInitSem(MosSem * sem, u32 start_value) {
 
 #if (MOS_ARM_RTOS_ON_NON_SECURE_SIDE == true)
 
+// Reserve secure contexts for threads.
+//   Scheduler must be locked out during reservation.
+//   Scheduler is invoked to change the context.
 void MosReserveSecureContext(void) {
     MosWaitForSem(&SecureContextCounter);
     LockScheduler(IntPriMaskLow);
-    u32 context = __builtin_ctz(SecureContextReservation);
-    RunningThread->secure_context_new = context;
-    SecureContextReservation &= ~(1 << RunningThread->secure_context_new);
+    u32 new_context = __builtin_ctz(SecureContextReservation);
+    RunningThread->secure_context_new = new_context;
+    SecureContextReservation &= ~(1 << new_context);
+    // Yield so that this thread can immediately use new stack pointer
     YieldThread();
     UnlockScheduler();
 }
@@ -969,9 +973,9 @@ void MosReserveSecureContext(void) {
 bool MosTryReserveSecureContext(void) {
     if (MosTrySem(&SecureContextCounter)) {
         LockScheduler(IntPriMaskLow);
-        u32 context = __builtin_ctz(SecureContextReservation);
-        RunningThread->secure_context_new = context;
-        SecureContextReservation &= ~(1 << RunningThread->secure_context_new);
+        u32 new_context = __builtin_ctz(SecureContextReservation);
+        RunningThread->secure_context_new = new_context;
+        SecureContextReservation &= ~(1 << new_context);
         YieldThread();
         UnlockScheduler();
         return true;
@@ -979,12 +983,15 @@ bool MosTryReserveSecureContext(void) {
     return false;
 }
 
+// Revert all threads to default secure context
 void MosReleaseSecureContext(void) {
     LockScheduler(IntPriMaskLow);
-    u32 context = RunningThread->secure_context;
-    _MosResetSecureContext(context);
+    u32 old_context = RunningThread->secure_context;
+    // Reset pointer value for next thread (using current thread context)
+    _MosResetSecureContext(old_context);
     RunningThread->secure_context_new = MOS_DEFAULT_SECURE_CONTEXT;
-    SecureContextReservation |= (1 << context);
+    SecureContextReservation |= (1 << old_context);
+    // Yield so that stack pointer is made available for next thread.
     YieldThread();
     UnlockScheduler();
     MosIncrementSem(&SecureContextCounter);
