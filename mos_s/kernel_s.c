@@ -34,7 +34,6 @@ static NSPrintfHook * PrintfHook = NULL;
 
 // Secure stack size must be multiple of 8
 MOS_STATIC_ASSERT(sec_stack_size, (MOS_SECURE_CONTEXT_STACK_SIZE & 0x7) == 0x0);
-MOS_STATIC_ASSERT(num_sec_contexts, MOS_NUM_SECURE_CONTEXTS <= 32);
 
 static MOS_INLINE u32 GetPSP(void) {
     u32 psp;

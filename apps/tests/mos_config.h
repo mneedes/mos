@@ -42,6 +42,7 @@
 #define MOS_HANG_ON_EXCEPTIONS          false
 
 /// Number of simultaneous secure thread contexts.
+/// Set to zero to disable security.
 /// Ignored on systems without security (e.g.: TrustZone) support
 #define MOS_NUM_SECURE_CONTEXTS         2
 

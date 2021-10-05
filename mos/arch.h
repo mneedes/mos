@@ -45,17 +45,25 @@
   #define MOS_ARM_AUTODETECT_EXC_RETURN    false
 #endif
 
-#if (defined(__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE == 1))
+#if defined(MOS_NUM_SECURE_CONTEXTS) && (MOS_NUM_SECURE_CONTEXTS > 0)
+  #define SECURE_CONTEXTS      true
+#else
+  #define SECURE_CONTEXTS      false
+#endif
+
+#if (defined(__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE == 1) && SECURE_CONTEXTS)
   #define MOS_ARM_RTOS_ON_NON_SECURE_SIDE    true
 #else
   #define MOS_ARM_RTOS_ON_NON_SECURE_SIDE    false
 #endif
 
-#if (defined(__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE == 3))
+#if (defined(__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE == 3) && SECURE_CONTEXTS)
   #define MOS_ARM_RTOS_ON_SECURE_SIDE        true
 #else
   #define MOS_ARM_RTOS_ON_SECURE_SIDE        false
 #endif
+
+#undef SECURE_CONTEXTS
 
 // Stack pointer overflow detection support
 //   (1) Only v8-mainline supports splim_ns and additionally splim_s (with security extensions).

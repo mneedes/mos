@@ -124,6 +124,7 @@ static MosList ISREventQueue;
 static u32 IntDisableCount = 0;
 static u32 ExcReturnInitial = MOS_EXC_RETURN_DEFAULT;
 #if (MOS_ARM_RTOS_ON_NON_SECURE_SIDE == true)
+MOS_STATIC_ASSERT(num_sec_contexts, MOS_NUM_SECURE_CONTEXTS <= 32);
 static u32 SecureContextReservation = (1 << MOS_NUM_SECURE_CONTEXTS) - 1;
 static MosSem SecureContextCounter;
 #endif
