@@ -612,10 +612,21 @@ void HalSendToTxUART(char ch) {
   huart1.Instance->TDR = ch;
 }
 
-static HalRxUARTCallback * s_RXCallback = NULL;
+static HalRxUARTCallback * rx_callback = NULL;
 
 void HalRegisterRxUARTCallback(HalRxUARTCallback * cb) {
-  s_RXCallback = cb;
+  rx_callback = cb;
+}
+
+void USART1_IRQHandler(void) {
+  u32 isr = huart1.Instance->ISR;
+  if (isr & UART_FLAG_RXNE) {
+    char ch = huart1.Instance->RDR;
+    if (rx_callback) (*rx_callback)(ch);
+  }
+  if (isr & UART_FLAG_ORE) {
+    huart1.Instance->ICR = USART_ICR_ORECF;
+  }
 }
 
 /**
@@ -665,8 +676,6 @@ static void MX_USART1_UART_Init(void)
   /* USER CODE END USART1_Init 2 */
 
 }
-
-
 
 /**
   * @brief USART2 Initialization Function
