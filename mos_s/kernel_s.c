@@ -8,11 +8,11 @@
 // MOS Microkernel Secure-side Implementation
 //
 
-#if (MOS_ARM_RTOS_ON_SECURE_SIDE == true)
-
 #include <mos/kernel.h>
 #include <mos/internal/arch.h>
 #include <mos/internal/security.h>
+
+#if (MOS_ARM_RTOS_ON_SECURE_SIDE == true)
 
 // Stack pointer storage for secure context
 typedef struct {

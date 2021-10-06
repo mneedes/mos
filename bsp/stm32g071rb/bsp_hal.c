@@ -166,9 +166,13 @@ void SystemClock_Config(void)
 static HalRxUARTCallback * rx_callback = NULL;
 
 void USART2_IRQHandler(void) {
-     if (huart2.Instance->ISR & UART_FLAG_RXNE) {
+    u32 isr = huart2.Instance->ISR;
+    if (isr & UART_FLAG_RXNE) {
         char ch = huart2.Instance->RDR;
         if (rx_callback) (*rx_callback)(ch);
+    }
+    if (isr & UART_FLAG_ORE) {
+        huart2.Instance->ICR = UART_CLEAR_OREF;
     }
 }
 
