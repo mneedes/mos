@@ -52,7 +52,7 @@ typedef struct MosParams {
 
 // Mos Thread (opaque container)
 typedef struct MosThread {
-    u32 rsvd[19];
+    u32 rsvd[20];
     s32 ref_cnt;
 } MosThread;
 

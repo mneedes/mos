@@ -69,6 +69,7 @@ typedef struct Thread {
     MosLinkHet          tmr_link;
     MosList             stop_q;
     u32                 wake_tick;
+    MosSem            * sem;
     MosThreadPriority   pri;
     MosThreadPriority   nom_pri;
     u8                  stop_request;
@@ -789,10 +790,17 @@ void SysTick_Handler(void) {
             s32 rem_ticks = (s32)thd->wake_tick - Tick.lower;
             if (rem_ticks <= 0) {
                 MosRemoveFromList(elm);
-                // Lock interrupts since thread could be on semaphore pend queue
-                DisableInterrupts();
-                MosRemoveFromList(&thd->run_link);
-                EnableInterrupts();
+                if (thd->state == THREAD_WAIT_FOR_SEM_OR_TICK) {
+                    DisableInterrupts();
+                    if (MosIsOnList(&thd->sem->evt_link)) {
+                        // Event occurred before timeout, just let it be processed
+                        EnableInterrupts();
+                        continue;
+                    } else {
+                        MosRemoveFromList(&thd->run_link);
+                        EnableInterrupts();
+                    }
+                } else MosRemoveFromList(&thd->run_link);
                 MosAddToList(&RunQueues[thd->pri], &thd->run_link);
                 thd->timed_out = 1;
                 SetThreadState(thd, THREAD_RUNNABLE);

@@ -125,6 +125,7 @@ void MosWaitForSem(MosSem * sem) {
         MosRemoveFromList(&RunningThread->run_link);
         MosAddToListBefore(elm, &RunningThread->run_link);
         RunningThread->state = THREAD_WAIT_FOR_SEM;
+        RunningThread->sem = sem;
         YieldThread();
         ExecutePendingInterrupts();
     }
@@ -148,6 +149,7 @@ bool MosWaitForSemOrTO(MosSem * sem, u32 ticks) {
         MosRemoveFromList(&RunningThread->run_link);
         MosAddToListBefore(elm, &RunningThread->run_link);
         RunningThread->state = THREAD_WAIT_FOR_SEM_OR_TICK;
+        RunningThread->sem = sem;
         YieldThread();
         EnableInterruptsWithBarrier();
         // Scheduler is invoked here
@@ -203,6 +205,7 @@ u32 MosWaitForSignal(MosSem * sem) {
         MosRemoveFromList(&RunningThread->run_link);
         MosAddToListBefore(elm, &RunningThread->run_link);
         RunningThread->state = THREAD_WAIT_FOR_SEM;
+        RunningThread->sem = sem;
         YieldThread();
         ExecutePendingInterrupts(); // Scheduler is invoked here
     }
@@ -228,6 +231,7 @@ u32 MosWaitForSignalOrTO(MosSem * sem, u32 ticks) {
         MosRemoveFromList(&RunningThread->run_link);
         MosAddToListBefore(elm, &RunningThread->run_link);
         RunningThread->state = THREAD_WAIT_FOR_SEM_OR_TICK;
+        RunningThread->sem = sem;
         YieldThread();
         EnableInterruptsWithBarrier();
         // Scheduler is invoked here

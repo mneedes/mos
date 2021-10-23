@@ -773,7 +773,7 @@ static s32 SemTestThreadRx(s32 arg) {
 
 static s32 SemTestThreadRxTimeout(s32 arg) {
     for (;;) {
-        if (MosWaitForSemOrTO(&TestSem, sem_test_delay / 2 + 2)) {
+        if (MosWaitForSemOrTO(&TestSem, sem_test_delay / 2 + 10)) {
             TestHisto[arg]++;
         } else {
             TestHisto[arg + 1]++;
@@ -1086,7 +1086,7 @@ static s32 QueueTestThreadTx(s32 arg) {
 
 static s32 QueueTestThreadTxTimeout(s32 arg) {
     for (;;) {
-        if (MosSendToQueue32OrTO(&TestQueue, 2, queue_test_delay / 2 + 2)) {
+        if (MosSendToQueue32OrTO(&TestQueue, 2, queue_test_delay / 2 + 10)) {
             TestHisto[arg]++;
         } else {
             TestHisto[arg + 1]++;

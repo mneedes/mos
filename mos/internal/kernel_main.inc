@@ -192,6 +192,7 @@ static void MOS_USED BlockOnSem(MosSem * sem) {
         MosRemoveFromList(&RunningThread->run_link);
         MosAddToListBefore(elm, &RunningThread->run_link);
         RunningThread->state = THREAD_WAIT_FOR_SEM;
+        RunningThread->sem = sem;
         YieldThread();
     }
     EnableInterrupts();
@@ -235,6 +236,7 @@ static bool MOS_USED BlockOnSemOrTO(MosSem * sem) {
         MosRemoveFromList(&RunningThread->run_link);
         MosAddToListBefore(elm, &RunningThread->run_link);
         RunningThread->state = THREAD_WAIT_FOR_SEM_OR_TICK;
+        RunningThread->sem = sem;
         YieldThread();
         // Must enable interrupts before checking timeout to allow pend
         // Barrier ensures that pend occurs before checking timeout.
