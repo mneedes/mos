@@ -14,6 +14,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdarg.h>
 
 #define MOS_VERSION            0.7
 
@@ -53,6 +54,8 @@
 
 #define MOS_STACK_ALIGNMENT    8
 #define MOS_STACK_ALIGNED      MOS_ALIGNED(MOS_STACK_ALIGNMENT)
+
+#define MOS_PRINT_BUFFER_SIZE  128
 
 // Align values up or down to nearest boundary
 //   mask is (alignment - 1)

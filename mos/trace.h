@@ -35,7 +35,7 @@ extern u32 MosTraceMask;
 // Initialize module
 //   if enable_raw_print_hook is true, then operate low-level prints
 //   through this module.
-void MosInitTrace(u32 mask, bool enable_raw_print_hook);
+void MosInitTrace(u32 mask, bool enable_raw_vprintf_hook);
 
 s32 MosPrint(char * str);
 s32 MosPrintf(const char * fmt, ...);

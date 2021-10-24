@@ -17,8 +17,6 @@
 #include <mos/internal/trace.h>
 #include <mos/trace.h>
 
-#define MOS_PRINT_BUFFER_SIZE   128
-
 u32 MosTraceMask = 0;
 static MosMutex TraceMutex;
 
@@ -40,19 +38,18 @@ u32 _MosPrint(char * str) {
     return cnt;
 }
 
-static void MosRawPrintfCallback(const char * fmt, ...) {
-    va_list args;
-    va_start(args, fmt);
+static void MosRawVPrintfCallback(const char * fmt, va_list args) {
+    MosDisableInterrupts();
     MosVSNPrintf(RawPrintBuffer, MOS_PRINT_BUFFER_SIZE, fmt, args);
-    va_end(args);
     _MosPrint(RawPrintBuffer);
+    MosEnableInterrupts();
 }
 
-void MosInitTrace(u32 mask, bool enable_raw_printf_hook) {
+void MosInitTrace(u32 mask, bool enable_raw_vprintf_hook) {
     MosTraceMask = mask;
     MosInitMutex(&TraceMutex);
-    if (enable_raw_printf_hook)
-        MosRegisterRawPrintfHook(MosRawPrintfCallback);
+    if (enable_raw_vprintf_hook)
+        MosRegisterRawVPrintfHook(MosRawVPrintfCallback, &RawPrintBuffer);
 }
 
 s32 MosPrint(char * str) {

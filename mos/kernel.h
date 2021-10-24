@@ -34,7 +34,7 @@ typedef struct MosTimer MosTimer;
 // Callbacks
 typedef s32 (MosThreadEntry)(s32 arg);
 typedef MOS_ISR_SAFE bool (MosTimerCallback)(MosTimer * tmr);
-typedef void (MosRawPrintfHook)(const char * fmt, ...);
+typedef void (MosRawVPrintfHook)(const char * fmt, va_list args);
 typedef void (MosSleepHook)(void);
 typedef void (MosWakeHook)(void);
 typedef void (MosEventHook)(MosEvent evt, u32 val);
@@ -92,7 +92,7 @@ void MosRunScheduler(void);
 
 // Hooks
 
-void MosRegisterRawPrintfHook(MosRawPrintfHook * hook);
+void MosRegisterRawVPrintfHook(MosRawVPrintfHook * hook, char (*buffer)[MOS_PRINT_BUFFER_SIZE]);
 void MosRegisterSleepHook(MosSleepHook * hook);
 void MosRegisterWakeHook(MosWakeHook * hook);
 void MosRegisterEventHook(MosEventHook * hook);

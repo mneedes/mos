@@ -110,7 +110,7 @@ static MosParams Params = {
 };
 
 // Hooks
-static MosRawPrintfHook * PrintfHook = NULL;
+static MosRawVPrintfHook * VPrintfHook = NULL;
 static MosSleepHook * SleepHook = NULL;
 static MosWakeHook * WakeHook = NULL;
 static void DummyEventHook(MosEvent e, u32 v) { MOS_UNUSED(e); MOS_UNUSED(v); }
@@ -142,11 +142,17 @@ static u32 MOS_USED CyclesPerMicroSec;
 //     add a stack frame for idle thread stack initialization.
 static u8 MOS_STACK_ALIGNED IdleStack[112 + sizeof(StackFrame)];
 
+// Print buffer
+static char (*RawPrintBuffer)[MOS_PRINT_BUFFER_SIZE] = NULL;
+
 const MosParams * MosGetParams(void) {
     return (const MosParams *) &Params;
 }
 
-void MosRegisterRawPrintfHook(MosRawPrintfHook * hook) { PrintfHook = hook; }
+void MosRegisterRawVPrintfHook(MosRawVPrintfHook * hook, char (*buffer)[MOS_PRINT_BUFFER_SIZE]) {
+    VPrintfHook = hook;
+    RawPrintBuffer = buffer;
+}
 void MosRegisterSleepHook(MosSleepHook * hook) { SleepHook = hook; }
 void MosRegisterWakeHook(MosWakeHook * hook) { WakeHook = hook; }
 void MosRegisterEventHook(MosEventHook * hook) { EventHook = hook; }
@@ -179,8 +185,23 @@ static MOS_INLINE void SetRunningThreadStateAndYield(ThreadState state) {
     UnlockScheduler();
 }
 
+static void KPrintf(const char * fmt, ...) {
+    if (VPrintfHook) {
+        va_list args;
+        va_start(args, fmt);
+        (*VPrintfHook)(fmt, args);
+        va_end(args);
+    }
+}
+
+#if (MOS_ARM_RTOS_ON_NON_SECURE_SIDE == true)
+static void KPrint(void) {
+    KPrintf(*RawPrintBuffer);
+}
+#endif
+
 void MosAssertAt(char * file, u32 line) {
-    if (PrintfHook) (*PrintfHook)("Assertion failed in %s on line %u\n", file, line);
+    KPrintf("Assertion failed in %s on line %u\n", file, line);
     if (RunningThread != NO_SUCH_THREAD)
         SetRunningThreadStateAndYield(THREAD_TIME_TO_STOP);
     // not always reachable
@@ -833,7 +854,7 @@ static u32 MOS_USED Scheduler(u32 sp) {
     } else {
         RunningThread = &IdleThread;
 #if (MOS_ARM_RTOS_ON_NON_SECURE_SIDE == true)
-        _MosInitSecureContexts();
+        _NSC_MosInitSecureContexts(KPrint, RawPrintBuffer);
 #endif
     }
     // Update Running Thread state
@@ -916,10 +937,10 @@ static u32 MOS_USED Scheduler(u32 sp) {
     // If there is a new secure context, only load the next context, don't save it.
     // otherwise only save/load the context if it is different.
     if (RunningThread->secure_context_new != RunningThread->secure_context) {
-        _MosSwitchSecureContext(-1, run_thd->secure_context);
+        _NSC_MosSwitchSecureContext(-1, run_thd->secure_context);
         RunningThread->secure_context = RunningThread->secure_context_new;
     } else if (RunningThread->secure_context != run_thd->secure_context)
-        _MosSwitchSecureContext(RunningThread->secure_context, run_thd->secure_context);
+        _NSC_MosSwitchSecureContext(RunningThread->secure_context, run_thd->secure_context);
 #endif
     // Set next thread ID and errno and return its stack pointer
     RunningThread = run_thd;
@@ -997,7 +1018,7 @@ void MosReleaseSecureContext(void) {
     LockScheduler(IntPriMaskLow);
     u32 old_context = RunningThread->secure_context;
     // Reset pointer value for next thread (using current thread context)
-    _MosResetSecureContext(old_context);
+    _NSC_MosResetSecureContext(old_context);
     RunningThread->secure_context_new = MOS_DEFAULT_SECURE_CONTEXT;
     SecureContextReservation |= (1 << old_context);
     // Yield so that stack pointer is made available for next thread.

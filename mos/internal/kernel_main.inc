@@ -436,47 +436,44 @@ static void MOS_USED FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 lr) {
     bool in_isr = ((lr & 0x8) == 0x0);
     bool fp_en = ((lr & 0x10) == 0x0);
     u32 cfsr = MOS_REG(CFSR);
-    if (PrintfHook) {
-        u32 fault_no = (psr & 0xf) - 3;
-        if (fault_no == 2 && (cfsr & 0x400)) fault_no = 4;
-        (*PrintfHook)("\n*** %s Fault %s", fault_type[fault_no],
-                          in_isr ? "IN ISR " : "");
-        if (RunningThread == NO_SUCH_THREAD) (*PrintfHook)("(Pre-Scheduler) ***\n");
-        else if (RunningThread->name && RunningThread->name[0] != '\0')
-            (*PrintfHook)("(Thread %s) ***\n", RunningThread->name);
-        else
-            (*PrintfHook)("(Thread @%08X) ***\n", RunningThread);
+    u32 fault_no = (psr & 0xf) - 3;
+    if (fault_no == 2 && (cfsr & 0x400)) fault_no = 4;
+    KPrintf("\n*** %s Fault %s", fault_type[fault_no],
+                      in_isr ? "IN ISR " : "");
+    if (RunningThread == NO_SUCH_THREAD) KPrintf("(Pre-Scheduler) ***\n");
+    else if (RunningThread->name && RunningThread->name[0] != '\0')
+        KPrintf("(Thread %s) ***\n", RunningThread->name);
+    else
+        KPrintf("(Thread @%08X) ***\n", RunningThread);
 
-        if (fp_en) (*PrintfHook)("*** Lazy Floating Point Enabled ***\n");
+    if (fp_en) KPrintf("*** Lazy Floating Point Enabled ***\n");
 
-        (*PrintfHook)(" HFSR: %08X  CFSR: %08X AFSR: %08X\n",
-                          MOS_REG(HFSR), cfsr, MOS_REG(AFSR));
-        (*PrintfHook)(" BFAR: %08X MMFAR: %08X\n\n", MOS_REG(BFAR), MOS_REG(MMFAR));
+    KPrintf(" HFSR: %08X  CFSR: %08X AFSR: %08X\n", MOS_REG(HFSR), cfsr, MOS_REG(AFSR));
+    KPrintf(" BFAR: %08X MMFAR: %08X\n\n", MOS_REG(BFAR), MOS_REG(MMFAR));
 
-        bool use_psp = ((lr & 0x4) == 0x4);
-        u32 * sp = use_psp ? psp : msp;
-        s32 num_words = 16;
-        if (use_psp && RunningThread != NO_SUCH_THREAD) {
-            u8 * sp2 = RunningThread->stack_bottom;
-            if (*((u32 *)sp2) != STACK_FILL_VALUE)
-                (*PrintfHook)("!!! Thread Stack corruption (bottom) !!!\n");
-            sp2 = (u8 *) ((u32)(sp2 + RunningThread->stack_size - sizeof(u32)) & 0xfffffff8);
-            if (*((u32 *)sp2) != STACK_FILL_VALUE)
-                (*PrintfHook)("!!! Thread Stack corruption (top) !!!\n");
-            s32 rem_words = ((u32 *) sp2) - sp;
-            if (rem_words < 64) num_words = rem_words;
-            else num_words = 64;
-        }
-        (*PrintfHook)("%s Stack @%08X:\n", use_psp ? "Process" : "Main", (u32) sp);
-        (*PrintfHook)(" %08X %08X %08X %08X  (R0 R1 R2 R3)\n",  sp[0], sp[1], sp[2], sp[3]);
-        (*PrintfHook)(" %08X %08X %08X %08X (R12 LR PC PSR)\n", sp[4], sp[5], sp[6], sp[7]);
-        sp += 8;
-        for (s32 ix = 0; ix < (num_words - 8); ix++) {
-            (*PrintfHook)(" %08X", sp[ix]);
-            if ((ix & 0x3) == 0x3) (*PrintfHook)("\n");
-        }
-        (*PrintfHook)("\n\n");
+    bool use_psp = ((lr & 0x4) == 0x4);
+    u32 * sp = use_psp ? psp : msp;
+    s32 num_words = 16;
+    if (use_psp && RunningThread != NO_SUCH_THREAD) {
+        u8 * sp2 = RunningThread->stack_bottom;
+        if (*((u32 *)sp2) != STACK_FILL_VALUE)
+            KPrintf("!!! Thread Stack corruption (bottom) !!!\n");
+        sp2 = (u8 *) ((u32)(sp2 + RunningThread->stack_size - sizeof(u32)) & 0xfffffff8);
+        if (*((u32 *)sp2) != STACK_FILL_VALUE)
+            KPrintf("!!! Thread Stack corruption (top) !!!\n");
+        s32 rem_words = ((u32 *) sp2) - sp;
+        if (rem_words < 64) num_words = rem_words;
+        else num_words = 64;
     }
+    KPrintf("%s Stack @%08X:\n", use_psp ? "Process" : "Main", (u32) sp);
+    KPrintf(" %08X %08X %08X %08X  (R0 R1 R2 R3)\n",  sp[0], sp[1], sp[2], sp[3]);
+    KPrintf(" %08X %08X %08X %08X (R12 LR PC PSR)\n", sp[4], sp[5], sp[6], sp[7]);
+    sp += 8;
+    for (s32 ix = 0; ix < (num_words - 8); ix++) {
+        KPrintf(" %08X", sp[ix]);
+        if ((ix & 0x3) == 0x3) KPrintf("\n");
+    }
+    KPrintf("\n\n");
     if (MOS_HANG_ON_EXCEPTIONS) {
         while (1);
     } else {

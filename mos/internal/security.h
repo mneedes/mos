@@ -11,8 +11,10 @@
 
 #define MOS_DEFAULT_SECURE_CONTEXT        0
 
-void _MosInitSecureContexts(void);
-void _MosResetSecureContext(s32 context);
-void _MosSwitchSecureContext(s32 save_context, s32 restore_context);
+typedef void (MosSecKPrintHook)(void);
+
+void _NSC_MosInitSecureContexts(MosSecKPrintHook * hook, char (*buffer)[MOS_PRINT_BUFFER_SIZE]);
+void _NSC_MosResetSecureContext(s32 context);
+void _NSC_MosSwitchSecureContext(s32 save_context, s32 restore_context);
 
 #endif
