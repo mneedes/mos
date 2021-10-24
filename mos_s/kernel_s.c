@@ -206,7 +206,12 @@ void MOS_NAKED MOS_WEAK UsageFault_Handler(void) {
 
 void MOS_NAKED MOS_WEAK SecureFault_Handler(void) {
     asm volatile (
-        "b HardFault_Handler"
+        "mrs r0, msp_ns\n"
+        "mrs r1, psp_ns\n"
+        "mrs r2, psr\n"
+        "mov r3, lr\n"
+        "b FaultHandler"
+            : : : "r0", "r1", "r2", "r3"
     );
 }
 

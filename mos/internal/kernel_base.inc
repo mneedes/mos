@@ -276,38 +276,59 @@ void MOS_ISR_SAFE MosRaiseSignal(MosSem * sem, u32 flags) {
 //
 
 // TODO: Limit MSP stack dump to end of MSP stack
-// TODO: Dump both stacks on ISR exception?
-static void MOS_USED FaultHandler(u32 * msp, u32 * psp, u32 lr) {
-    bool in_isr = ((lr & 0x8) == 0x0);
+// TODO: Dump more registers
+static void MOS_USED
+FaultHandler(u32 * msp, u32 * psp, u32 exc_rtn) {
+    bool in_isr = ((exc_rtn & 0x8) == 0x0);
     KPrintf("\n*** Hard Fault %s", in_isr ? "IN ISR " : "");
+
     if (RunningThread == NO_SUCH_THREAD) KPrintf("(Pre-Scheduler) ***\n");
     else if (RunningThread->name && RunningThread->name[0] != '\0')
         KPrintf("(Thread %s) ***\n", RunningThread->name);
     else
         KPrintf("(Thread @%08X) ***\n", RunningThread);
-    bool use_psp = ((lr & 0x4) == 0x4);
-    u32 * sp = use_psp ? psp : msp;
+
+    KPrintf(" EXCR: %08X\n\n", exc_rtn);
+
+#if 0
+    KPrintf("   R4: %08X    R5: %08X   R6: %08X,   R7: %08X\n", msp[-1], msp[-2], msp[-3], msp[-4]);
+    KPrintf("   R8: %08X    R9: %08X  R10: %08X,  R11: %08X\n", msp[-5], msp[-6], msp[-7], msp[-8]);
+#endif
+
     s32 num_words = 16;
-    if (use_psp && RunningThread != NO_SUCH_THREAD) {
-        u8 * sp2 = RunningThread->stack_bottom;
-        if (*((u32 *)sp2) != STACK_FILL_VALUE)
+    if ((exc_rtn & 0x4) == 0x0) {
+        KPrintf("Main Stack @%08X:\n", (u32)msp);
+        KPrintf(" %08X %08X %08X %08X  (R0 R1 R2 R3)\n",  msp[0], msp[1], msp[2], msp[3]);
+        KPrintf(" %08X %08X %08X %08X (R12 LR PC PSR)\n", msp[4], msp[5], msp[6], msp[7]);
+        msp += 8;
+        for (s32 ix = 0; ix < (num_words - 8); ix++) {
+            KPrintf(" %08X", msp[ix]);
+            if ((ix & 0x3) == 0x3) KPrintf("\n");
+        }
+        KPrintf("\n");
+    }
+    if (RunningThread != NO_SUCH_THREAD) {
+        u8 * psp2 = RunningThread->stack_bottom;
+        if (*((u32 *)psp2) != STACK_FILL_VALUE)
             KPrintf("!!! Thread Stack corruption (bottom) !!!\n");
-        sp2 = (u8 *) ((u32)(sp2 + RunningThread->stack_size - sizeof(u32)) & 0xfffffff8);
-        if (*((u32 *)sp2) != STACK_FILL_VALUE)
+        psp2 = (u8 *) ((u32)(psp2 + RunningThread->stack_size - sizeof(u32)) & 0xfffffff8);
+        if (*((u32 *)psp2) != STACK_FILL_VALUE)
             KPrintf("!!! Thread Stack corruption (top) !!!\n");
-        s32 rem_words = ((u32 *) sp2) - sp;
+
+        s32 rem_words = ((u32 *)psp2) - psp;
         if (rem_words < 64) num_words = rem_words;
         else num_words = 64;
+
+        KPrintf("Thread Stack @%08X:\n", (u32)psp);
+        KPrintf(" %08X %08X %08X %08X  (R0 R1 R2 R3)\n",  psp[0], psp[1], psp[2], psp[3]);
+        KPrintf(" %08X %08X %08X %08X (R12 LR PC PSR)\n", psp[4], psp[5], psp[6], psp[7]);
+        psp += 8;
+        for (s32 ix = 0; ix < (num_words - 8); ix++) {
+            KPrintf(" %08X", psp[ix]);
+            if ((ix & 0x3) == 0x3) KPrintf("\n");
+        }
+        KPrintf("\n");
     }
-    KPrintf("%s Stack @%08X:\n", use_psp ? "Process" : "Main", (u32) sp);
-    KPrintf(" %08X %08X %08X %08X  (R0 R1 R2 R3)\n",  sp[0], sp[1], sp[2], sp[3]);
-    KPrintf(" %08X %08X %08X %08X (R12 LR PC PSR)\n", sp[4], sp[5], sp[6], sp[7]);
-    sp += 8;
-    for (s32 ix = 0; ix < (num_words - 8); ix++) {
-        KPrintf(" %08X", sp[ix]);
-        if ((ix & 0x3) == 0x3) KPrintf("\n");
-    }
-    KPrintf("\n\n");
     if (MOS_HANG_ON_EXCEPTIONS) {
         while (1);
     } else {
@@ -331,4 +352,3 @@ void MOS_NAKED MOS_WEAK HardFault_Handler(void) {
             : : : "r0", "r1", "r2", "r3"
     );
 }
-
