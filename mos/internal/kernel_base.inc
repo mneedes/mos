@@ -276,7 +276,6 @@ void MOS_ISR_SAFE MosRaiseSignal(MosSem * sem, u32 flags) {
 //
 
 // TODO: Limit MSP stack dump to end of MSP stack
-// TODO: Dump more registers
 static void MOS_USED
 FaultHandler(u32 * msp, u32 * psp, u32 exc_rtn) {
     bool in_isr = ((exc_rtn & 0x8) == 0x0);
@@ -288,12 +287,12 @@ FaultHandler(u32 * msp, u32 * psp, u32 exc_rtn) {
     else
         KPrintf("(Thread @%08X) ***\n", RunningThread);
 
-    KPrintf(" EXCR: %08X\n\n", exc_rtn);
-
-#if 0
-    KPrintf("   R4: %08X    R5: %08X   R6: %08X,   R7: %08X\n", msp[-1], msp[-2], msp[-3], msp[-4]);
-    KPrintf("   R8: %08X    R9: %08X  R10: %08X,  R11: %08X\n", msp[-5], msp[-6], msp[-7], msp[-8]);
-#endif
+    u32 * sp = ((exc_rtn & 0x4) == 0) ? msp + 8 : psp;
+    KPrintf("\n    R0: %08X   R1: %08X   R2: %08X,  R3: %08X\n", sp[0], sp[1],  sp[2],  sp[3]);
+    KPrintf("    R4: %08X   R5: %08X   R6: %08X,  R7: %08X\n", msp[0], msp[1], msp[2], msp[3]);
+    KPrintf("    R8: %08X   R9: %08X  R10: %08X, R11: %08X\n", msp[4], msp[5], msp[6], msp[7]);
+    KPrintf("  EXCR: %08X\n\n", exc_rtn);
+    msp += 8;
 
     s32 num_words = 16;
     if ((exc_rtn & 0x4) == 0x0) {
@@ -345,6 +344,7 @@ FaultHandler(u32 * msp, u32 * psp, u32 exc_rtn) {
 
 void MOS_NAKED MOS_WEAK HardFault_Handler(void) {
     asm volatile (
+        "push {r4-r11}\n"
         "mrs r0, msp\n"
         "mrs r1, psp\n"
         "mov r2, lr\n"
