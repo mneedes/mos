@@ -60,15 +60,16 @@ static MOS_INLINE void UnlockScheduler(void) {
 
 #define MOS_REG_AIRCR          (*(volatile u32 *)0xe000ed0c)
 #define MOS_GET_PRI_GROUP_NUM  ((MOS_REG_AIRCR >> 8) & 0x7)
-#define MOS_VAL_AIRCR_MASK     0x00006030
 #define MOS_VAL_VECTKEY        0x05fa0000
+#define MOS_VAL_AIRCR_SEC_MASK 0x00000730
+#define MOS_VAL_AIRCR_SEC      (MOS_VAL_VECTKEY | 0x00004000)
 
 #define MOS_REG_CCR            (*(volatile u32 *)0xe000ed14)
 #define MOS_VAL_DIV0_TRAP      (0x1 << 4)
 #define MOS_VAL_UNALIGN_TRAP   (0x1 << 3)
 
 #define MOS_REG_SHCSR          (*(volatile u32 *)0xe000ed24)
-#define MOS_VAL_FAULT_ENABLE   (0x7 << 16)
+#define MOS_VAL_FAULT_ENABLE   (0xf << 16)
 
 #define MOS_REG_CPUID_NS       (*(volatile u32 *)0xe002ed00)
 

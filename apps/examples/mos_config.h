@@ -17,28 +17,32 @@
 
 /// Thread priorities <=> [0 ... MOS_MAX_THREAD_PRIORITIES - 1].
 /// The lower the number the higher the priority
-#define MOS_MAX_THREAD_PRIORITIES   4
+#define MOS_MAX_THREAD_PRIORITIES       4
 
 /// Interrupt tick rate
 ///
-#define MOS_MICRO_SEC_PER_TICK      1000
+#define MOS_MICRO_SEC_PER_TICK          1000
 
-/// Monitor maximum stack usage on context switches.
+/// Monitor maximum stack usage
 ///
-#define MOS_STACK_USAGE_MONITOR     true
+#define MOS_STACK_USAGE_MONITOR         true
 
 /// Enable events (required for MOS profiling).
 ///
-#define MOS_ENABLE_EVENTS           false
-
-/// Enable "unintentional" alignment faults.
-/// Recommend true for small from-scratch projects,
-/// false for large, pre-existing code bases.
-#define MOS_ENABLE_UNALIGN_FAULTS   false
+#define MOS_ENABLE_EVENTS               false
 
 /// Hang on exceptions.
 /// Generally set to true unless this is a testbench.
 /// Can be used in systems with watchdog timer reset to reboot
-#define MOS_HANG_ON_EXCEPTIONS      true
+#define MOS_HANG_ON_EXCEPTIONS          true
+
+/// Number of simultaneous secure thread contexts (e.g.: TrustZone).
+/// Set to zero to disable security.
+/// Ignored on systems without security support.
+#define MOS_NUM_SECURE_CONTEXTS         2
+
+/// Stack size for secure context store (e.g.: TrustZone).
+/// Ignored on systems without security support.
+#define MOS_SECURE_CONTEXT_STACK_SIZE   512
 
 #endif

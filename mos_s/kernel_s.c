@@ -8,8 +8,6 @@
 // MOS Microkernel Secure-side Implementation
 //
 
-// TODO: Seal the stack per ARM security recommendations
-
 #include <mos/kernel.h>
 #include <mos/internal/arch.h>
 #include <mos/internal/security.h>
@@ -17,15 +15,20 @@
 
 #if (MOS_ARM_RTOS_ON_SECURE_SIDE == true)
 
+#define STACK_SEAL       0xfef5eda5
+
 // Stack pointer storage for secure context
 typedef struct {
-    u32 splim;
-    u32 sp;
+    u8 * splim;
+    u8 * sp;
 } SecureContext;
 
 // Secure context stacks are for user applications.
 static u8 MOS_STACK_ALIGNED
 Stacks[MOS_NUM_SECURE_CONTEXTS][MOS_SECURE_CONTEXT_STACK_SIZE];
+
+// Secure stack size must be multiple of 8
+MOS_STATIC_ASSERT(sec_stack_size, (MOS_SECURE_CONTEXT_STACK_SIZE & 0x7) == 0x0);
 
 // Stack pointer storage for context switches.
 static SecureContext Contexts[MOS_NUM_SECURE_CONTEXTS];
@@ -41,26 +44,23 @@ static void S_KPrintf(const char * fmt, ...) {
         va_start(args, fmt);
         asm volatile ( "cpsid if" );
         S_MosVSNPrintf(*RawPrintBuffer, MOS_PRINT_BUFFER_SIZE, fmt, args);
-        (*KPrintHook)();
         asm volatile ( "cpsie if" );
         va_end(args);
+        (*KPrintHook)();
     }
 }
 
-// Secure stack size must be multiple of 8
-MOS_STATIC_ASSERT(sec_stack_size, (MOS_SECURE_CONTEXT_STACK_SIZE & 0x7) == 0x0);
-
-static MOS_INLINE u32 GetPSP(void) {
-    u32 psp;
+static MOS_INLINE u8 * GetPSP(void) {
+    u8 * psp;
     asm volatile ( "mrs %0, psp" : "=r" (psp) : : );
     return psp;
 }
 
-static MOS_INLINE void SetPSP(u32 psp) {
+static MOS_INLINE void SetPSP(u8 * psp) {
     asm volatile ( "msr psp, %0" : : "r" (psp) : );
 }
 
-static MOS_INLINE void SetPSPLIM(u32 psplim) {
+static MOS_INLINE void SetPSPLIM(u8 * psplim) {
     asm volatile ( "msr psplim, %0" : : "r" (psplim) : );
 }
 
@@ -77,29 +77,30 @@ void MOS_NSC_ENTRY
 _NSC_MosInitSecureContexts(MosSecKPrintHook * hook, char (*buffer)[MOS_PRINT_BUFFER_SIZE]) {
     KPrintHook = (NS_SecKPrintHook *)hook;
     RawPrintBuffer = buffer;
-
-    // TODO: Initialize exception handler configuration
+    // Prioritize secure exceptions and enable all secure mode faults
+    MOS_REG(AIRCR) = (MOS_REG(AIRCR) & MOS_REG_VALUE(AIRCR_SEC_MASK)) | MOS_REG_VALUE(AIRCR_SEC);
+   // Trap Divide By 0 and disable "Unintentional" Alignment Faults
     MOS_REG(CCR) |=  MOS_REG_VALUE(DIV0_TRAP);
     MOS_REG(CCR) &= ~MOS_REG_VALUE(UNALIGN_TRAP);
-    // Enable Bus, Memory and Usage Faults in general
+    // Enable Bus, Memory, Usage and Security Faults in general
     MOS_REG(SHCSR) |= MOS_REG_VALUE(FAULT_ENABLE);
-
     // Initialize stack pointers
     for (u32 context = 0; context < MOS_NUM_SECURE_CONTEXTS; context++) {
-        Contexts[context].splim = (u32)&Stacks[context][0];
-        Contexts[context].sp    = (u32)&Stacks[context][0] + MOS_SECURE_CONTEXT_STACK_SIZE;
+        Contexts[context].splim = Stacks[context];
+        Contexts[context].sp    = Stacks[context] + MOS_SECURE_CONTEXT_STACK_SIZE - 8;
+        *((u32 *)(Contexts[context].sp)) = STACK_SEAL;
     }
     // Set initial stack pointers and set thread mode on secure side
     SetPSPLIM(Contexts[0].splim);
     SetPSP(Contexts[0].sp);
     SetControl(0x2);
-    S_KPrintf("Initializing secure side\n");
 }
 
 // NOTE: This can be run in thread mode as long as the scheduler is locked
-//       during the call as it is not manipulating stack pointers directly.
+//       during this call as it is not manipulating stack pointers directly.
 void MOS_NSC_ENTRY _NSC_MosResetSecureContext(s32 context) {
-    Contexts[context].sp = (u32)&Stacks[context][0] + MOS_SECURE_CONTEXT_STACK_SIZE;
+    Contexts[context].sp = Stacks[context] + MOS_SECURE_CONTEXT_STACK_SIZE - 8;
+    *((u32 *)(Contexts[context].sp)) = STACK_SEAL;
 }
 
 // Induces a crash

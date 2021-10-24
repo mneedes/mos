@@ -31,23 +31,18 @@
 ///
 #define MOS_ENABLE_EVENTS               false
 
-/// Enable "unintentional" alignment faults.
-/// Recommend true for small from-scratch projects,
-/// false for large, pre-existing code bases.
-#define MOS_ENABLE_UNALIGN_FAULTS       false
-
 /// Hang on exceptions.
 /// Generally set to true unless this is a testbench.
 /// Can be used in systems with watchdog timer reset to reboot
 #define MOS_HANG_ON_EXCEPTIONS          false
 
-/// Number of simultaneous secure thread contexts.
+/// Number of simultaneous secure thread contexts (e.g.: TrustZone).
 /// Set to zero to disable security.
-/// Ignored on systems without security (e.g.: TrustZone) support
+/// Ignored on systems without security support.
 #define MOS_NUM_SECURE_CONTEXTS         2
 
-/// Stack size for secure context store.
-/// Ignored on systems without security (e.g.: TrustZone) support
+/// Stack size for secure context store (e.g.: TrustZone).
+/// Ignored on systems without security support.
 #define MOS_SECURE_CONTEXT_STACK_SIZE   512
 
 #endif

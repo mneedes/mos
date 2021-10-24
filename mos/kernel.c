@@ -711,13 +711,9 @@ void MosInit(void) {
     CyclesPerMicroSec = CyclesPerTick / MOS_MICRO_SEC_PER_TICK;
     // Architecture-specific setup
 #if (MOS_ARCH_CAT == MOS_ARCH_ARM_CORTEX_M_MAIN)
-    // Trap Divide By 0 and (optionally) "Unintentional" Unaligned Accesses
-    if (MOS_ENABLE_UNALIGN_FAULTS) {
-        MOS_REG(CCR) |= (MOS_REG_VALUE(DIV0_TRAP) | MOS_REG_VALUE(UNALIGN_TRAP));
-    } else {
-        MOS_REG(CCR) |=  MOS_REG_VALUE(DIV0_TRAP);
-        MOS_REG(CCR) &= ~MOS_REG_VALUE(UNALIGN_TRAP);
-    }
+    // Trap Divide By 0 and disable "Unintentional" Alignment Faults
+    MOS_REG(CCR) |=  MOS_REG_VALUE(DIV0_TRAP);
+    MOS_REG(CCR) &= ~MOS_REG_VALUE(UNALIGN_TRAP);
     // Enable Bus, Memory and Usage Faults in general
     MOS_REG(SHCSR) |= MOS_REG_VALUE(FAULT_ENABLE);
     if (MOS_FP_LAZY_CONTEXT_SWITCHING) {
