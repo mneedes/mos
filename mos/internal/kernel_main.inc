@@ -445,10 +445,10 @@ FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 exc_rtn) {
 
     u32 * sp = ((exc_rtn & 0x4) == 0) ? msp + 8 : psp;
     KPrintf("\n    R0: %08X   R1: %08X   R2: %08X,  R3: %08X\n", sp[0], sp[1],  sp[2],  sp[3]);
-    KPrintf("    R4: %08X   R5: %08X   R6: %08X,  R7: %08X\n", msp[0], msp[1], msp[2], msp[3]);
-    KPrintf("    R8: %08X   R9: %08X  R10: %08X, R11: %08X\n", msp[4], msp[5], msp[6], msp[7]);
-    KPrintf("  HFSR: %08X CFSR: %08X AFSR: %08X BFAR: %08X\n", MOS_REG(HFSR), cfsr, MOS_REG(AFSR), MOS_REG(BFAR));
-    KPrintf(" MMFAR: %08X EXCR: %08X\n\n", MOS_REG(MMFAR), exc_rtn);
+    KPrintf("    R4: %08X   R5: %08X   R6: %08X   R7: %08X\n", msp[0], msp[1], msp[2], msp[3]);
+    KPrintf("    R8: %08X   R9: %08X  R10: %08X  R11: %08X\n", msp[4], msp[5], msp[6], msp[7]);
+    KPrintf("  HFSR: %08X CFSR: %08X AFSR: %08X EXCR: %08X\n", MOS_REG(HFSR), cfsr, MOS_REG(AFSR), exc_rtn);
+    KPrintf(" MMFAR: %08X BFAR: %08X\n\n", MOS_REG(MMFAR), MOS_REG(BFAR));
     msp += 8;
 
     s32 num_words = 16;

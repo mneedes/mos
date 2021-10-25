@@ -85,6 +85,8 @@ static MOS_INLINE void UnlockScheduler(void) {
 #define MOS_REG_MMFAR          (*(volatile u32 *)0xe000ed34)
 #define MOS_REG_BFAR           (*(volatile u32 *)0xe000ed38)
 #define MOS_REG_AFSR           (*(volatile u32 *)0xe000ed3c)
+#define MOS_REG_SFSR           (*(volatile u32 *)0xe000ede4)
+#define MOS_REG_SFAR           (*(volatile u32 *)0xe000ede8)
 
 // Debug registers
 #define MOS_REG_DHCSR          (*(volatile u32 *)0xe000edf0)
