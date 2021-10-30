@@ -12,10 +12,7 @@
 
 // Convert integers, long long integers and double-precision floating point to ASCII
 u32 MosItoa(char * restrict out, s32 input, u16 base, bool is_upper,
-            u16 min_digits, char pad_char, bool is_signed);
-u32 MosLLtoa(char * restrict out, s64 input, u16 base, bool is_upper,
-             u16 min_digits, char pad_char, bool is_signed);
-u32 MosDtoa(char * restrict out, double in, u16 min_width, u16 prec);
+            u16 min_width, char pad_char, bool is_signed);
 
 // Like C vsnprintf()/vsnprintf() EXCEPT that it will always return number of
 //   actual characters printed rather than what would have been printed.

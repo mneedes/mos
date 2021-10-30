@@ -13,47 +13,47 @@
 static const char LowerCaseDigits[] = "0123456789abcdef";
 static const char UpperCaseDigits[] = "0123456789ABCDEF";
 
-u32 S_MosItoa(char * restrict out, s32 in, u16 base, bool is_upper,
-              u16 min_width, char pad_char, bool is_signed) {
-    u32 adj = (u32) in;
-    u8 shift = 0;
-    switch (base) {
-    case 2:
-        shift = 1;
-        break;
-    case 8:
-        shift = 3;
-        break;
-    case 16:
-        shift = 4;
-        break;
-    }
+// Use structure to limit stack depth
+typedef struct {
+    // Format settings
+    u8   base;
+    u8   is_upper;
+    u8   is_signed;
+    u8   min_width;
+    char pad_char;
+    // State variables
+    u8   do_numeric;
+    u8   in_arg;
+} Format;
+
+static u32 S_Itoa(char * restrict out, Format * format, s32 in) {
+    u32 adj = (u32)in;
     s32 cnt = 0;
-    if (shift) {
+    if (format->base == 16) {
         const char * restrict digits = LowerCaseDigits;
-        if (is_upper) digits = UpperCaseDigits;
-        u32 mask = (1 << shift) - 1;
+        if (format->is_upper) digits = UpperCaseDigits;
+        const u32 mask = (1 << 4) - 1;
         do {
             *out++ = digits[adj & mask];
-            adj >>= shift;
+            adj >>= 4;
             cnt++;
         } while (adj != 0);
     } else {
-        if (is_signed && in < 0) adj = (u32) -in;
+        if (format->is_signed && in < 0) adj = (u32) -in;
         // Determine digits (in reverse order)
         do {
-            *out++ = LowerCaseDigits[adj % base];
-            adj = adj / base;
+            *out++ = LowerCaseDigits[adj % format->base];
+            adj = adj / format->base;
             cnt++;
         } while (adj != 0);
         // Write sign
-        if (is_signed && in < 0) {
+        if (format->is_signed && in < 0) {
             *out++ = '-';
             cnt++;
         }
     }
     // Pad to minimum number of digits
-    for (; cnt < min_width; cnt++) *out++ = pad_char;
+    for (; cnt < format->min_width; cnt++) *out++ = format->pad_char;
     // Reverse digit order in place
     for (s32 idx = 0; idx < ((cnt + 1) >> 1); idx++) {
         char tmp = out[idx - cnt];
@@ -64,8 +64,7 @@ u32 S_MosItoa(char * restrict out, s32 in, u16 base, bool is_upper,
 }
 
 static void
-WriteBuf(char * restrict * out, const char * restrict in,
-         s32 len, s32 * buf_rem) {
+S_WriteBuf(char * restrict * out, const char * restrict in, s32 len, s32 * buf_rem) {
     u32 cnt = (len < *buf_rem) ? len : *buf_rem;
     *buf_rem -= cnt;
     for (; cnt > 0; cnt--) {
@@ -74,96 +73,90 @@ WriteBuf(char * restrict * out, const char * restrict in,
     }
 }
 
-s32 S_MosVSNPrintf(char * restrict buffer, mos_size sz,
-                   const char * restrict fmt, va_list args) {
+s32
+S_MosVSNPrintf(char * restrict buffer, mos_size sz, const char * restrict fmt, va_list args) {
     const char * restrict ch = fmt;
     char * restrict out = buffer;
-    s32 buf_rem = (s32) sz - 1;
-    u32 do_numeric, is_signed, is_upper = false, in_arg = false;
-    u32 base, min_width;
-    char pad_char = ' ';
+    s32 buf_rem = (s32)sz - 1;
+    Format format = { .in_arg = false };
     for (ch = fmt; *ch != '\0'; ch++) {
-        if (!in_arg) {
+        if (!format.in_arg) {
             if (*ch == '%') {
-                is_upper = false;
                 // Found argument, set default state
-                in_arg = true;
-                pad_char = ' ';
-                min_width = 0;
-            } else WriteBuf(&out, ch, 1, &buf_rem);
+                format.min_width = 0;
+                format.pad_char  = ' ';
+                format.in_arg    = true;
+            } else S_WriteBuf(&out, ch, 1, &buf_rem);
         } else if (*ch >= '0' && *ch <= '9') {
-            if (min_width == 0 && *ch == '0') pad_char = '0';
-            else min_width = (10 * min_width) + (*ch - '0');
+            if (format.min_width == 0 && *ch == '0') format.pad_char = '0';
+            else format.min_width = (10 * format.min_width) + (*ch - '0');
         } else {
             // Argument will be consumed (unless modifier found)
-            in_arg = false;
-            do_numeric = false;
+            format.in_arg     = false;
+            format.do_numeric = false;
             switch (*ch) {
             case '%': {
                 char c = '%';
-                WriteBuf(&out, &c, 1, &buf_rem);
+                S_WriteBuf(&out, &c, 1, &buf_rem);
                 break;
             }
             case 'c': {
                 char c = (char) va_arg(args, int);
-                WriteBuf(&out, &c, 1, &buf_rem);
+                S_WriteBuf(&out, &c, 1, &buf_rem);
                 break;
             }
             case 's': {
                 char * arg = va_arg(args, char *);
                 for (; *arg != '\0'; arg++)
-                    WriteBuf(&out, arg, 1, &buf_rem);
+                    S_WriteBuf(&out, arg, 1, &buf_rem);
                 break;
             }
             case 'l':
-                in_arg = true;
+                format.in_arg     = true;
                 break;
             case 'd':
-                base = 10;
-                do_numeric = true;
-                is_signed = true;
+                format.base       = 10;
+                format.is_signed  = true;
+                format.do_numeric = true;
                 break;
             case 'u':
-                base = 10;
-                do_numeric = true;
-                is_signed = false;
+                format.base       = 10;
+                format.is_signed  = false;
+                format.do_numeric = true;
                 break;
             case 'x':
-                base = 16;
-                do_numeric = true;
-                is_signed = false;
-                is_upper = false;
+                format.base       = 16;
+                format.is_upper   = false;
+                format.is_signed  = false;
+                format.do_numeric = true;
                 break;
             case 'X':
-                base = 16;
-                do_numeric = true;
-                is_signed = false;
-                is_upper = true;
+                format.base       = 16;
+                format.is_upper   = true;
+                format.is_signed  = false;
+                format.do_numeric = true;
                 break;
             case 'p': {
-                s32 arg32 = (u32) va_arg(args, u32 *);
+                s32 arg32 = (u32)va_arg(args, u32 *);
                 char tmp32[8];
-                u32 cnt = S_MosItoa(tmp32, arg32, 16, false, 8, '0', false);
-                WriteBuf(&out, tmp32, cnt, &buf_rem);
-                break;
-            }
-            case 'P': {
-                s32 arg32 = (u32) va_arg(args, u32 *);
-                char tmp32[8];
-                u32 cnt = S_MosItoa(tmp32, arg32, 16, true, 8, '0', false);
-                WriteBuf(&out, tmp32, cnt, &buf_rem);
+                format.base       = 16;
+                format.is_upper   = false;
+                format.is_signed  = false;
+                format.min_width  = 8;
+                format.pad_char   = '0';
+                u32 cnt = S_Itoa(tmp32, &format, arg32);
+                S_WriteBuf(&out, tmp32, cnt, &buf_rem);
                 break;
             }
             default:
                 break;
             }
             // Convert numeric types to text
-            if (do_numeric) {
+            if (format.do_numeric) {
                 s32 arg32 = va_arg(args, s32);
                 char tmp32[11];
-                u32 cnt = S_MosItoa(tmp32, arg32, base, is_upper,
-                                    min_width, pad_char, is_signed);
-                WriteBuf(&out, tmp32, cnt, &buf_rem);
+                u32 cnt = S_Itoa(tmp32, &format, arg32);
+                S_WriteBuf(&out, tmp32, cnt, &buf_rem);
             }
         }
     }
@@ -171,7 +164,8 @@ s32 S_MosVSNPrintf(char * restrict buffer, mos_size sz,
     return sz - buf_rem - 1;
 }
 
-s32 S_MosSNPrintf(char * restrict dest, mos_size size, const char * restrict fmt, ...) {
+s32
+S_MosSNPrintf(char * restrict dest, mos_size size, const char * restrict fmt, ...) {
     va_list args;
     va_start(args, fmt);
     s32 cnt = S_MosVSNPrintf(dest, size, fmt, args);
