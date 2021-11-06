@@ -10,8 +10,6 @@
 #include <stdarg.h>
 #include <mos/defs.h>
 
-// Like C vsnprintf()/vsnprintf() EXCEPT that it will always return number of
-//   actual characters printed rather than what would have been printed.
 s32 S_MosVSNPrintf(char * dest, mos_size size, const char * fmt, va_list arg);
 s32 S_MosSNPrintf(char * dest, mos_size size, const char * fmt, ...);
 

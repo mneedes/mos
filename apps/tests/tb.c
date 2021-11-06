@@ -1887,7 +1887,7 @@ static bool MiscTests(void) {
     {
         char * dummy = "bummy_dummy_mummy_";
         char buf[128];
-        if (MosSNPrintf(buf, 32, "%s%s%s", dummy, dummy, dummy) != 31) test_pass = false;
+        if (MosSNPrintf(buf, 32, "%s%s%s", dummy, dummy, dummy) != 54) test_pass = false;
         if (MosSNPrintf(buf, sizeof(buf), "%s", dummy) != (s32)strlen(dummy)) test_pass = false;
         if (strcmp(buf, dummy)) test_pass = false;
         if (MosSNPrintf(buf, 11, "%010llx", 0xdeadbee90) != 10) test_pass = false;
@@ -1899,10 +1899,15 @@ static bool MiscTests(void) {
         float flt = -1.375;
         MosSNPrintf(buf, sizeof(buf), "%0.4f", flt);
         if (strcmp(buf, "-1.3750")) test_pass = false;
-        double dbl = 0.33333333333333;
-        MosSNPrintf(buf, sizeof(buf), "%0.4f", dbl);
-        if (strcmp(buf, "0.3333")) test_pass = false;
-        dbl = 123456789;
+        u64 p0 = 0x3FD5555555555555;
+        double * pf = (double *) &p0;
+        MosSNPrintf(buf, sizeof(buf), "%0.16f", *pf);
+        if (strcmp(buf, "0.3333333333333333")) test_pass = false;
+        MosPrintf("%s\n", buf);
+        p0 = 0x400921fb54442d18;
+        MosSNPrintf(buf, sizeof(buf), "%0.9f", *pf);
+        if (strcmp(buf, "3.141592654")) test_pass = false;
+        double dbl = 123456789;
         MosSNPrintf(buf, sizeof(buf), "%f", dbl);
         if (strcmp(buf, "123456789.000000")) test_pass = false;
         // Note: Tests rounding since 123456789.1 -> 123456789.099999
@@ -1912,11 +1917,6 @@ static bool MiscTests(void) {
         MosSNPrintf(buf, sizeof(buf), "%.1f", dbl);
         if (strcmp(buf, "-123456789.1")) test_pass = false;
         MosPrintf("*%f*\n", dbl);
-        u64 p0 = 0x400921fb54442d18;
-        double * pf = (double *) &p0;
-        MosSNPrintf(buf, sizeof(buf), "%0.9f", *pf);
-        if (strcmp(buf, "3.141592654")) test_pass = false;
-        MosPrintf("%s\n", buf);
         MosSNPrintf(buf, sizeof(buf), "%f", *pf);
         if (strcmp(buf, "3.141593")) test_pass = false;
         MosPrintf("%s\n", buf);

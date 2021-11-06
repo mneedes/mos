@@ -10,12 +10,10 @@
 #include <stdarg.h>
 #include <mos/defs.h>
 
-// Convert integers, long long integers and double-precision floating point to ASCII
+// Convert 32-bit integers to ASCII
 u32 MosItoa(char * restrict out, s32 input, u16 base, bool is_upper,
             u16 min_width, char pad_char, bool is_signed);
 
-// Like C vsnprintf()/vsnprintf() EXCEPT that it will always return number of
-//   actual characters printed rather than what would have been printed.
 s32 MosVSNPrintf(char * dest, mos_size size, const char * fmt, va_list arg);
 s32 MosSNPrintf(char * dest, mos_size size, const char * fmt, ...);
 
