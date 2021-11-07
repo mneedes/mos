@@ -140,7 +140,6 @@ void MOS_NSC_ENTRY _NSC_MosSwitchSecureContext(s32 save_context, s32 restore_con
 
 // TODO: Limit MSP stack dump to end of MSP stack
 // TODO: Faults in Secure ISRs -- test
-// TODO: R4-R11 ?
 static void MOS_USED
 FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 exc_rtn) {
     char * fault_type[] = {
@@ -169,8 +168,8 @@ FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 exc_rtn) {
         // IS NOT a security fault (originated from S side) ...
         S_KPrintf("   MSP: %08X  PSP: %08X\n", (u32)msp, (u32)psp);
         if ((cfsr & 0x100000) == 0x0) {
-            // If a secure fault (NB: different from Security Fault) and not STK_OVF
-            //   then print PC and LR of fault
+            // If this is a secure fault (NB: different from Security Fault)
+            //   and not a stack overflow (STK_OVF) then print PC and LR of fault.
             u32 * sp = in_isr ? msp : psp;
             S_KPrintf("    LR: %08X   PC: %08X\n", sp[5], sp[6]);
         } else {
@@ -209,6 +208,8 @@ FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 exc_rtn) {
                 S_KPrintf(" %08X", psp_ns[ix]);
                 if ((ix & 0x3) == 0x3) S_KPrintf("\n");
             }
+            S_KPrintf("\n R4: %08X R5: %08X  R6: %08X  R7: %08X\n", msp[0], msp[1], msp[2], msp[3]);
+            S_KPrintf(" R8: %08X R9: %08X R10: %08X R11: %08X\n",   msp[4], msp[5], msp[6], msp[7]);
         }
     }
     S_KPrintf("\n");
@@ -219,7 +220,7 @@ void MOS_NAKED MOS_WEAK HardFault_Handler(void) {
     asm volatile (
         "mrs r0, msp_ns\n"
         "mrs r1, psp_ns\n"
-        "push {r0-r1}\n"
+        "push {r0-r1,r4-r11}\n"
         "mrs r0, msp\n"
         "mrs r1, psp\n"
         "mrs r2, psr\n"
