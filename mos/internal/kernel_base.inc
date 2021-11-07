@@ -287,9 +287,7 @@ FaultHandler(u32 * msp, u32 * psp, u32 exc_rtn) {
     else
         KPrintf("(Thread @%08X) ***\n", RunningThread);
 
-    u32 * sp = ((exc_rtn & 0x4) == 0) ? msp + 8 : psp;
-    KPrintf("\n   R0: %08X  R1: %08X   R2: %08X   R3: %08X\n", sp[0], sp[1],  sp[2],  sp[3]);
-    KPrintf("   R4: %08X  R5: %08X   R6: %08X   R7: %08X\n", msp[0], msp[1], msp[2], msp[3]);
+    KPrintf("\n   R4: %08X  R5: %08X   R6: %08X   R7: %08X\n", msp[0], msp[1], msp[2], msp[3]);
     KPrintf("   R8: %08X  R9: %08X  R10: %08X  R11: %08X\n", msp[4], msp[5], msp[6], msp[7]);
     KPrintf(" EXCR: %08X\n\n", exc_rtn);
     msp += 8;
@@ -307,6 +305,8 @@ FaultHandler(u32 * msp, u32 * psp, u32 exc_rtn) {
         KPrintf("\n");
     }
     if (RunningThread != NO_SUCH_THREAD) {
+        KPrintf("Thread Stack @%08X:\n", (u32)psp);
+
         u8 * psp2 = RunningThread->stack_bottom;
         if (*((u32 *)psp2) != STACK_FILL_VALUE)
             KPrintf("!!! Thread Stack corruption (bottom) !!!\n");
@@ -318,7 +318,6 @@ FaultHandler(u32 * msp, u32 * psp, u32 exc_rtn) {
         if (rem_words < 64) num_words = rem_words;
         else num_words = 64;
 
-        KPrintf("Thread Stack @%08X:\n", (u32)psp);
         KPrintf(" %08X %08X %08X %08X  (R0 R1 R2 R3)\n",  psp[0], psp[1], psp[2], psp[3]);
         KPrintf(" %08X %08X %08X %08X (R12 LR PC PSR)\n", psp[4], psp[5], psp[6], psp[7]);
         psp += 8;

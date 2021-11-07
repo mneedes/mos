@@ -443,9 +443,7 @@ FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 exc_rtn) {
         KPrintf("(Thread @%08X) ***\n", RunningThread);
     if ((exc_rtn & 0x10) == 0x0) KPrintf("*** Lazy Floating Point Enabled ***\n");
 
-    u32 * sp = ((exc_rtn & 0x4) == 0) ? msp + 8 : psp;
-    KPrintf("\n    R0: %08X   R1: %08X   R2: %08X,  R3: %08X\n", sp[0], sp[1],  sp[2],  sp[3]);
-    KPrintf("    R4: %08X   R5: %08X   R6: %08X   R7: %08X\n", msp[0], msp[1], msp[2], msp[3]);
+    KPrintf("\n    R4: %08X   R5: %08X   R6: %08X   R7: %08X\n", msp[0], msp[1], msp[2], msp[3]);
     KPrintf("    R8: %08X   R9: %08X  R10: %08X  R11: %08X\n", msp[4], msp[5], msp[6], msp[7]);
     KPrintf("  HFSR: %08X CFSR: %08X AFSR: %08X EXCR: %08X\n", MOS_REG(HFSR), cfsr, MOS_REG(AFSR), exc_rtn);
     KPrintf(" MMFAR: %08X BFAR: %08X\n\n", MOS_REG(MMFAR), MOS_REG(BFAR));
@@ -464,6 +462,8 @@ FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 exc_rtn) {
         KPrintf("\n");
     }
     if (RunningThread != NO_SUCH_THREAD) {
+        KPrintf("Thread Stack @%08X:\n", (u32)psp);
+
         u8 * psp2 = RunningThread->stack_bottom;
         if (*((u32 *)psp2) != STACK_FILL_VALUE)
             KPrintf("!!! Thread Stack corruption (bottom) !!!\n");
@@ -475,9 +475,13 @@ FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 exc_rtn) {
         if (rem_words < 64) num_words = rem_words;
         else num_words = 64;
 
-        KPrintf("Thread Stack @%08X:\n", (u32)psp);
-        KPrintf(" %08X %08X %08X %08X  (R0 R1 R2 R3)\n",  psp[0], psp[1], psp[2], psp[3]);
-        KPrintf(" %08X %08X %08X %08X (R12 LR PC PSR)\n", psp[4], psp[5], psp[6], psp[7]);
+        bool not_stkovf = ((cfsr & 0x100000) == 0);
+        KPrintf(" %08X %08X %08X %08X",  psp[0], psp[1], psp[2], psp[3]);
+        if (not_stkovf) KPrintf("  (R0 R1 R2 R3)");
+        KPrintf("\n %08X %08X %08X %08X", psp[4], psp[5], psp[6], psp[7]);
+        if (not_stkovf) KPrintf(" (R12 LR PC PSR)");
+        KPrintf("\n");
+
         psp += 8;
         for (s32 ix = 0; ix < (num_words - 8); ix++) {
             KPrintf(" %08X", psp[ix]);

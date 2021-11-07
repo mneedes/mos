@@ -9,6 +9,8 @@
 //
 
 #include <mos/kernel.h>
+#include <mos_s/kernel_s.h>
+
 #include <mos/internal/arch.h>
 #include <mos/internal/security.h>
 #include <mos_s/format_string_s.h>
@@ -137,7 +139,8 @@ void MOS_NSC_ENTRY _NSC_MosSwitchSecureContext(s32 save_context, s32 restore_con
 //
 
 // TODO: Limit MSP stack dump to end of MSP stack
-// TODO: Test (TT) non-secure stack pointer(s) before dumping?
+// TODO: Faults in Secure ISRs -- test
+// TODO: R4-R11 ?
 static void MOS_USED
 FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 exc_rtn) {
     char * fault_type[] = {
@@ -163,6 +166,7 @@ FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 exc_rtn) {
     msp += 2;
 
     if (fault_no != 4) {
+        // IS NOT a security fault (originated from S side) ...
         S_KPrintf("   MSP: %08X  PSP: %08X\n", (u32)msp, (u32)psp);
         if ((cfsr & 0x100000) == 0x0) {
             // If a secure fault (NB: different from Security Fault) and not STK_OVF
@@ -182,25 +186,29 @@ FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 exc_rtn) {
             }
         }
     } else {
-        // If a security fault from NS side
+        // IS a security fault (originated from NS side) ... dump stacks after validating pointers
         if (in_isr) {
             S_KPrintf("NS Main Stack @%08X:\n", (u32)msp_ns);
-            S_KPrintf(" %08X %08X %08X %08X  (R0 R1 R2 R3)\n",  msp_ns[0], msp_ns[1], msp_ns[2], msp_ns[3]);
-            S_KPrintf(" %08X %08X %08X %08X (R12 LR PC PSR)\n", msp_ns[4], msp_ns[5], msp_ns[6], msp_ns[7]);
-            msp_ns += 8;
-            for (s32 ix = 0; ix < 8; ix++) {
-                S_KPrintf(" %08X", msp_ns[ix]);
-                if ((ix & 0x3) == 0x3) S_KPrintf("\n");
+            if (S_MosIsAddressRangeNonSecure(msp_ns, 64)) {
+                S_KPrintf(" %08X %08X %08X %08X  (R0 R1 R2 R3)\n",  msp_ns[0], msp_ns[1], msp_ns[2], msp_ns[3]);
+                S_KPrintf(" %08X %08X %08X %08X (R12 LR PC PSR)\n", msp_ns[4], msp_ns[5], msp_ns[6], msp_ns[7]);
+                msp_ns += 8;
+                for (s32 ix = 0; ix < 8; ix++) {
+                    S_KPrintf(" %08X", msp_ns[ix]);
+                    if ((ix & 0x3) == 0x3) S_KPrintf("\n");
+                }
+                S_KPrintf("\n");
             }
-            S_KPrintf("\n");
         }
         S_KPrintf("NS Thread Stack @%08X:\n", (u32)psp_ns);
-        S_KPrintf(" %08X %08X %08X %08X  (R0 R1 R2 R3)\n",  psp_ns[0], psp_ns[1], psp_ns[2], psp_ns[3]);
-        S_KPrintf(" %08X %08X %08X %08X (R12 LR PC PSR)\n", psp_ns[4], psp_ns[5], psp_ns[6], psp_ns[7]);
-        psp_ns += 8;
-        for (s32 ix = 0; ix < 8; ix++) {
-            S_KPrintf(" %08X", psp_ns[ix]);
-            if ((ix & 0x3) == 0x3) S_KPrintf("\n");
+        if (S_MosIsAddressRangeNonSecure(psp_ns, 64)) {
+            S_KPrintf(" %08X %08X %08X %08X  (R0 R1 R2 R3)\n",  psp_ns[0], psp_ns[1], psp_ns[2], psp_ns[3]);
+            S_KPrintf(" %08X %08X %08X %08X (R12 LR PC PSR)\n", psp_ns[4], psp_ns[5], psp_ns[6], psp_ns[7]);
+            psp_ns += 8;
+            for (s32 ix = 0; ix < 8; ix++) {
+                S_KPrintf(" %08X", psp_ns[ix]);
+                if ((ix & 0x3) == 0x3) S_KPrintf("\n");
+            }
         }
     }
     S_KPrintf("\n");

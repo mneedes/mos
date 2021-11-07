@@ -1878,6 +1878,13 @@ static bool MiscTests(void) {
         MosPrint(" Failed\n");
         tests_all_pass = false;
     }
+
+#if 0
+    // Tests security fault
+    u32 val = *((volatile u32 *)0x30000038);
+    MosPrintf("%08X\n", val);
+#endif
+
 #endif
     //
     // MosSNPrintf
