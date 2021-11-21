@@ -291,8 +291,8 @@ FaultHandler(u32 * msp, u32 * psp, u32 exc_rtn) {
     else
         KPrintf("(Thread @%08X) ***\n", RunningThread);
 
-    KPrintf("\n   R4: %08X  R5: %08X   R6: %08X   R7: %08X\n", msp[0], msp[1], msp[2], msp[3]);
-    KPrintf("   R8: %08X  R9: %08X  R10: %08X  R11: %08X\n", msp[4], msp[5], msp[6], msp[7]);
+    KPrintf("\n   R4: %08X  R5: %08X   R6: %08X   R7: %08X\n", msp[4], msp[5], msp[6], msp[7]);
+    KPrintf("   R8: %08X  R9: %08X  R10: %08X  R11: %08X\n", msp[0], msp[1], msp[2], msp[3]);
     KPrintf(" EXCR: %08X\n\n", exc_rtn);
     msp += 8;
 
@@ -347,7 +347,11 @@ FaultHandler(u32 * msp, u32 * psp, u32 exc_rtn) {
 
 void MOS_NAKED MOS_WEAK HardFault_Handler(void) {
     asm volatile (
-        "push {r4-r11}\n"
+        "mov r0, r8\n"
+        "mov r1, r9\n"
+        "mov r2, r10\n"
+        "mov r3, r11\n"
+        "push {r0-r7}\n"
         "mrs r0, msp\n"
         "mrs r1, psp\n"
         "mov r2, lr\n"
