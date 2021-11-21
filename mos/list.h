@@ -31,26 +31,26 @@ typedef struct {
 MOS_ISR_SAFE void MosInitList(MosList * list);
 MOS_ISR_SAFE void MosInitLinkHet(MosLinkHet * elm, u32 type);
 MOS_ISR_SAFE void MosAddToList(MosList * list, MosList * elm_add);
-static MOS_INLINE MOS_ISR_SAFE void
+MOS_ISR_SAFE static MOS_INLINE void
 MosAddToListBefore(MosList * elm_exist, MosList * elm_add) {
     // AddToList <=> AddToListBefore if used on element rather than list
     MosAddToList(elm_exist, elm_add);
 }
-void MOS_ISR_SAFE MosAddToListAfter(MosList * elm_exist, MosList * elm_add);
-static MOS_INLINE MOS_ISR_SAFE void
+MOS_ISR_SAFE void MosAddToListAfter(MosList * elm_exist, MosList * elm_add);
+MOS_ISR_SAFE static MOS_INLINE void
 MosAddToFrontOfList(MosList * list, MosList * elm_add) {
     // AddToListAfter <=> AddToFrontOfList if used on list rather than element
     MosAddToListAfter(list, elm_add);
 }
-void MOS_ISR_SAFE MosRemoveFromList(MosList * elm_rem);
-void MOS_ISR_SAFE MosMoveToEndOfList(MosList * elm_exist, MosList * elm_move);
-static MOS_INLINE MOS_ISR_SAFE bool MosIsLastElement(MosList * list, MosList * elm) {
+MOS_ISR_SAFE void MosRemoveFromList(MosList * elm_rem);
+MOS_ISR_SAFE void MosMoveToEndOfList(MosList * elm_exist, MosList * elm_move);
+MOS_ISR_SAFE static MOS_INLINE bool MosIsLastElement(MosList * list, MosList * elm) {
     return (list->prev == elm);
 }
-static MOS_INLINE MOS_ISR_SAFE bool MosIsListEmpty(MosList * list) {
+MOS_ISR_SAFE static MOS_INLINE bool MosIsListEmpty(MosList * list) {
     return (list->prev == list);
 }
-static MOS_INLINE MOS_ISR_SAFE bool MosIsOnList(MosList * elm) {
+MOS_ISR_SAFE static MOS_INLINE bool MosIsOnList(MosList * elm) {
     return (elm->prev != elm);
 }
 

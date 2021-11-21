@@ -39,10 +39,10 @@ u32 _MosPrint(char * str) {
 }
 
 static void MosRawVPrintfCallback(const char * fmt, va_list args) {
-    MosDisableInterrupts();
+    u32 mask = MosDisableInterrupts();
     MosVSNPrintf(RawPrintBuffer, MOS_PRINT_BUFFER_SIZE, fmt, args);
     _MosPrint(RawPrintBuffer);
-    MosEnableInterrupts();
+    MosEnableInterrupts(mask);
 }
 
 void MosInitTrace(u32 mask, bool enable_raw_vprintf_hook) {

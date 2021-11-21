@@ -6,32 +6,32 @@
 
 #include <mos/list.h>
 
-void MosInitList(MosList * list) {
+MOS_ISR_SAFE void MosInitList(MosList * list) {
     list->prev = list;
     list->next = list;
 }
 
-void MosInitLinkHet(MosLinkHet * link, u32 type) {
+MOS_ISR_SAFE void MosInitLinkHet(MosLinkHet * link, u32 type) {
     link->link.prev = &link->link;
     link->link.next = &link->link;
     link->type = type;
 }
 
-void MosAddToList(MosList * list, MosList * elm_add) {
+MOS_ISR_SAFE void MosAddToList(MosList * list, MosList * elm_add) {
     elm_add->prev = list->prev;
     elm_add->next = list;
     list->prev->next = elm_add;
     list->prev = elm_add;
 }
 
-void MosAddToListAfter(MosList * list, MosList * elm_add) {
+MOS_ISR_SAFE void MosAddToListAfter(MosList * list, MosList * elm_add) {
     elm_add->prev = list;
     elm_add->next = list->next;
     list->next->prev = elm_add;
     list->next = elm_add;
 }
 
-void MosRemoveFromList(MosList * elm_rem) {
+MOS_ISR_SAFE void MosRemoveFromList(MosList * elm_rem) {
     elm_rem->next->prev = elm_rem->prev;
     elm_rem->prev->next = elm_rem->next;
     // For MosIsElementOnList() and safety
@@ -39,7 +39,7 @@ void MosRemoveFromList(MosList * elm_rem) {
     elm_rem->next = elm_rem;
 }
 
-void MosMoveToEndOfList(MosList * elm_exist, MosList * elm_move) {
+MOS_ISR_SAFE void MosMoveToEndOfList(MosList * elm_exist, MosList * elm_move) {
     // Remove element
     elm_move->next->prev = elm_move->prev;
     elm_move->prev->next = elm_move->next;

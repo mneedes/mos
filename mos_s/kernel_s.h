@@ -33,7 +33,7 @@ MOS_ISR_SAFE MOS_INLINE bool S_MosIsAddressNonSecure(const void * address) {
 MOS_ISR_SAFE MOS_INLINE bool S_MosIsAddressRangeNonSecure(const void * address, mos_size size) {
     u32 perms_b = S_MosTT(address);
     u32 perms_e = S_MosTT((u8 *)address + size - 1);
-    return (perms_b == perms_e) && (perms_b & (0x1 << 22)) == 0x0;
+    return (perms_b == perms_e) && ((perms_b & (0x1 << 22)) == 0x0);
 }
 
 #endif

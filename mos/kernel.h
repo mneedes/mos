@@ -101,24 +101,6 @@ void MosRegisterEventHook(MosEventHook * hook);
 /// This allows applications to have insight into the MOS microkernel configuration.
 const MosParams * MosGetParams(void);
 
-// Interrupt methods
-
-/// Used primarily to determine if in interrupt context.
-/// \return '0' if not in an interrupt, otherwise returns vector number
-static MOS_INLINE u32 MOS_ISR_SAFE MosGetIRQNumber(void) {
-    u32 irq;
-    asm volatile (
-        "mrs %0, ipsr"
-            : "=r" (irq)
-    );
-    return irq;
-}
-
-// Nestable disable and enable interrupt methods, must be
-// used in a balanced fashion like a recursive mutex.
-MOS_ISR_SAFE void MosDisableInterrupts(void);
-MOS_ISR_SAFE void MosEnableInterrupts(void);
-
 // Time and Delays
 
 MOS_ISR_SAFE u32 MosGetTickCount(void);

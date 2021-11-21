@@ -94,10 +94,10 @@ u32 MosAddSlabsToPool(MosPool * pool, u32 max_to_add) {
             buf += pool->block_size;
         }
         slab->avail_blocks = pool->blocks_per_slab;
-        DisableInterrupts();
+        _MosDisableInterrupts();
         MosAddToList(&pool->free_q, &slab->slab_link);
         pool->avail_blocks += pool->blocks_per_slab;
-        EnableInterrupts();
+        _MosEnableInterrupts();
     }
     return slabs_added_cnt;
 }
@@ -107,23 +107,23 @@ u32 MosFreeUnallocatedSlabs(MosPool * pool, u32 max_to_remove) {
     u32 slabs_removed_cnt = 0;
     while (1) {
         if (slabs_removed_cnt == max_to_remove) break;
-        DisableInterrupts();
+        _MosDisableInterrupts();
         if (MosIsListEmpty(&pool->free_q)) {
-            EnableInterrupts();
+            _MosEnableInterrupts();
             break;
         }
         pool->avail_blocks -= pool->blocks_per_slab;
         MosList * elm = pool->free_q.next;
         MosRemoveFromList(elm);
-        EnableInterrupts();
+        _MosEnableInterrupts();
         MosFree(pool->heap, container_of(elm, Slab, slab_link));
         slabs_removed_cnt++;
     }
     return slabs_removed_cnt;
 }
 
-void * MosAllocFromSlab(MosPool * pool) {
-    DisableInterrupts();
+MOS_ISR_SAFE void * MosAllocFromSlab(MosPool * pool) {
+    u32 mask = MosDisableInterrupts();
     if (pool->avail_blocks) {
         pool->avail_blocks--;
         Slab * slab;
@@ -142,16 +142,16 @@ void * MosAllocFromSlab(MosPool * pool) {
         MosList * elm = slab->blk_q.next;
         MosRemoveFromList(elm);
         Block * block = container_of(elm, Block, fl_link);
-        EnableInterrupts();
+        MosEnableInterrupts(mask);
         return &block->payload;
     }
-    EnableInterrupts();
+    MosEnableInterrupts(mask);
     return NULL;
 }
 
-void MosFreeToSlab(MosPool * pool, void * _block) {
+MOS_ISR_SAFE void MosFreeToSlab(MosPool * pool, void * _block) {
     Block * block = (Block *) ((u32 *) _block - 1);
-    DisableInterrupts();
+    u32 mask = MosDisableInterrupts();
     pool->avail_blocks++;
     MosAddToList(&block->slab->blk_q, &block->fl_link);
     block->slab->avail_blocks++;
@@ -162,5 +162,5 @@ void MosFreeToSlab(MosPool * pool, void * _block) {
         MosRemoveFromList(&block->slab->slab_link);
         MosAddToList(&pool->free_q, &block->slab->slab_link);
     }
-    EnableInterrupts();
+    MosEnableInterrupts(mask);
 }

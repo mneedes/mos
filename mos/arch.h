@@ -4,6 +4,9 @@
 // terms and conditions contained within the LICENSE file (the
 // "License") included under this distribution.
 
+/// \file  mos/arch.h
+/// \brief MOS Microkernel
+
 //
 // Architecture Definitions
 //
@@ -84,28 +87,59 @@
 #endif
 
 //
-// Interrupt locking
+// Interrupt methods
 //
 
-static MOS_INLINE void DisableInterrupts(void) {
-    asm volatile ( "cpsid if" );
+/// Disable Interrupts (Not nestable, assumes interrupts are enabled prior to call).
+///
+MOS_ISR_SAFE static MOS_INLINE void _MosDisableInterrupts(void) {
+    asm volatile ( "cpsid i" );
 }
 
-static MOS_INLINE void EnableInterrupts(void) {
-    asm volatile ( "cpsie if" );
+/// Enable Interrupts (Not nestable, assumes interrupts are disabled prior to call).
+///
+MOS_ISR_SAFE static MOS_INLINE void _MosEnableInterrupts(void) {
+    asm volatile ( "cpsie i" );
 }
 
-static MOS_INLINE void EnableInterruptsWithBarrier(void) {
-    // Provides barrier to ensure pending interrupt executes before
-    //   subsequent instructions.
-    asm volatile ( "cpsie if\n"
+/// Enable Interrupts (Not nestable, assumes interrupts are disabled prior to call).
+/// Provides barrier to ensure pending interrupt executes before
+///   subsequent instructions.  Can be combined with _MosEnableInterrupts().
+MOS_ISR_SAFE static MOS_INLINE void _MosEnableInterruptsWithBarrier(void) {
+    asm volatile ( "cpsie i\n"
                    "isb" );
 }
 
-static MOS_INLINE void ExecutePendingInterrupts(void) {
-    // Execute any pending interrupts (does not require isb)
-    asm volatile ( "cpsie if\n"
-                   "cpsid if" );
+/// Disable interrupts (Nestable, recommended for ISRs).
+///   Saves mask to remember if interrupts were already disabled prior to this.
+MOS_ISR_SAFE static MOS_INLINE u32 MosDisableInterrupts(void) {
+    u32 mask;
+    asm volatile (
+        "mrs %0, primask\n"
+        "cpsid i"
+            : "=r" (mask) : :
+    );
+    return mask;
+}
+
+/// Enable Interrupts (Nestable, recommended for ISRs).
+///   Only enables if mask indicates interrupts had been enabled in prior call to MosDisableInterrupts().
+MOS_ISR_SAFE static MOS_INLINE void MosEnableInterrupts(u32 mask) {
+    asm volatile (
+        "msr primask, %0"
+            : : "r" (mask) :
+    );
+}
+
+/// Used to determine if in interrupt context.
+/// \return '0' if not in an interrupt, otherwise returns vector number
+MOS_ISR_SAFE static MOS_INLINE u32 MosGetIRQNumber(void) {
+    u32 irq;
+    asm volatile (
+        "mrs %0, ipsr"
+            : "=r" (irq)
+    );
+    return irq;
 }
 
 #endif

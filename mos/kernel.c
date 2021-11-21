@@ -122,7 +122,6 @@ static error_t * ErrNo;
 static Thread IdleThread;
 static MosList RunQueues[MOS_MAX_THREAD_PRIORITIES];
 static MosList ISREventQueue;
-static u32 IntDisableCount = 0;
 static u32 ExcReturnInitial = MOS_EXC_RETURN_DEFAULT;
 #if (MOS_ARM_RTOS_ON_NON_SECURE_SIDE == true)
 MOS_STATIC_ASSERT(num_sec_contexts, MOS_NUM_SECURE_CONTEXTS <= 32);
@@ -157,21 +156,12 @@ void MosRegisterSleepHook(MosSleepHook * hook) { SleepHook = hook; }
 void MosRegisterWakeHook(MosWakeHook * hook) { WakeHook = hook; }
 void MosRegisterEventHook(MosEventHook * hook) { EventHook = hook; }
 
-void MOS_ISR_SAFE MosDisableInterrupts(void) {
-    if (IntDisableCount++ == 0) DisableInterrupts();
-}
-
-void MOS_ISR_SAFE MosEnableInterrupts(void) {
-    if (IntDisableCount == 0) return;
-    if (--IntDisableCount == 0) EnableInterruptsWithBarrier();
-}
-
 static MOS_INLINE void SetThreadState(Thread * thd, ThreadState state) {
     asm volatile ( "dmb" );
     thd->state = state;
 }
 
-static MOS_INLINE MOS_ISR_SAFE void YieldThread(void) {
+MOS_ISR_SAFE static MOS_INLINE void YieldThread(void) {
     // Invoke PendSV handler to potentially perform context switch
     MOS_REG(ICSR) = MOS_REG_VALUE(ICSR_PENDSV);
     asm volatile ( "dsb" );
@@ -216,29 +206,29 @@ u32 MosGetTickCount(void) {
     return Tick.lower;
 }
 
-u64 MosGetCycleCount(void) {
-    DisableInterrupts();
+MOS_ISR_SAFE u64 MosGetCycleCount(void) {
+    u32 mask = MosDisableInterrupts();
     if (MOS_REG(TICK_CTRL) & MOS_REG_VALUE(TICK_FLAG)) Tick.count++;
     s64 tmp = Tick.count;
     u32 val = MOS_REG(TICK_VAL);
-    EnableInterrupts();
+    MosEnableInterrupts(mask);
     return (tmp * CyclesPerTick) - val;
 }
 
-void MosAdvanceTickCount(u32 ticks) {
+MOS_ISR_SAFE void MosAdvanceTickCount(u32 ticks) {
     if (ticks) {
-        DisableInterrupts();
+        u32 mask = MosDisableInterrupts();
         Tick.count += ticks;
         MOS_REG(ICSR) = MOS_REG_VALUE(ICSR_PENDST);
-        EnableInterrupts();
+        MosEnableInterrupts(mask);
     }
 }
 
-static void MOS_USED SetTimeout(u32 ticks) {
+MOS_ISR_SAFE static void MOS_USED SetTimeout(u32 ticks) {
     RunningThread->wake_tick = Tick.lower + ticks;
 }
 
-void MOS_NAKED MosDelayMicroSec(u32 usec) {
+MOS_ISR_SAFE void MOS_NAKED MosDelayMicroSec(u32 usec) {
     MOS_UNUSED(usec);
     asm volatile (
         ".syntax unified\n"
@@ -349,9 +339,9 @@ static s32 ThreadExit(s32 rtn_val) {
     return 0;
 }
 
-static void InitThread(Thread * thd, MosThreadPriority pri,
-                       MosThreadEntry * entry, s32 arg,
-                       u8 * stack_bottom, u32 stack_size) {
+MOS_ISR_SAFE static void
+InitThread(Thread * thd, MosThreadPriority pri, MosThreadEntry * entry, s32 arg,
+               u8 * stack_bottom, u32 stack_size) {
     u8 * sp = stack_bottom;
     // Ensure 8-byte alignment for ARM / varargs compatibility.
     sp = (u8 *) ((u32)(sp + stack_size - sizeof(u32)) & 0xfffffff8);
@@ -449,7 +439,7 @@ static s32 IdleThreadEntry(s32 arg) {
     return 0;
 }
 
-void MOS_ISR_SAFE MosYieldThread(void) {
+MOS_ISR_SAFE void MosYieldThread(void) {
     if (RunningThread == NO_SUCH_THREAD) return;
     // Invoke PendSV handler to potentially perform context switch
     MOS_REG(ICSR) = MOS_REG_VALUE(ICSR_PENDSV);
@@ -534,9 +524,9 @@ bool MosInitThread(MosThread * _thd, MosThreadPriority pri,
         if (MosIsOnList(&thd->tmr_link.link))
             MosRemoveFromList(&thd->tmr_link.link);
         // Lock because thread might be on semaphore pend queue
-        DisableInterrupts();
+        _MosDisableInterrupts();
         MosRemoveFromList(&thd->run_link);
-        EnableInterrupts();
+        _MosEnableInterrupts();
         break;
     }
     SetThreadState(thd, THREAD_UNINIT);
@@ -787,15 +777,15 @@ void MosRunScheduler(void) {
     );
     // Invoke PendSV handler to start scheduler (first context switch)
     YieldThread();
-    EnableInterruptsWithBarrier();
+    _MosEnableInterruptsWithBarrier();
     // Not reachable
     MosAssert(0);
 }
 
 void SysTick_Handler(void) {
-    DisableInterrupts();
+    _MosDisableInterrupts();
     if (MOS_REG(TICK_CTRL) & MOS_REG_VALUE(TICK_FLAG)) Tick.count += 1;
-    EnableInterrupts();
+    _MosEnableInterrupts();
     if (RunningThread == NO_SUCH_THREAD) return;
     // Process timer queue
     //  Timer queues can contain threads or message timers
@@ -808,14 +798,14 @@ void SysTick_Handler(void) {
             if (rem_ticks <= 0) {
                 MosRemoveFromList(elm);
                 if (thd->state == THREAD_WAIT_FOR_SEM_OR_TICK) {
-                    DisableInterrupts();
+                    _MosDisableInterrupts();
                     if (MosIsOnList(&thd->sem->evt_link)) {
                         // Event occurred before timeout, just let it be processed
-                        EnableInterrupts();
+                        _MosEnableInterrupts();
                         continue;
                     } else {
                         MosRemoveFromList(&thd->run_link);
-                        EnableInterrupts();
+                        _MosEnableInterrupts();
                     }
                 } else MosRemoveFromList(&thd->run_link);
                 MosAddToList(&RunQueues[thd->pri], &thd->run_link);
@@ -889,7 +879,7 @@ static u32 MOS_USED Scheduler(u32 sp) {
     //  Event queue allows ISRs to signal semaphores without directly
     //  manipulating run queues, making critical sections shorter
     while (1) {
-        DisableInterrupts();
+        _MosDisableInterrupts();
         if (!MosIsListEmpty(&ISREventQueue)) {
             MosLink * elm = ISREventQueue.next;
             MosRemoveFromList(elm);
@@ -899,15 +889,15 @@ static u32 MOS_USED Scheduler(u32 sp) {
             if (!MosIsListEmpty(&sem->pend_q)) {
                 MosLink * elm = sem->pend_q.next;
                 MosRemoveFromList(elm);
-                EnableInterrupts();
+                _MosEnableInterrupts();
                 Thread * thd = container_of(elm, Thread, run_link);
                 MosAddToFrontOfList(&RunQueues[thd->pri], elm);
                 if (MosIsOnList(&thd->tmr_link.link))
                     MosRemoveFromList(&thd->tmr_link.link);
                 SetThreadState(thd, THREAD_RUNNABLE);
-            } else EnableInterrupts();
+            } else _MosEnableInterrupts();
         } else {
-            EnableInterrupts();
+            _MosEnableInterrupts();
             break;
         }
     }

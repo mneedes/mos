@@ -113,7 +113,7 @@ void MosUnlockMutex(MosMutex * mtx) {
 }
 
 void MosWaitForSem(MosSem * sem) {
-    DisableInterrupts();
+    _MosDisableInterrupts();
     while (sem->value == 0) {
         MosLink * elm = sem->pend_q.next;
         for (; elm != &sem->pend_q; elm = elm->next) {
@@ -127,16 +127,18 @@ void MosWaitForSem(MosSem * sem) {
         RunningThread->state = THREAD_WAIT_FOR_SEM;
         RunningThread->sem = sem;
         YieldThread();
-        ExecutePendingInterrupts();
+        _MosEnableInterruptsWithBarrier();
+        // Scheduler is invoked here
+        _MosDisableInterrupts();
     }
     sem->value--;
     asm volatile ( "dmb" );
-    EnableInterrupts();
+    _MosEnableInterrupts();
 }
 
 bool MosWaitForSemOrTO(MosSem * sem, u32 ticks) {
     SetTimeout(ticks);
-    DisableInterrupts();
+    _MosDisableInterrupts();
     while (sem->value == 0) {
         RunningThread->timed_out = 0;
         MosLink * elm = sem->pend_q.next;
@@ -151,32 +153,32 @@ bool MosWaitForSemOrTO(MosSem * sem, u32 ticks) {
         RunningThread->state = THREAD_WAIT_FOR_SEM_OR_TICK;
         RunningThread->sem = sem;
         YieldThread();
-        EnableInterruptsWithBarrier();
+        _MosEnableInterruptsWithBarrier();
         // Scheduler is invoked here
         if (RunningThread->timed_out) return false;
-        DisableInterrupts();
+        _MosDisableInterrupts();
     }
     sem->value--;
     asm volatile ( "dmb" );
-    EnableInterrupts();
+    _MosEnableInterrupts();
     return true;
 }
 
-bool MOS_ISR_SAFE MosTrySem(MosSem * sem) {
+MOS_ISR_SAFE bool MosTrySem(MosSem * sem) {
     bool success = true;
-    DisableInterrupts();
+    u32 mask = MosDisableInterrupts();
     if (sem->value > 0) {
         sem->value--;
         asm volatile ( "dmb" );
     } else {
         success = false;
     }
-    EnableInterrupts();
+    MosEnableInterrupts(mask);
     return success;
 }
 
-void MOS_ISR_SAFE MosIncrementSem(MosSem * sem) {
-    DisableInterrupts();
+MOS_ISR_SAFE void MosIncrementSem(MosSem * sem) {
+    u32 mask = MosDisableInterrupts();
     sem->value++;
     asm volatile ( "dmb" );
     // This places the semaphore on event queue to be processed by
@@ -189,11 +191,11 @@ void MOS_ISR_SAFE MosIncrementSem(MosSem * sem) {
         // Yield if released thread has higher priority than running thread
         if (RunningThread && thd->pri < RunningThread->pri) YieldThread();
     }
-    EnableInterrupts();
+    MosEnableInterrupts(mask);
 }
 
 u32 MosWaitForSignal(MosSem * sem) {
-    DisableInterrupts();
+    _MosDisableInterrupts();
     while (sem->value == 0) {
         MosLink * elm = sem->pend_q.next;
         for (; elm != &sem->pend_q; elm = elm->next) {
@@ -207,18 +209,20 @@ u32 MosWaitForSignal(MosSem * sem) {
         RunningThread->state = THREAD_WAIT_FOR_SEM;
         RunningThread->sem = sem;
         YieldThread();
-        ExecutePendingInterrupts(); // Scheduler is invoked here
+        _MosEnableInterruptsWithBarrier();
+        // Scheduler is invoked here
+        _MosDisableInterrupts();
     }
     u32 mask = sem->value;
     sem->value = 0;
     asm volatile ( "dmb" );
-    EnableInterrupts();
+    _MosEnableInterrupts();
     return mask;
 }
 
 u32 MosWaitForSignalOrTO(MosSem * sem, u32 ticks) {
     SetTimeout(ticks);
-    DisableInterrupts();
+    _MosDisableInterrupts();
     while (sem->value == 0) {
         RunningThread->timed_out = 0;
         MosLink * elm = sem->pend_q.next;
@@ -233,29 +237,29 @@ u32 MosWaitForSignalOrTO(MosSem * sem, u32 ticks) {
         RunningThread->state = THREAD_WAIT_FOR_SEM_OR_TICK;
         RunningThread->sem = sem;
         YieldThread();
-        EnableInterruptsWithBarrier();
+        _MosEnableInterruptsWithBarrier();
         // Scheduler is invoked here
         if (RunningThread->timed_out) return 0;
-        DisableInterrupts();
+        _MosDisableInterrupts();
     }
     u32 mask = sem->value;
     sem->value = 0;
     asm volatile ( "dmb" );
-    EnableInterrupts();
+    _MosEnableInterrupts();
     return mask;
 }
 
-u32 MOS_ISR_SAFE MosPollSignal(MosSem * sem) {
-    DisableInterrupts();
-    u32 mask = sem->value;
+MOS_ISR_SAFE u32 MosPollSignal(MosSem * sem) {
+    u32 mask = MosDisableInterrupts();
+    u32 poll_mask = sem->value;
     sem->value = 0;
     asm volatile ( "dmb" );
-    EnableInterrupts();
-    return mask;
+    MosEnableInterrupts(mask);
+    return poll_mask;
 }
 
-void MOS_ISR_SAFE MosRaiseSignal(MosSem * sem, u32 flags) {
-    DisableInterrupts();
+MOS_ISR_SAFE void MosRaiseSignal(MosSem * sem, u32 flags) {
+    u32 mask = MosDisableInterrupts();
     sem->value |= flags;
     asm volatile ( "dmb" );
     // This places the semaphore on event queue to be processed by
@@ -268,7 +272,7 @@ void MOS_ISR_SAFE MosRaiseSignal(MosSem * sem, u32 flags) {
         // Yield if released thread has higher priority than running thread
         if (RunningThread && thd->pri < RunningThread->pri) YieldThread();
     }
-    EnableInterrupts();
+    MosEnableInterrupts(mask);
 }
 
 //

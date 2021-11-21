@@ -179,7 +179,7 @@ void MOS_NAKED MosUnlockMutex(MosMutex * mtx) {
 
 static void MOS_USED BlockOnSem(MosSem * sem) {
     // Lock in case semaphore is about to be given by another context.
-    DisableInterrupts();
+    _MosDisableInterrupts();
     // Retry (don't block) if count has since incremented
     if (sem->value == 0) {
         MosLink * elm = sem->pend_q.next;
@@ -195,7 +195,7 @@ static void MOS_USED BlockOnSem(MosSem * sem) {
         RunningThread->sem = sem;
         YieldThread();
     }
-    EnableInterrupts();
+    _MosEnableInterrupts();
 }
 
 void MOS_NAKED MosWaitForSem(MosSem * sem) {
@@ -222,7 +222,7 @@ void MOS_NAKED MosWaitForSem(MosSem * sem) {
 static bool MOS_USED BlockOnSemOrTO(MosSem * sem) {
     bool timeout = false;
     // Lock in case semaphore is about to be given by another context.
-    DisableInterrupts();
+    _MosDisableInterrupts();
     // Immediately retry (don't block) if count has since incremented
     if (sem->value == 0) {
         RunningThread->timed_out = 0;
@@ -240,9 +240,9 @@ static bool MOS_USED BlockOnSemOrTO(MosSem * sem) {
         YieldThread();
         // Must enable interrupts before checking timeout to allow pend
         // Barrier ensures that pend occurs before checking timeout.
-        EnableInterruptsWithBarrier();
+        _MosEnableInterruptsWithBarrier();
         if (RunningThread->timed_out) timeout = true;
-    } else EnableInterrupts();
+    } else _MosEnableInterrupts();
     return timeout;
 }
 
@@ -276,7 +276,7 @@ bool MOS_NAKED MosWaitForSemOrTO(MosSem * sem, u32 ticks) {
     );
 }
 
-bool MOS_NAKED MOS_ISR_SAFE MosTrySem(MosSem * sem) {
+MOS_ISR_SAFE bool MOS_NAKED MosTrySem(MosSem * sem) {
     MOS_USED_PARAM(sem);
     asm volatile (
         "RetryTRS:\n"
@@ -297,11 +297,11 @@ bool MOS_NAKED MOS_ISR_SAFE MosTrySem(MosSem * sem) {
 }
 
 // For yielding when semaphore is given
-static void MOS_USED MOS_ISR_SAFE ReleaseOnSem(MosSem * sem) {
+MOS_ISR_SAFE static void MOS_USED ReleaseOnSem(MosSem * sem) {
     // This places the semaphore on event queue to be processed by
     // scheduler to avoid direct manipulation of run queues.  If run
     // queues were manipulated here critical sections would be larger.
-    DisableInterrupts();
+    u32 mask = MosDisableInterrupts();
     // Only add event if pend_q is not empty and event not already queued
     if (!MosIsListEmpty(&sem->pend_q) && !MosIsOnList(&sem->evt_link)) {
         MosAddToList(&ISREventQueue, &sem->evt_link);
@@ -309,10 +309,10 @@ static void MOS_USED MOS_ISR_SAFE ReleaseOnSem(MosSem * sem) {
         // Yield if released thread has higher priority than running thread
         if (RunningThread && thd->pri < RunningThread->pri) YieldThread();
     }
-    EnableInterrupts();
+    MosEnableInterrupts(mask);
 }
 
-void MOS_NAKED MOS_ISR_SAFE MosIncrementSem(MosSem * sem) {
+MOS_ISR_SAFE void MOS_NAKED MosIncrementSem(MosSem * sem) {
     MOS_USED_PARAM(sem);
     asm volatile (
         "push { lr }\n"
@@ -381,7 +381,7 @@ u32 MOS_NAKED MosWaitForSignalOrTO(MosSem * sem, u32 ticks) {
     );
 }
 
-u32 MOS_NAKED MOS_ISR_SAFE MosPollSignal(MosSem * sem) {
+MOS_ISR_SAFE u32 MOS_NAKED MosPollSignal(MosSem * sem) {
     MOS_USED_PARAM(sem);
     asm volatile (
         "mov r3, #0\n"
@@ -401,7 +401,7 @@ u32 MOS_NAKED MOS_ISR_SAFE MosPollSignal(MosSem * sem) {
     );
 }
 
-void MOS_NAKED MOS_ISR_SAFE MosRaiseSignal(MosSem * sem, u32 flags) {
+MOS_ISR_SAFE void MOS_NAKED MosRaiseSignal(MosSem * sem, u32 flags) {
     MOS_USED_PARAM(sem);
     MOS_USED_PARAM(flags);
     asm volatile (

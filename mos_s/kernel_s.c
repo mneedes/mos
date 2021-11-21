@@ -44,9 +44,9 @@ static void S_KPrintf(const char * fmt, ...) {
     if (KPrintHook) {
         va_list args;
         va_start(args, fmt);
-        asm volatile ( "cpsid if" );
+        _MosDisableInterrupts();
         S_MosVSNPrintf(*RawPrintBuffer, MOS_PRINT_BUFFER_SIZE, fmt, args);
-        asm volatile ( "cpsie if" );
+        _MosEnableInterrupts();
         va_end(args);
         (*KPrintHook)();
     }
@@ -100,7 +100,7 @@ _NSC_MosInitSecureContexts(MosSecKPrintHook * hook, char (*buffer)[MOS_PRINT_BUF
     RawPrintBuffer = buffer;
     // Prioritize secure exceptions and enable all secure mode faults
     MOS_REG(AIRCR) = (MOS_REG(AIRCR) & MOS_REG_VALUE(AIRCR_SEC_MASK)) | MOS_REG_VALUE(AIRCR_SEC);
-   // Trap Divide By 0 and disable "Unintentional" Alignment Faults
+    // Trap Divide By 0 and disable "Unintentional" Alignment Faults
     MOS_REG(CCR) |=  MOS_REG_VALUE(DIV0_TRAP);
     MOS_REG(CCR) &= ~MOS_REG_VALUE(UNALIGN_TRAP);
     // Enable Bus, Memory, Usage and Security Faults in general
@@ -186,7 +186,7 @@ FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 exc_rtn) {
         }
     } else {
         // IS a security fault (originated from NS side) ... dump stacks after validating pointers
-        if (in_isr) {
+        if (in_isr || psp_ns == NULL) {
             S_KPrintf("NS Main Stack @%08X:\n", (u32)msp_ns);
             if (S_MosIsAddressRangeNonSecure(msp_ns, 64)) {
                 S_KPrintf(" %08X %08X %08X %08X  (R0 R1 R2 R3)\n",  msp_ns[0], msp_ns[1], msp_ns[2], msp_ns[3]);
