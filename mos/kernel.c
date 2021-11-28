@@ -15,7 +15,6 @@
 #include <errno.h>
 
 // TODO: multi-level priority inheritance / multiple mutexes at the same time
-// TODO: Change wait queue position on priority change
 // TODO: Hooks for other timers such as LPTIM ?
 // TODO: auto tick startup?
 
@@ -69,7 +68,7 @@ typedef struct Thread {
     MosLinkHet          tmr_link;
     MosList             stop_q;
     u32                 wake_tick;
-    MosSem            * sem;
+    void              * blocked_on;
     MosThreadPriority   pri;
     MosThreadPriority   nom_pri;
     u8                  stop_request;
@@ -602,6 +601,16 @@ void MosChangeThreadPriority(MosThread * _thd, MosThreadPriority new_pri) {
         if (thd->state == THREAD_RUNNABLE) {
             MosRemoveFromList(&thd->run_link);
             MosAddToList(&RunQueues[new_pri], &thd->run_link);
+        } else if (thd->state == THREAD_WAIT_FOR_MUTEX) {
+            // Re-sort thread in mutex pend queue
+            MosRemoveFromList(&thd->run_link);
+            MosMutex * mtx = (MosMutex *)thd->blocked_on;
+            MosLink * elm = mtx->pend_q.next;
+            for (; elm != &mtx->pend_q; elm = elm->next) {
+                Thread * _thd = container_of(elm, Thread, run_link);
+                if (_thd->pri > thd->pri) break;
+            }
+            MosAddToListBefore(elm, &thd->run_link);
         }
     }
     // Always change nominal priority
@@ -799,7 +808,7 @@ void SysTick_Handler(void) {
                 MosRemoveFromList(elm);
                 if (thd->state == THREAD_WAIT_FOR_SEM_OR_TICK) {
                     _MosDisableInterrupts();
-                    if (MosIsOnList(&thd->sem->evt_link)) {
+                    if (MosIsOnList(&((MosSem *)thd->blocked_on)->evt_link)) {
                         // Event occurred before timeout, just let it be processed
                         _MosEnableInterrupts();
                         continue;

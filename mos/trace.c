@@ -8,6 +8,8 @@
 // MOS tracing facility and command shell support
 //
 
+// TODO: printf() should return number of characters printed, not vsnprintf()
+// TODO: Need a _MosPrintN(char * str, u32 N) to print exactly N characters, use in MosPrintf()
 // TODO: Rotating logs
 
 #include <mos/kernel.h>

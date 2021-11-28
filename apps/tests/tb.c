@@ -1357,7 +1357,7 @@ static s32 MutexTestThread(s32 arg) {
     for (;;) {
         if (arg == MUTEX_TEST_PRIO_INHER) {
             static u32 count = 0;
-            if ((count++ & 0xFFF) == 0) {
+            if ((count++ & 0xfff) == 0) {
                 // Give low priority thread chance to acquire mutex
                 MosTrySendToQueue32(&TestQueue, 0);
                 MosDelayThread(5);
@@ -1426,6 +1426,27 @@ static s32 MutexDummyThread(s32 arg) {
     }
     return TEST_PASS;
 }
+
+static s32 MutexChangePrioThread(s32 arg) {
+    for (;;) {
+        MosLockMutex(&TestMutex);
+        MosUnlockMutex(&TestMutex);
+        MosPrintf("Thread %d run\n", arg);
+        TestHisto[arg]++;
+        if (MosIsStopRequested())
+            break;
+    }
+    return TEST_PASS;
+}
+
+static s32 MutexBusyThread(s32 arg) {
+    for (;;) {
+        if (MosIsStopRequested()) break;
+        TestHisto[arg]++;
+    }
+    return TEST_PASS;
+}
+
 
 static bool MutexTests(void) {
     bool tests_all_pass = true;
@@ -1547,6 +1568,40 @@ static bool MutexTests(void) {
         MosPrint(" Failed\n");
         tests_all_pass = false;
     }
+    test_pass = true;
+    MosPrint("Mutex Test 6\n");
+    ClearHistogram();
+    MosInitMutex(&TestMutex);
+    MosLockMutex(&TestMutex);
+    MosInitAndRunThread(Threads[1], 2, MutexChangePrioThread, 2, Stacks[1], DFT_STACK_SIZE);
+    MosInitAndRunThread(Threads[2], 2, MutexChangePrioThread, 1, Stacks[2], DFT_STACK_SIZE);
+    MosInitAndRunThread(Threads[3], 2, MutexChangePrioThread, 0, Stacks[3], DFT_STACK_SIZE);
+    MosDelayThread(2);
+    MosInitAndRunThread(Threads[4], 1, MutexBusyThread, 3, Stacks[4], DFT_STACK_SIZE);
+    MosDelayThread(2);
+    // Changing priorities should force thread order 0 -> 2 (on console log)
+    MosChangeThreadPriority(Threads[1], 3);
+    MosChangeThreadPriority(Threads[3], 0);
+    MosUnlockMutex(&TestMutex);
+    if (MosGetThreadPriority(Threads[1]) != 3) test_pass = false;
+    if (MosGetThreadPriority(Threads[2]) != 2) test_pass = false;
+    if (MosGetThreadPriority(Threads[3]) != 0) test_pass = false;
+    if (MosGetThreadPriority(Threads[4]) != 1) test_pass = false;
+    MosRequestThreadStop(Threads[1]);
+    MosRequestThreadStop(Threads[2]);
+    MosRequestThreadStop(Threads[3]);
+    MosRequestThreadStop(Threads[4]);
+    if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
+    if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
+    if (MosWaitForThreadStop(Threads[3]) != TEST_PASS) test_pass = false;
+    if (MosWaitForThreadStop(Threads[4]) != TEST_PASS) test_pass = false;
+    DisplayHistogram(4);
+    if (test_pass) MosPrint(" Passed\n");
+    else {
+        MosPrint(" Failed\n");
+        tests_all_pass = false;
+    }
+
     return tests_all_pass;
 }
 

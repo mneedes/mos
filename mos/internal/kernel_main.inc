@@ -57,7 +57,7 @@ static void MOS_USED BlockOnMutex(MosMutex * mtx) {
         MosRemoveFromList(&RunningThread->run_link);
         MosAddToListBefore(elm, &RunningThread->run_link);
         // Basic priority inheritance
-        Thread * thd = (Thread *) mtx->owner;
+        Thread * thd = (Thread *)mtx->owner;
         if (RunningThread->pri < thd->pri) {
             thd->pri = RunningThread->pri;
             if (thd->state == THREAD_RUNNABLE) {
@@ -65,6 +65,7 @@ static void MOS_USED BlockOnMutex(MosMutex * mtx) {
                 MosAddToFrontOfList(&RunQueues[thd->pri], &thd->run_link);
             }
         }
+        RunningThread->blocked_on = mtx;
         SetThreadState(RunningThread, THREAD_WAIT_FOR_MUTEX);
         YieldThread();
     }
@@ -192,7 +193,7 @@ static void MOS_USED BlockOnSem(MosSem * sem) {
         MosRemoveFromList(&RunningThread->run_link);
         MosAddToListBefore(elm, &RunningThread->run_link);
         RunningThread->state = THREAD_WAIT_FOR_SEM;
-        RunningThread->sem = sem;
+        RunningThread->blocked_on = sem;
         YieldThread();
     }
     _MosEnableInterrupts();
@@ -236,7 +237,7 @@ static bool MOS_USED BlockOnSemOrTO(MosSem * sem) {
         MosRemoveFromList(&RunningThread->run_link);
         MosAddToListBefore(elm, &RunningThread->run_link);
         RunningThread->state = THREAD_WAIT_FOR_SEM_OR_TICK;
-        RunningThread->sem = sem;
+        RunningThread->blocked_on = sem;
         YieldThread();
         // Must enable interrupts before checking timeout to allow pend
         // Barrier ensures that pend occurs before checking timeout.
