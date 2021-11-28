@@ -64,9 +64,9 @@ typedef struct MosMutex {
 } MosMutex;
 
 typedef struct MosSem {
-    u32     value;
-    MosList pend_q;
-    MosLink evt_link;
+    u32         value;
+    MosThread * thd;
+    MosLink     evt_link;
 } MosSem;
 
 typedef MosSem MosSignal;
