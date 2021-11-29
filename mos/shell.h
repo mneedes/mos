@@ -44,7 +44,7 @@ typedef struct MosShell {
     void * cmd_buffer;
     u16 cmd_buffer_len;
     u16 max_cmd_line_size;
-    s16 cmd_ix;
+    u16 cmd_ix;
     s16 cmd_max_ix;
     s16 cmd_history_ix;
 } MosShell;
