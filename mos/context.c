@@ -8,9 +8,6 @@
 // (Shared) Context
 //
 
-// TODO: Should support for this be added to dynamic threads?
-// TODO: Should they be ClientMessages or ContextMessages?  ClientTimers or ContextTimers?
-
 #include <mos/context.h>
 
 static s32 ContextRunner(s32 in) {

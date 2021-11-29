@@ -509,35 +509,6 @@ static s32 MessageTimerTestThread(s32 arg) {
     return TEST_PASS;
 }
 
-#if 0
-
-static bool MOS_ISR_SAFE ThreadTimerCallback2(MosTimer * tmr) {
-    // TODO: rescheduling timer in callbacks
-    u32 msg = tmr->arg;
-    MosSetTimer(&self_timer, timer_test_delay, msg + 1);
-    return MosTrySendToQueue32(&TestQueue, msg);
-}
-
-static s32 MessageTimerTestThread2(s32 arg) {
-    MosInitQueue32(&TestQueue, queue, count_of(queue));
-    MosInitTimer(&self_timer, &ThreadTimerCallback2);
-    MosSetTimer(&self_timer, timer_test_delay, 0);
-    u32 cnt = 0;
-    for (;;) {
-        if (MosIsStopRequested()) {
-            MosCancelTimer(&self_timer);
-            break;
-        }
-        u32 val = MosReceiveFromQueue32(&TestQueue);
-        if (val != cnt) return TEST_FAIL;
-        cnt++;
-        TestHisto[arg]++;
-    }
-    return TEST_PASS;
-}
-
-#endif
-
 //
 // Timer Tests
 //
@@ -1004,7 +975,6 @@ static bool SemTests(void) {
     }
     //
     // Signals with Timeout
-    //   TODO: needs some work -- since timeout isn't tested yet
     //
     test_pass = true;
     MosPrint("Signals With Timeout\n");
@@ -1268,24 +1238,6 @@ s32 MultiTestThreadRx(s32 arg) {
     return TEST_PASS;
 }
 
-#if 0
-void test() {
-    u32 flags = 0;
-    // Three priority queues and shared signal
-    MosQueue  queue[3];
-    //u32       queueBuf[3][4];
-    MosSignal signal;
-    while (1) {
-        s16 chan = MosWaitOnMultiQueue(&signal, &flags);
-        if (MosTryReceiveFromQueue32(&queue[chan], &val)) {
-
-        } else {
-            MosClearChannel(&flags, chan);
-        }
-    }
-}
-#endif
-
 //
 // Multiple Queue / Semaphore Tests
 //
@@ -1447,7 +1399,6 @@ static s32 MutexBusyThread(s32 arg) {
     return TEST_PASS;
 }
 
-
 static bool MutexTests(void) {
     bool tests_all_pass = true;
     bool test_pass;
@@ -1601,7 +1552,6 @@ static bool MutexTests(void) {
         MosPrint(" Failed\n");
         tests_all_pass = false;
     }
-
     return tests_all_pass;
 }
 

@@ -51,8 +51,6 @@
 // Marks calls that are unsafe in client handlers
 #define MOS_CLIENT_UNSAFE
 
-// TODO: should this all be part of the dynamic threads?
-
 typedef u32 MosContextMessageID;
 enum MosContextMessageID {
     MosContextMessageID_StartClient      = 0xFFFFFFFC,  /* Request client initialization */
