@@ -601,16 +601,29 @@ void MosChangeThreadPriority(MosThread * _thd, MosThreadPriority new_pri) {
         if (thd->state == THREAD_RUNNABLE) {
             MosRemoveFromList(&thd->run_link);
             MosAddToList(&RunQueues[new_pri], &thd->run_link);
-        } else if (thd->state == THREAD_WAIT_FOR_MUTEX) {
-            // Re-sort thread in mutex pend queue
-            MosRemoveFromList(&thd->run_link);
-            MosMutex * mtx = (MosMutex *)thd->blocked_on;
-            MosLink * elm = mtx->pend_q.next;
-            for (; elm != &mtx->pend_q; elm = elm->next) {
-                Thread * _thd = container_of(elm, Thread, run_link);
-                if (_thd->pri > thd->pri) break;
+        } else {
+            MosList * pend_q = NULL;
+            switch (thd->state) {
+            case THREAD_WAIT_FOR_MUTEX:
+                pend_q = &((MosMutex *)thd->blocked_on)->pend_q;
+                break;
+            case THREAD_WAIT_FOR_SEM:
+            case THREAD_WAIT_FOR_SEM_OR_TICK:
+                pend_q = &((MosSem *)thd->blocked_on)->pend_q;
+                break;
+            default:
+                break;
             }
-            MosAddToListBefore(elm, &thd->run_link);
+            if (pend_q) {
+                // Re-sort thread in mutex pend queue
+                MosRemoveFromList(&thd->run_link);
+                MosLink * elm = pend_q->next;
+                for (; elm != pend_q; elm = elm->next) {
+                    Thread * _thd = container_of(elm, Thread, run_link);
+                    if (_thd->pri > thd->pri) break;
+                }
+                MosAddToListBefore(elm, &thd->run_link);
+            }
         }
     }
     // Always change nominal priority

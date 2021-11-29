@@ -192,8 +192,8 @@ static void MOS_USED BlockOnSem(MosSem * sem) {
         // and other other interrupts are locked out.
         MosRemoveFromList(&RunningThread->run_link);
         MosAddToListBefore(elm, &RunningThread->run_link);
-        RunningThread->state = THREAD_WAIT_FOR_SEM;
         RunningThread->blocked_on = sem;
+        RunningThread->state = THREAD_WAIT_FOR_SEM;
         YieldThread();
     }
     _MosEnableInterrupts();
@@ -226,7 +226,6 @@ static bool MOS_USED BlockOnSemOrTO(MosSem * sem) {
     _MosDisableInterrupts();
     // Immediately retry (don't block) if count has since incremented
     if (sem->value == 0) {
-        RunningThread->timed_out = 0;
         MosLink * elm = sem->pend_q.next;
         for (; elm != &sem->pend_q; elm = elm->next) {
             Thread * thd = container_of(elm, Thread, run_link);
@@ -236,8 +235,9 @@ static bool MOS_USED BlockOnSemOrTO(MosSem * sem) {
         // and other other interrupts are locked out.
         MosRemoveFromList(&RunningThread->run_link);
         MosAddToListBefore(elm, &RunningThread->run_link);
-        RunningThread->state = THREAD_WAIT_FOR_SEM_OR_TICK;
+        RunningThread->timed_out = 0;
         RunningThread->blocked_on = sem;
+        RunningThread->state = THREAD_WAIT_FOR_SEM_OR_TICK;
         YieldThread();
         // Must enable interrupts before checking timeout to allow pend
         // Barrier ensures that pend occurs before checking timeout.

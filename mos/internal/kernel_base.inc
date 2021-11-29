@@ -125,8 +125,8 @@ void MosWaitForSem(MosSem * sem) {
         // and other other interrupts are locked out.
         MosRemoveFromList(&RunningThread->run_link);
         MosAddToListBefore(elm, &RunningThread->run_link);
-        RunningThread->state = THREAD_WAIT_FOR_SEM;
         RunningThread->blocked_on = sem;
+        RunningThread->state = THREAD_WAIT_FOR_SEM;
         YieldThread();
         _MosEnableInterruptsWithBarrier();
         // Scheduler is invoked here
@@ -141,7 +141,6 @@ bool MosWaitForSemOrTO(MosSem * sem, u32 ticks) {
     SetTimeout(ticks);
     _MosDisableInterrupts();
     while (sem->value == 0) {
-        RunningThread->timed_out = 0;
         MosLink * elm = sem->pend_q.next;
         for (; elm != &sem->pend_q; elm = elm->next) {
             Thread * thd = container_of(elm, Thread, run_link);
@@ -151,8 +150,9 @@ bool MosWaitForSemOrTO(MosSem * sem, u32 ticks) {
         // and other other interrupts are locked out.
         MosRemoveFromList(&RunningThread->run_link);
         MosAddToListBefore(elm, &RunningThread->run_link);
-        RunningThread->state = THREAD_WAIT_FOR_SEM_OR_TICK;
+        RunningThread->timed_out = 0;
         RunningThread->blocked_on = sem;
+        RunningThread->state = THREAD_WAIT_FOR_SEM_OR_TICK;
         YieldThread();
         _MosEnableInterruptsWithBarrier();
         // Scheduler is invoked here
@@ -207,8 +207,8 @@ u32 MosWaitForSignal(MosSem * sem) {
         // and other other interrupts are locked out.
         MosRemoveFromList(&RunningThread->run_link);
         MosAddToListBefore(elm, &RunningThread->run_link);
-        RunningThread->state = THREAD_WAIT_FOR_SEM;
         RunningThread->blocked_on = sem;
+        RunningThread->state = THREAD_WAIT_FOR_SEM;
         YieldThread();
         _MosEnableInterruptsWithBarrier();
         // Scheduler is invoked here
@@ -225,7 +225,6 @@ u32 MosWaitForSignalOrTO(MosSem * sem, u32 ticks) {
     SetTimeout(ticks);
     _MosDisableInterrupts();
     while (sem->value == 0) {
-        RunningThread->timed_out = 0;
         MosLink * elm = sem->pend_q.next;
         for (; elm != &sem->pend_q; elm = elm->next) {
             Thread * thd = container_of(elm, Thread, run_link);
@@ -235,8 +234,9 @@ u32 MosWaitForSignalOrTO(MosSem * sem, u32 ticks) {
         // and other other interrupts are locked out.
         MosRemoveFromList(&RunningThread->run_link);
         MosAddToListBefore(elm, &RunningThread->run_link);
-        RunningThread->state = THREAD_WAIT_FOR_SEM_OR_TICK;
+        RunningThread->timed_out = 0;
         RunningThread->blocked_on = sem;
+        RunningThread->state = THREAD_WAIT_FOR_SEM_OR_TICK;
         YieldThread();
         _MosEnableInterruptsWithBarrier();
         // Scheduler is invoked here
