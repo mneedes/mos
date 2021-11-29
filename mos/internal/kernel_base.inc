@@ -42,14 +42,8 @@ void MosLockMutex(MosMutex * mtx) {
         return;
     }
     while (mtx->owner != NO_SUCH_THREAD) {
-        // Add thread to pend queue
-        MosLink * elm = mtx->pend_q.next;
-        for (; elm != &mtx->pend_q; elm = elm->next) {
-            Thread * thd = container_of(elm, Thread, run_link);
-            if (thd->pri > RunningThread->pri) break;
-        }
-        MosRemoveFromList(&RunningThread->run_link);
-        MosAddToListBefore(elm, &RunningThread->run_link);
+        // Move thread to pend queue
+        SortThreadByPriority(RunningThread, &mtx->pend_q);
         // Basic priority inheritance
         Thread * thd = (Thread *)mtx->owner;
         if (RunningThread->pri < thd->pri) {
@@ -116,15 +110,9 @@ void MosUnlockMutex(MosMutex * mtx) {
 void MosWaitForSem(MosSem * sem) {
     _MosDisableInterrupts();
     while (sem->value == 0) {
-        MosLink * elm = sem->pend_q.next;
-        for (; elm != &sem->pend_q; elm = elm->next) {
-            Thread * thd = container_of(elm, Thread, run_link);
-            if (thd->pri > RunningThread->pri) break;
-        }
         // Can directly manipulate run queues here since scheduler
         // and other other interrupts are locked out.
-        MosRemoveFromList(&RunningThread->run_link);
-        MosAddToListBefore(elm, &RunningThread->run_link);
+        SortThreadByPriority(RunningThread, &sem->pend_q);
         RunningThread->blocked_on = sem;
         RunningThread->state = THREAD_WAIT_FOR_SEM;
         YieldThread();
@@ -141,15 +129,9 @@ bool MosWaitForSemOrTO(MosSem * sem, u32 ticks) {
     SetTimeout(ticks);
     _MosDisableInterrupts();
     while (sem->value == 0) {
-        MosLink * elm = sem->pend_q.next;
-        for (; elm != &sem->pend_q; elm = elm->next) {
-            Thread * thd = container_of(elm, Thread, run_link);
-            if (thd->pri > RunningThread->pri) break;
-        }
         // Can directly manipulate run queues here since scheduler
         // and other other interrupts are locked out.
-        MosRemoveFromList(&RunningThread->run_link);
-        MosAddToListBefore(elm, &RunningThread->run_link);
+        SortThreadByPriority(RunningThread, &sem->pend_q);
         RunningThread->timed_out = 0;
         RunningThread->blocked_on = sem;
         RunningThread->state = THREAD_WAIT_FOR_SEM_OR_TICK;
@@ -198,15 +180,9 @@ MOS_ISR_SAFE void MosIncrementSem(MosSem * sem) {
 u32 MosWaitForSignal(MosSem * sem) {
     _MosDisableInterrupts();
     while (sem->value == 0) {
-        MosLink * elm = sem->pend_q.next;
-        for (; elm != &sem->pend_q; elm = elm->next) {
-            Thread * thd = container_of(elm, Thread, run_link);
-            if (thd->pri > RunningThread->pri) break;
-        }
         // Can directly manipulate run queues here since scheduler
         // and other other interrupts are locked out.
-        MosRemoveFromList(&RunningThread->run_link);
-        MosAddToListBefore(elm, &RunningThread->run_link);
+        SortThreadByPriority(RunningThread, &sem->pend_q);
         RunningThread->blocked_on = sem;
         RunningThread->state = THREAD_WAIT_FOR_SEM;
         YieldThread();
@@ -225,15 +201,9 @@ u32 MosWaitForSignalOrTO(MosSem * sem, u32 ticks) {
     SetTimeout(ticks);
     _MosDisableInterrupts();
     while (sem->value == 0) {
-        MosLink * elm = sem->pend_q.next;
-        for (; elm != &sem->pend_q; elm = elm->next) {
-            Thread * thd = container_of(elm, Thread, run_link);
-            if (thd->pri > RunningThread->pri) break;
-        }
         // Can directly manipulate run queues here since scheduler
         // and other other interrupts are locked out.
-        MosRemoveFromList(&RunningThread->run_link);
-        MosAddToListBefore(elm, &RunningThread->run_link);
+        SortThreadByPriority(RunningThread, &sem->pend_q);
         RunningThread->timed_out = 0;
         RunningThread->blocked_on = sem;
         RunningThread->state = THREAD_WAIT_FOR_SEM_OR_TICK;

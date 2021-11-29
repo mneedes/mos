@@ -588,6 +588,17 @@ MosThreadPriority MosGetThreadPriority(MosThread * _thd) {
     return thd->pri;
 }
 
+// Sort thread into pend queue by priority
+MOS_ISR_SAFE static void SortThreadByPriority(Thread * thd, MosList * pend_q) {
+    MosRemoveFromList(&thd->run_link);
+    MosLink * elm = pend_q->next;
+    for (; elm != pend_q; elm = elm->next) {
+        Thread * _thd = container_of(elm, Thread, run_link);
+        if (_thd->pri > thd->pri) break;
+    }
+    MosAddToListBefore(elm, &thd->run_link);
+}
+
 void MosChangeThreadPriority(MosThread * _thd, MosThreadPriority new_pri) {
     Thread * thd = (Thread *)_thd;
     LockScheduler(IntPriMaskLow);
@@ -602,27 +613,16 @@ void MosChangeThreadPriority(MosThread * _thd, MosThreadPriority new_pri) {
             MosRemoveFromList(&thd->run_link);
             MosAddToList(&RunQueues[new_pri], &thd->run_link);
         } else {
-            MosList * pend_q = NULL;
             switch (thd->state) {
             case THREAD_WAIT_FOR_MUTEX:
-                pend_q = &((MosMutex *)thd->blocked_on)->pend_q;
+                SortThreadByPriority(thd, &((MosMutex *)thd->blocked_on)->pend_q);
                 break;
             case THREAD_WAIT_FOR_SEM:
             case THREAD_WAIT_FOR_SEM_OR_TICK:
-                pend_q = &((MosSem *)thd->blocked_on)->pend_q;
+                SortThreadByPriority(thd, &((MosSem *)thd->blocked_on)->pend_q);
                 break;
             default:
                 break;
-            }
-            if (pend_q) {
-                // Re-sort thread in mutex pend queue
-                MosRemoveFromList(&thd->run_link);
-                MosLink * elm = pend_q->next;
-                for (; elm != pend_q; elm = elm->next) {
-                    Thread * _thd = container_of(elm, Thread, run_link);
-                    if (_thd->pri > thd->pri) break;
-                }
-                MosAddToListBefore(elm, &thd->run_link);
             }
         }
     }
