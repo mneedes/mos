@@ -8,10 +8,6 @@
 // MOS tracing facility and command shell support
 //
 
-// TODO: printf() should return number of characters printed, not vsnprintf()
-// TODO: Need a _MosPrintN(char * str, u32 N) to print exactly N characters, use in MosPrintf()
-// TODO: Rotating logs
-
 #include <mos/kernel.h>
 #include <mos/hal.h>
 
@@ -22,8 +18,8 @@
 u32 MosTraceMask = 0;
 static MosMutex TraceMutex;
 
-static char PrintBuffer[MOS_PRINT_BUFFER_SIZE];
-static char RawPrintBuffer[MOS_PRINT_BUFFER_SIZE];
+static char PrintBuffer[MOS_PRINT_BUFFER_SIZE + 1];
+static char RawPrintBuffer[MOS_PRINT_BUFFER_SIZE + 1];
 
 void _MosPrintCh(char ch) {
     MosLockMutex(&TraceMutex);
@@ -50,8 +46,11 @@ static void MosRawVPrintfCallback(const char * fmt, va_list args) {
 void MosInitTrace(u32 mask, bool enable_raw_vprintf_hook) {
     MosTraceMask = mask;
     MosInitMutex(&TraceMutex);
+    PrintBuffer[MOS_PRINT_BUFFER_SIZE] = '\0';
+    RawPrintBuffer[MOS_PRINT_BUFFER_SIZE] = '\0';
     if (enable_raw_vprintf_hook)
-        MosRegisterRawVPrintfHook(MosRawVPrintfCallback, &RawPrintBuffer);
+        MosRegisterRawVPrintfHook(MosRawVPrintfCallback,
+                                  (char (*)[MOS_PRINT_BUFFER_SIZE])&RawPrintBuffer);
 }
 
 s32 MosPrint(char * str) {
@@ -69,6 +68,7 @@ s32 MosPrintf(const char * fmt, ...) {
     _MosPrint(PrintBuffer);
     MosUnlockMutex(&TraceMutex);
     va_end(args);
+    if (cnt > MOS_PRINT_BUFFER_SIZE) cnt = MOS_PRINT_BUFFER_SIZE;
     return cnt;
 }
 
