@@ -192,7 +192,7 @@ static u32 CalcOffsetCommandIx(s32 ix, s32 max_ix, s32 offset) {
     return (u32)new_ix;
 }
 
-// FIXME: This is recursive -- maybe not a good idea
+// NOTE: this function is one-level recursive when running commands out of history.
 MosCommandStatus MosRunCommand(MosShell * shell, char * cmd_buf_in) {
     const u32 max_cmd_args = 10;
     u32 argc;

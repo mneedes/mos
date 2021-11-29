@@ -52,8 +52,7 @@ typedef struct MosShell {
 typedef enum {
     MOS_CMD_RECEIVED,
     MOS_CMD_UP_ARROW,
-    MOS_CMD_DOWN_ARROW,
-    //TODO: MOS_CMD_TIMEOUT?
+    MOS_CMD_DOWN_ARROW
 } MosCommandResult;
 
 // Command shell support
