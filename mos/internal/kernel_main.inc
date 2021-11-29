@@ -183,12 +183,17 @@ static void MOS_USED BlockOnSem(MosSem * sem) {
     _MosDisableInterrupts();
     // Retry (don't block) if count has since incremented
     if (sem->value == 0) {
+        MosLink * elm = sem->pend_q.next;
+        for (; elm != &sem->pend_q; elm = elm->next) {
+            Thread * thd = container_of(elm, Thread, run_link);
+            if (thd->pri > RunningThread->pri) break;
+        }
         // Can directly manipulate run queues here since scheduler
         // and other other interrupts are locked out.
         MosRemoveFromList(&RunningThread->run_link);
-        sem->thd = (MosThread *)RunningThread;
-        RunningThread->blocked_on = sem;
+        MosAddToListBefore(elm, &RunningThread->run_link);
         RunningThread->state = THREAD_WAIT_FOR_SEM;
+        RunningThread->blocked_on = sem;
         YieldThread();
     }
     _MosEnableInterrupts();
@@ -221,13 +226,18 @@ static bool MOS_USED BlockOnSemOrTO(MosSem * sem) {
     _MosDisableInterrupts();
     // Immediately retry (don't block) if count has since incremented
     if (sem->value == 0) {
+        RunningThread->timed_out = 0;
+        MosLink * elm = sem->pend_q.next;
+        for (; elm != &sem->pend_q; elm = elm->next) {
+            Thread * thd = container_of(elm, Thread, run_link);
+            if (thd->pri > RunningThread->pri) break;
+        }
         // Can directly manipulate run queues here since scheduler
         // and other other interrupts are locked out.
         MosRemoveFromList(&RunningThread->run_link);
-        sem->thd = (MosThread *)RunningThread;
-        RunningThread->timed_out = 0;
-        RunningThread->blocked_on = sem;
+        MosAddToListBefore(elm, &RunningThread->run_link);
         RunningThread->state = THREAD_WAIT_FOR_SEM_OR_TICK;
+        RunningThread->blocked_on = sem;
         YieldThread();
         // Must enable interrupts before checking timeout to allow pend
         // Barrier ensures that pend occurs before checking timeout.
@@ -294,9 +304,9 @@ MOS_ISR_SAFE static void MOS_USED ReleaseOnSem(MosSem * sem) {
     // queues were manipulated here critical sections would be larger.
     u32 mask = MosDisableInterrupts();
     // Only add event if pend_q is not empty and event not already queued
-    Thread * thd = (Thread *)sem->thd;
-    if (thd != NO_SUCH_THREAD && !MosIsOnList(&sem->evt_link)) {
+    if (!MosIsListEmpty(&sem->pend_q) && !MosIsOnList(&sem->evt_link)) {
         MosAddToList(&ISREventQueue, &sem->evt_link);
+        Thread * thd = container_of(sem->pend_q.next, Thread, run_link);
         // Yield if released thread has higher priority than running thread
         if (RunningThread && thd->pri < RunningThread->pri) YieldThread();
     }

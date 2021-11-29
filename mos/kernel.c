@@ -808,13 +808,12 @@ void SysTick_Handler(void) {
                 MosRemoveFromList(elm);
                 if (thd->state == THREAD_WAIT_FOR_SEM_OR_TICK) {
                     _MosDisableInterrupts();
-                    MosSem * sem = (MosSem *)thd->blocked_on;
-                    if (MosIsOnList(&sem->evt_link)) {
+                    if (MosIsOnList(&((MosSem *)thd->blocked_on)->evt_link)) {
                         // Event occurred before timeout, just let it be processed
                         _MosEnableInterrupts();
                         continue;
                     } else {
-                        sem->thd = NO_SUCH_THREAD;
+                        MosRemoveFromList(&thd->run_link);
                         _MosEnableInterrupts();
                     }
                 } else MosRemoveFromList(&thd->run_link);
@@ -895,12 +894,13 @@ static u32 MOS_USED Scheduler(u32 sp) {
             MosRemoveFromList(elm);
             // Currently only semaphores are on event list
             MosSem * sem = container_of(elm, MosSem, evt_link);
-            Thread * thd = (Thread *)sem->thd;
             // Release thread if it is pending
-            if (thd != NO_SUCH_THREAD) {
-                sem->thd = NO_SUCH_THREAD;
+            if (!MosIsListEmpty(&sem->pend_q)) {
+                MosLink * elm = sem->pend_q.next;
+                MosRemoveFromList(elm);
                 _MosEnableInterrupts();
-                MosAddToFrontOfList(&RunQueues[thd->pri], &thd->run_link);
+                Thread * thd = container_of(elm, Thread, run_link);
+                MosAddToFrontOfList(&RunQueues[thd->pri], elm);
                 if (MosIsOnList(&thd->tmr_link.link))
                     MosRemoveFromList(&thd->tmr_link.link);
                 SetThreadState(thd, THREAD_RUNNABLE);
@@ -971,7 +971,7 @@ bool MosIsMutexOwner(MosMutex * mtx) {
 
 void MosInitSem(MosSem * sem, u32 start_value) {
     sem->value = start_value;
-    sem->thd = NO_SUCH_THREAD;
+    MosInitList(&sem->pend_q);
     MosInitList(&sem->evt_link);
 }
 
