@@ -609,21 +609,20 @@ void MosChangeThreadPriority(MosThread * _thd, MosThreadPriority new_pri) {
     //  -OR- if new priority is higher than priority inheritance priority
     if (thd->pri == thd->nom_pri || new_pri < thd->pri) {
         thd->pri = new_pri;
-        if (thd->state == THREAD_RUNNABLE) {
+        switch (thd->state) {
+        case THREAD_RUNNABLE:
             MosRemoveFromList(&thd->run_link);
             MosAddToList(&RunQueues[new_pri], &thd->run_link);
-        } else {
-            switch (thd->state) {
-            case THREAD_WAIT_FOR_MUTEX:
-                SortThreadByPriority(thd, &((MosMutex *)thd->blocked_on)->pend_q);
-                break;
-            case THREAD_WAIT_FOR_SEM:
-            case THREAD_WAIT_FOR_SEM_OR_TICK:
-                SortThreadByPriority(thd, &((MosSem *)thd->blocked_on)->pend_q);
-                break;
-            default:
-                break;
-            }
+            break;
+        case THREAD_WAIT_FOR_MUTEX:
+            SortThreadByPriority(thd, &((MosMutex *)thd->blocked_on)->pend_q);
+            break;
+        case THREAD_WAIT_FOR_SEM:
+        case THREAD_WAIT_FOR_SEM_OR_TICK:
+            SortThreadByPriority(thd, &((MosSem *)thd->blocked_on)->pend_q);
+            break;
+        default:
+            break;
         }
     }
     // Always change nominal priority
