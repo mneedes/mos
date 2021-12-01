@@ -61,6 +61,7 @@ void MosLockMutex(MosMutex * mtx) {
         LockScheduler(IntPriMaskLow);
     }
     // Take it
+    RunningThread->mtx_cnt++;
     mtx->owner = (MosThread *)RunningThread;
     mtx->depth = 1;
     asm volatile ( "dmb" );
@@ -70,7 +71,10 @@ void MosLockMutex(MosMutex * mtx) {
 bool MosTryMutex(MosMutex * mtx) {
     LockScheduler(IntPriMaskLow);
     asm volatile ( "dsb" );
-    if (mtx->owner == NO_SUCH_THREAD) mtx->owner = (MosThread *)RunningThread;
+    if (mtx->owner == NO_SUCH_THREAD) {
+        RunningThread->mtx_cnt++;
+        mtx->owner = (MosThread *)RunningThread;
+    }
     if (mtx->owner == (MosThread *)RunningThread) {
         mtx->depth++;
         UnlockScheduler();
@@ -85,6 +89,14 @@ void MosUnlockMutex(MosMutex * mtx) {
     LockScheduler(IntPriMaskLow);
     asm volatile ( "dmb" );
     if (--mtx->depth == 0) {
+        if (--RunningThread->mtx_cnt == 0 &&
+        	    RunningThread->pri != RunningThread->nom_pri) {
+            // Reset priority inheritance
+            RunningThread->pri = RunningThread->nom_pri;
+            MosRemoveFromList(&RunningThread->run_link);
+            MosAddToFrontOfList(&RunQueues[RunningThread->pri],
+                                    &RunningThread->run_link);
+        }
         mtx->owner = NO_SUCH_THREAD;
         if (!MosIsListEmpty(&mtx->pend_q)) {
             MosLink * elm = mtx->pend_q.next;
@@ -94,13 +106,6 @@ void MosUnlockMutex(MosMutex * mtx) {
             if (MosIsOnList(&thd->tmr_link.link))
                 MosRemoveFromList(&thd->tmr_link.link);
             SetThreadState(thd, THREAD_RUNNABLE);
-            // Reset priority inheritance
-            if (RunningThread->pri != RunningThread->nom_pri) {
-                RunningThread->pri = RunningThread->nom_pri;
-                MosRemoveFromList(&RunningThread->run_link);
-                MosAddToFrontOfList(&RunQueues[RunningThread->pri],
-                                        &RunningThread->run_link);
-            }
             if (thd->pri < RunningThread->pri) YieldThread();
         }
     }

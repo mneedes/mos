@@ -60,6 +60,7 @@ static volatile u32 SchedCount;
 // Test Sem / Mutex / Mux
 static MosSem TestSem;
 static MosMutex TestMutex;
+static MosMutex TestMutex2;
 
 // Test Message Queue
 static u32 queue[4];
@@ -1363,6 +1364,19 @@ EXIT_MTT:
     return status;
 }
 
+#if 0
+static s32 MutexNestedPrioInversionThread(s32 arg) {
+	for (;;) {
+		MosLockMutex(&TestMutex);
+		MosLockMutex(&TestMutex2);
+
+
+		MosUnlockMutex(&TestMutex2);
+		MosUnlockMutex(&TestMutex);
+	}
+}
+#endif
+
 // Dummy thread is used for priority inheritance tests and
 //   runs at the middle priority.
 static s32 MutexDummyThread(s32 arg) {
@@ -1446,10 +1460,53 @@ static bool MutexTests(void) {
         tests_all_pass = false;
     }
     //
+    // Try Mutex
+    //
+    test_pass = true;
+    MosPrint("Try Mutex\n");
+    ClearHistogram();
+    MosInitMutex(&TestMutex);
+    MosInitAndRunThread(Threads[1], 2, MutexTryTestThread, 0, Stacks[1], DFT_STACK_SIZE);
+    MosInitAndRunThread(Threads[2], 2, MutexTryTestThread, 1, Stacks[2], DFT_STACK_SIZE);
+    MosDelayThread(5000);
+    MosRequestThreadStop(Threads[1]);
+    MosRequestThreadStop(Threads[2]);
+    if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
+    if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
+    DisplayHistogram(2);
+    if (test_pass) MosPrint(" Passed\n");
+    else {
+        MosPrint(" Failed\n");
+        tests_all_pass = false;
+    }
+    //
+    // Try Mutex 2
+    //
+    test_pass = true;
+    MosPrint("Try Mutex Test 2\n");
+    ClearHistogram();
+    MosInitMutex(&TestMutex);
+    MosInitAndRunThread(Threads[1], 2, MutexTryTestThread, 0, Stacks[1], DFT_STACK_SIZE);
+    MosInitAndRunThread(Threads[2], 2, MutexTryTestThread, 1, Stacks[2], DFT_STACK_SIZE);
+    MosInitAndRunThread(Threads[3], 2, MutexTryTestThread, 2, Stacks[3], DFT_STACK_SIZE);
+    MosDelayThread(5000);
+    MosRequestThreadStop(Threads[1]);
+    MosRequestThreadStop(Threads[2]);
+    MosRequestThreadStop(Threads[3]);
+    if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
+    if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
+    if (MosWaitForThreadStop(Threads[3]) != TEST_PASS) test_pass = false;
+    DisplayHistogram(3);
+    if (test_pass) MosPrint(" Passed\n");
+    else {
+        MosPrint(" Failed\n");
+        tests_all_pass = false;
+    }
+    //
     // Priority Inheritance (1 level)
     //
     test_pass = true;
-    MosPrint("Mutex Test 3\n");
+    MosPrint("Mutex Priority Inversion\n");
     ClearHistogram();
     MosInitMutex(&TestMutex);
     MosInitQueue32(&TestQueue, queue, count_of(queue));
@@ -1476,51 +1533,26 @@ static bool MutexTests(void) {
         MosPrint(" Failed\n");
         tests_all_pass = false;
     }
+#if 0
     //
-    // Try Mutex (NOTE: may exhibit some non-deterministic behavior)
+    // Priority Inheritance (nested)
     //
     test_pass = true;
-    MosPrint("Mutex Test 4\n");
+    MosPrint("Mutex Nested Priority Inversion\n");
     ClearHistogram();
     MosInitMutex(&TestMutex);
-    MosInitAndRunThread(Threads[1], 2, MutexTryTestThread, 0, Stacks[1], DFT_STACK_SIZE);
-    MosInitAndRunThread(Threads[2], 2, MutexTryTestThread, 1, Stacks[2], DFT_STACK_SIZE);
-    MosDelayThread(5000);
-    MosRequestThreadStop(Threads[1]);
-    MosRequestThreadStop(Threads[2]);
-    if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
-    if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
-    DisplayHistogram(2);
+
     if (test_pass) MosPrint(" Passed\n");
     else {
         MosPrint(" Failed\n");
         tests_all_pass = false;
     }
+#endif
     //
-    // Try Mutex 2 (NOTE: may exhibit some non-deterministic behavior)
+    // Mutex Priority Change Test
     //
     test_pass = true;
-    MosPrint("Mutex Test 5\n");
-    ClearHistogram();
-    MosInitMutex(&TestMutex);
-    MosInitAndRunThread(Threads[1], 2, MutexTryTestThread, 0, Stacks[1], DFT_STACK_SIZE);
-    MosInitAndRunThread(Threads[2], 2, MutexTryTestThread, 1, Stacks[2], DFT_STACK_SIZE);
-    MosInitAndRunThread(Threads[3], 2, MutexTryTestThread, 2, Stacks[3], DFT_STACK_SIZE);
-    MosDelayThread(5000);
-    MosRequestThreadStop(Threads[1]);
-    MosRequestThreadStop(Threads[2]);
-    MosRequestThreadStop(Threads[3]);
-    if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
-    if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
-    if (MosWaitForThreadStop(Threads[3]) != TEST_PASS) test_pass = false;
-    DisplayHistogram(3);
-    if (test_pass) MosPrint(" Passed\n");
-    else {
-        MosPrint(" Failed\n");
-        tests_all_pass = false;
-    }
-    test_pass = true;
-    MosPrint("Mutex Test 6\n");
+    MosPrint("Mutex Thread Priority Change\n");
     ClearHistogram();
     MosInitMutex(&TestMutex);
     MosLockMutex(&TestMutex);

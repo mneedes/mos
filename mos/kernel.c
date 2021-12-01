@@ -62,6 +62,7 @@ typedef enum {
 
 typedef struct Thread {
     u32                 sp;
+    u32                 mtx_cnt;
     error_t             err_no;
     ThreadState         state;
     MosLink             run_link;
@@ -364,6 +365,7 @@ InitThread(Thread * thd, MosThreadPriority pri, MosThreadEntry * entry, s32 arg,
     }
     // Initialize context and state
     thd->sp = (u32)sf;
+    thd->mtx_cnt = 0;
     thd->err_no = 0;
     thd->pri = pri;
     thd->nom_pri = pri;
