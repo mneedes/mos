@@ -71,27 +71,32 @@ void MOS_NAKED MosLockMutex(MosMutex * mtx) {
     asm volatile (
         "ldr r1, _ThreadID\n"
         "ldr r1, [r1]\n"
-        "RetryTM:\n"
+      "RetryLM:\n"
         "ldrex r2, [r0]\n"
         "cmp r2, r1\n"
-        "beq IncTM\n"
-        "cbnz r2, BlockTM\n"
+        "beq IncLM\n"
+        "cbnz r2, BlockLM\n"
         "strex r2, r1, [r0]\n"
         "cmp r2, #0\n"
-        "bne RetryTM\n"
-        "IncTM:\n"
+        "bne RetryLM\n"
+      "IncLM:\n"
         "ldr r2, [r0, #4]\n"
+        "cbnz r2, SkipAddLM\n"
+    	"ldr r3, [r1, #4]\n"
+    	"add r3, #1\n"
+    	"str r3, [r1, #4]\n"
+      "SkipAddLM:\n"
         "add r2, #1\n"
         "str r2, [r0, #4]\n"
         "dmb\n"
         "bx lr\n"
-        "BlockTM:\n"
+      "BlockLM:\n"
         "push {r0, r1, lr}\n"
         "bl BlockOnMutex\n"
         "pop {r0, r1, lr}\n"
-        "b RetryTM\n"
+        "b RetryLM\n"
         ".balign 4\n"
-        "_ThreadID: .word RunningThread"
+      "_ThreadID: .word RunningThread"
             // Explicit clobber list prevents compiler from making
             // assumptions about registers not being changed as
             // this assembly code calls a C function.  Normally C
@@ -105,7 +110,7 @@ bool MOS_NAKED MosTryMutex(MosMutex * mtx) {
     asm volatile (
         "ldr r1, _ThreadID2\n"
         "ldr r1, [r1]\n"
-        "RetryTRM:\n"
+      "RetryTRM:\n"
         "ldrex r2, [r0]\n"
         "cmp r2, r1\n"
         "beq IncTRM\n"
@@ -113,24 +118,37 @@ bool MOS_NAKED MosTryMutex(MosMutex * mtx) {
         "strex r2, r1, [r0]\n"
         "cmp r2, #0\n"
         "bne RetryTRM\n"
-        "IncTRM:\n"
+      "IncTRM:\n"
         "ldr r2, [r0, #4]\n"
+		"cbnz r2, SkipAddTRM\n"
+		"ldr r3, [r1, #4]\n"
+		"add r3, #1\n"
+		"str r3, [r1, #4]\n"
+      "SkipAddTRM:\n"
         "add r2, #1\n"
         "str r2, [r0, #4]\n"
         "dmb\n"
         "mov r0, #1\n"
         "bx lr\n"
-        "FailTRM:\n"
+      "FailTRM:\n"
         "mov r0, #0\n"
         "bx lr\n"
         ".balign 4\n"
-        "_ThreadID2: .word RunningThread"
+      "_ThreadID2: .word RunningThread"
             : : : "r0", "r1", "r2", "r3"
     );
 }
 
 static void MOS_USED ReleaseMutex(MosMutex * mtx) {
     LockScheduler(IntPriMaskLow);
+    if (--RunningThread->mtx_cnt == 0 &&
+    	    RunningThread->pri != RunningThread->nom_pri) {
+        // Reset priority inheritance
+        RunningThread->pri = RunningThread->nom_pri;
+        MosRemoveFromList(&RunningThread->run_link);
+        MosAddToFrontOfList(&RunQueues[RunningThread->pri],
+                                &RunningThread->run_link);
+    }
     if (!MosIsListEmpty(&mtx->pend_q)) {
         MosLink * elm = mtx->pend_q.next;
         Thread * thd = container_of(elm, Thread, run_link);
@@ -139,13 +157,6 @@ static void MOS_USED ReleaseMutex(MosMutex * mtx) {
         if (MosIsOnList(&thd->tmr_link.link))
             MosRemoveFromList(&thd->tmr_link.link);
         SetThreadState(thd, THREAD_RUNNABLE);
-        // Reset priority inheritance
-        if (RunningThread->pri != RunningThread->nom_pri) {
-            RunningThread->pri = RunningThread->nom_pri;
-            MosRemoveFromList(&RunningThread->run_link);
-            MosAddToFrontOfList(&RunQueues[RunningThread->pri],
-                                    &RunningThread->run_link);
-        }
         if (thd->pri < RunningThread->pri) YieldThread();
     }
     UnlockScheduler();
@@ -160,13 +171,13 @@ void MOS_NAKED MosUnlockMutex(MosMutex * mtx) {
         "str r1, [r0, #4]\n"
         "cbnz r1, SkipGM\n"
         "mov r1, #0\n"
-        "RetryGM:\n"
+      "RetryGM:\n"
         "ldrex r2, [r0]\n"
         "strex r2, r1, [r0]\n"
         "cmp r2, #0\n"
         "bne RetryGM\n"
         "b ReleaseMutex\n"
-        "SkipGM:\n"
+      "SkipGM:\n"
         "bx lr"
             : : : "r0", "r1", "r2", "r3"
     );
@@ -190,7 +201,7 @@ static void MOS_USED BlockOnSem(MosSem * sem) {
 void MOS_NAKED MosWaitForSem(MosSem * sem) {
     MOS_USED_PARAM(sem);
     asm volatile (
-        "RetryTS:\n"
+      "RetryTS:\n"
         "ldrex r1, [r0]\n"
         "cbz r1, BlockTS\n"
         "sub r1, #1\n"
@@ -199,7 +210,7 @@ void MOS_NAKED MosWaitForSem(MosSem * sem) {
         "bne RetryTS\n"
         "dmb\n"
         "bx lr\n"
-        "BlockTS:\n"
+      "BlockTS:\n"
         "push {r0, lr}\n"
         "bl BlockOnSem\n"
         "pop {r0, lr}\n"
@@ -237,7 +248,7 @@ bool MOS_NAKED MosWaitForSemOrTO(MosSem * sem, u32 ticks) {
         "mov r0, r1\n"
         "bl SetTimeout\n"
         "pop {r0, lr}\n"
-        "RetryTSTO:\n"
+      "RetryTSTO:\n"
         "ldrex r1, [r0]\n"
         "cbz r1, BlockTSTO\n"
         "sub r1, #1\n"
@@ -247,7 +258,7 @@ bool MOS_NAKED MosWaitForSemOrTO(MosSem * sem, u32 ticks) {
         "dmb\n"
         "mov r0, #1\n"
         "bx lr\n"
-        "BlockTSTO:\n"
+      "BlockTSTO:\n"
         "push {r0, lr}\n"
         "bl BlockOnSemOrTO\n"
         "cmp r0, #0\n"
@@ -262,7 +273,7 @@ bool MOS_NAKED MosWaitForSemOrTO(MosSem * sem, u32 ticks) {
 MOS_ISR_SAFE bool MOS_NAKED MosTrySem(MosSem * sem) {
     MOS_USED_PARAM(sem);
     asm volatile (
-        "RetryTRS:\n"
+      "RetryTRS:\n"
         "ldrex r1, [r0]\n"
         "cbz r1, FailTRS\n"
         "sub r1, #1\n"
@@ -272,7 +283,7 @@ MOS_ISR_SAFE bool MOS_NAKED MosTrySem(MosSem * sem) {
         "dmb\n"
         "mov r0, #1\n"
         "bx lr\n"
-        "FailTRS:\n"
+      "FailTRS:\n"
         "mov r0, #0\n"
         "bx lr"
             : : : "r0", "r1", "r2", "r3"
@@ -299,12 +310,12 @@ MOS_ISR_SAFE void MOS_NAKED MosIncrementSem(MosSem * sem) {
     MOS_USED_PARAM(sem);
     asm volatile (
         "push { lr }\n"
-        "RetryGS:\n"
+      "RetryIS:\n"
         "ldrex r1, [r0]\n"
         "add r1, #1\n"
         "strex r2, r1, [r0]\n"
         "cmp r2, #0\n"
-        "bne RetryGS\n"
+        "bne RetryIS\n"
         "dmb\n"
         "bl ReleaseOnSem\n"
         "pop { pc }"
@@ -316,7 +327,7 @@ u32 MOS_NAKED MosWaitForSignal(MosSem * sem) {
     MOS_USED_PARAM(sem);
     asm volatile (
         "mov r3, #0\n"
-        "RetryWS:\n"
+      "RetryWS:\n"
         "ldrex r1, [r0]\n"
         "cbz r1, BlockWS\n"
         "strex r2, r3, [r0]\n"
@@ -325,7 +336,7 @@ u32 MOS_NAKED MosWaitForSignal(MosSem * sem) {
         "mov r0, r1\n"
         "dmb\n"
         "bx lr\n"
-        "BlockWS:\n"
+      "BlockWS:\n"
         "push {r0, r3, lr}\n"
         "bl BlockOnSem\n"
         "pop {r0, r3, lr}\n"
@@ -342,7 +353,7 @@ u32 MOS_NAKED MosWaitForSignalOrTO(MosSem * sem, u32 ticks) {
         "mov r0, r1\n"
         "bl SetTimeout\n"
         "pop {r0, lr}\n"
-        "RetryWSTO:\n"
+      "RetryWSTO:\n"
         "mov r2, #0\n"
         "ldrex r1, [r0]\n"
         "cbz r1, BlockWSTO\n"
@@ -352,7 +363,7 @@ u32 MOS_NAKED MosWaitForSignalOrTO(MosSem * sem, u32 ticks) {
         "dmb\n"
         "mov r0, r1\n"
         "bx lr\n"
-        "BlockWSTO:\n"
+      "BlockWSTO:\n"
         "push {r0, lr}\n"
         "bl BlockOnSemOrTO\n"
         "cmp r0, #0\n"
@@ -368,7 +379,7 @@ MOS_ISR_SAFE u32 MOS_NAKED MosPollSignal(MosSem * sem) {
     MOS_USED_PARAM(sem);
     asm volatile (
         "mov r3, #0\n"
-        "RetryPS:\n"
+      "RetryPS:\n"
         "ldrex r1, [r0]\n"
         "cbz r1, FailPS\n"
         "strex r2, r3, [r0]\n"
@@ -377,7 +388,7 @@ MOS_ISR_SAFE u32 MOS_NAKED MosPollSignal(MosSem * sem) {
         "dmb\n"
         "mov r0, r1\n"
         "bx lr\n"
-        "FailPS:\n"
+      "FailPS:\n"
         "mov r0, #0\n"
         "bx lr"
             : : : "r0", "r1", "r2", "r3"
@@ -389,7 +400,7 @@ MOS_ISR_SAFE void MOS_NAKED MosRaiseSignal(MosSem * sem, u32 flags) {
     MOS_USED_PARAM(flags);
     asm volatile (
         "push { lr }\n"
-        "RetryRS:\n"
+      "RetryRS:\n"
         "ldrex r2, [r0]\n"
         "orr r2, r2, r1\n"
         "strex r3, r2, [r0]\n"

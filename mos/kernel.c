@@ -14,7 +14,6 @@
 #include <mos/internal/security.h>
 #include <errno.h>
 
-// TODO: multi-level priority inheritance / multiple mutexes at the same time
 // TODO: Hooks for other timers such as LPTIM ?
 // TODO: auto tick startup?
 
@@ -236,7 +235,7 @@ MOS_ISR_SAFE void MOS_NAKED MosDelayMicroSec(u32 usec) {
         "ldr r1, [r1]\n"
         "muls r0, r0, r1\n"
         "subs r0, #13\n"  // Overhead calibration
-        "delay:\n"
+      "delay:\n"
         // It is possible that 6 is another valid value, non-cached flash stall?
 #if (MOS_CYCLES_PER_INNER_LOOP == 3)
         "subs r0, r0, #3\n"
@@ -248,7 +247,7 @@ MOS_ISR_SAFE void MOS_NAKED MosDelayMicroSec(u32 usec) {
         "bgt delay\n"
         "bx lr\n"
         ".balign 4\n"
-        "_CyclesPerMicroSec: .word CyclesPerMicroSec"
+      "_CyclesPerMicroSec: .word CyclesPerMicroSec"
             : : : "r0", "r1"
     );
 }
@@ -795,7 +794,7 @@ void MosRunScheduler(void) {
         ".balign 4\n"
         // 112 (28 words) is enough to store a dummy FP stack frame
         "psp_start: .word IdleStack + 112\n"
-        "SkipRS:"
+      "SkipRS:"
             : : : "r0"
     );
     // Invoke PendSV handler to start scheduler (first context switch)

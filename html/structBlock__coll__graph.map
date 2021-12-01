@@ -1,0 +1,5 @@
+<map id="Block" name="Block">
+<area shape="rect" id="node2" href="$structSlab.html" title="Slab" alt="" coords="81,112,129,139"/>
+<area shape="rect" id="node3" href="$structMosList.html" title="MosList" alt="" coords="5,7,73,33"/>
+<area shape="rect" id="node4" href="$structLink.html" title="Link" alt="" coords="153,112,200,139"/>
+</map>

@@ -1,0 +1,82 @@
+\hypertarget{mos__config_8h}{}\section{mos\+\_\+config.\+h File Reference}
+\label{mos__config_8h}\index{mos\+\_\+config.\+h@{mos\+\_\+config.\+h}}
+
+
+M\+OS Configuration File.  
+
+
+This graph shows which files directly or indirectly include this file\+:\nopagebreak
+\begin{figure}[H]
+\begin{center}
+\leavevmode
+\includegraphics[width=350pt]{mos__config_8h__dep__incl}
+\end{center}
+\end{figure}
+\subsection*{Macros}
+\begin{DoxyCompactItemize}
+\item 
+\#define \hyperlink{mos__config_8h_ad1803148610318396564915f7b05f74a}{M\+O\+S\+\_\+\+M\+A\+X\+\_\+\+T\+H\+R\+E\+A\+D\+\_\+\+P\+R\+I\+O\+R\+I\+T\+I\+ES}~4
+\item 
+\#define \hyperlink{mos__config_8h_a2db444cd6908c9bfd69826472a49c57c}{M\+O\+S\+\_\+\+M\+I\+C\+R\+O\+\_\+\+S\+E\+C\+\_\+\+P\+E\+R\+\_\+\+T\+I\+CK}~1000
+\item 
+\#define \hyperlink{mos__config_8h_a01dd2ae0fb6d32216c7d55cc8b7dd11a}{M\+O\+S\+\_\+\+S\+T\+A\+C\+K\+\_\+\+U\+S\+A\+G\+E\+\_\+\+M\+O\+N\+I\+T\+OR}~true
+\item 
+\#define \hyperlink{mos__config_8h_a6cb750ae6ffedb473238c2976f6c548a}{M\+O\+S\+\_\+\+K\+E\+E\+P\+\_\+\+T\+I\+C\+K\+S\+\_\+\+R\+U\+N\+N\+I\+NG}~false
+\item 
+\#define \hyperlink{mos__config_8h_a1a0f00b489bf6f3f76448b939a1ce2a7}{M\+O\+S\+\_\+\+E\+N\+A\+B\+L\+E\+\_\+\+E\+V\+E\+N\+TS}~false
+\item 
+\#define \hyperlink{mos__config_8h_abedfdd335fcdaed1a310e376da4f0afb}{M\+O\+S\+\_\+\+E\+N\+A\+B\+L\+E\+\_\+\+U\+N\+A\+L\+I\+G\+N\+\_\+\+F\+A\+U\+L\+TS}~false
+\item 
+\#define \hyperlink{mos__config_8h_ac1bbd575a51c5a0705ebb6e6d0a0b9cc}{M\+O\+S\+\_\+\+H\+A\+N\+G\+\_\+\+O\+N\+\_\+\+E\+X\+C\+E\+P\+T\+I\+O\+NS}~false
+\end{DoxyCompactItemize}
+
+
+\subsection{Detailed Description}
+M\+OS Configuration File. 
+
+M\+OS is intended to be easy to maintain, so rather than providing tons of options here and cluttering the code with \#ifdefs, instead consider modifying the microkernel itself to suit system requirements. 
+
+\subsection{Macro Definition Documentation}
+\mbox{\Hypertarget{mos__config_8h_a1a0f00b489bf6f3f76448b939a1ce2a7}\label{mos__config_8h_a1a0f00b489bf6f3f76448b939a1ce2a7}} 
+\index{mos\+\_\+config.\+h@{mos\+\_\+config.\+h}!M\+O\+S\+\_\+\+E\+N\+A\+B\+L\+E\+\_\+\+E\+V\+E\+N\+TS@{M\+O\+S\+\_\+\+E\+N\+A\+B\+L\+E\+\_\+\+E\+V\+E\+N\+TS}}
+\index{M\+O\+S\+\_\+\+E\+N\+A\+B\+L\+E\+\_\+\+E\+V\+E\+N\+TS@{M\+O\+S\+\_\+\+E\+N\+A\+B\+L\+E\+\_\+\+E\+V\+E\+N\+TS}!mos\+\_\+config.\+h@{mos\+\_\+config.\+h}}
+\subsubsection{\texorpdfstring{M\+O\+S\+\_\+\+E\+N\+A\+B\+L\+E\+\_\+\+E\+V\+E\+N\+TS}{MOS\_ENABLE\_EVENTS}}
+{\footnotesize\ttfamily \#define M\+O\+S\+\_\+\+E\+N\+A\+B\+L\+E\+\_\+\+E\+V\+E\+N\+TS~false}
+
+Enable events (required for M\+OS profiling) \mbox{\Hypertarget{mos__config_8h_abedfdd335fcdaed1a310e376da4f0afb}\label{mos__config_8h_abedfdd335fcdaed1a310e376da4f0afb}} 
+\index{mos\+\_\+config.\+h@{mos\+\_\+config.\+h}!M\+O\+S\+\_\+\+E\+N\+A\+B\+L\+E\+\_\+\+U\+N\+A\+L\+I\+G\+N\+\_\+\+F\+A\+U\+L\+TS@{M\+O\+S\+\_\+\+E\+N\+A\+B\+L\+E\+\_\+\+U\+N\+A\+L\+I\+G\+N\+\_\+\+F\+A\+U\+L\+TS}}
+\index{M\+O\+S\+\_\+\+E\+N\+A\+B\+L\+E\+\_\+\+U\+N\+A\+L\+I\+G\+N\+\_\+\+F\+A\+U\+L\+TS@{M\+O\+S\+\_\+\+E\+N\+A\+B\+L\+E\+\_\+\+U\+N\+A\+L\+I\+G\+N\+\_\+\+F\+A\+U\+L\+TS}!mos\+\_\+config.\+h@{mos\+\_\+config.\+h}}
+\subsubsection{\texorpdfstring{M\+O\+S\+\_\+\+E\+N\+A\+B\+L\+E\+\_\+\+U\+N\+A\+L\+I\+G\+N\+\_\+\+F\+A\+U\+L\+TS}{MOS\_ENABLE\_UNALIGN\_FAULTS}}
+{\footnotesize\ttfamily \#define M\+O\+S\+\_\+\+E\+N\+A\+B\+L\+E\+\_\+\+U\+N\+A\+L\+I\+G\+N\+\_\+\+F\+A\+U\+L\+TS~false}
+
+Enable \char`\"{}unintentional\char`\"{} alignment faults. Recommend true for small from-\/scratch projects, false for large, pre-\/existing code bases. \mbox{\Hypertarget{mos__config_8h_ac1bbd575a51c5a0705ebb6e6d0a0b9cc}\label{mos__config_8h_ac1bbd575a51c5a0705ebb6e6d0a0b9cc}} 
+\index{mos\+\_\+config.\+h@{mos\+\_\+config.\+h}!M\+O\+S\+\_\+\+H\+A\+N\+G\+\_\+\+O\+N\+\_\+\+E\+X\+C\+E\+P\+T\+I\+O\+NS@{M\+O\+S\+\_\+\+H\+A\+N\+G\+\_\+\+O\+N\+\_\+\+E\+X\+C\+E\+P\+T\+I\+O\+NS}}
+\index{M\+O\+S\+\_\+\+H\+A\+N\+G\+\_\+\+O\+N\+\_\+\+E\+X\+C\+E\+P\+T\+I\+O\+NS@{M\+O\+S\+\_\+\+H\+A\+N\+G\+\_\+\+O\+N\+\_\+\+E\+X\+C\+E\+P\+T\+I\+O\+NS}!mos\+\_\+config.\+h@{mos\+\_\+config.\+h}}
+\subsubsection{\texorpdfstring{M\+O\+S\+\_\+\+H\+A\+N\+G\+\_\+\+O\+N\+\_\+\+E\+X\+C\+E\+P\+T\+I\+O\+NS}{MOS\_HANG\_ON\_EXCEPTIONS}}
+{\footnotesize\ttfamily \#define M\+O\+S\+\_\+\+H\+A\+N\+G\+\_\+\+O\+N\+\_\+\+E\+X\+C\+E\+P\+T\+I\+O\+NS~false}
+
+Hang on exceptions. Can be used in systems with watchdog timer reset to reboot \mbox{\Hypertarget{mos__config_8h_a6cb750ae6ffedb473238c2976f6c548a}\label{mos__config_8h_a6cb750ae6ffedb473238c2976f6c548a}} 
+\index{mos\+\_\+config.\+h@{mos\+\_\+config.\+h}!M\+O\+S\+\_\+\+K\+E\+E\+P\+\_\+\+T\+I\+C\+K\+S\+\_\+\+R\+U\+N\+N\+I\+NG@{M\+O\+S\+\_\+\+K\+E\+E\+P\+\_\+\+T\+I\+C\+K\+S\+\_\+\+R\+U\+N\+N\+I\+NG}}
+\index{M\+O\+S\+\_\+\+K\+E\+E\+P\+\_\+\+T\+I\+C\+K\+S\+\_\+\+R\+U\+N\+N\+I\+NG@{M\+O\+S\+\_\+\+K\+E\+E\+P\+\_\+\+T\+I\+C\+K\+S\+\_\+\+R\+U\+N\+N\+I\+NG}!mos\+\_\+config.\+h@{mos\+\_\+config.\+h}}
+\subsubsection{\texorpdfstring{M\+O\+S\+\_\+\+K\+E\+E\+P\+\_\+\+T\+I\+C\+K\+S\+\_\+\+R\+U\+N\+N\+I\+NG}{MOS\_KEEP\_TICKS\_RUNNING}}
+{\footnotesize\ttfamily \#define M\+O\+S\+\_\+\+K\+E\+E\+P\+\_\+\+T\+I\+C\+K\+S\+\_\+\+R\+U\+N\+N\+I\+NG~false}
+
+Keep tick interrupt running at slowest rate to maintain time even when there are no timer events scheduled. \mbox{\Hypertarget{mos__config_8h_ad1803148610318396564915f7b05f74a}\label{mos__config_8h_ad1803148610318396564915f7b05f74a}} 
+\index{mos\+\_\+config.\+h@{mos\+\_\+config.\+h}!M\+O\+S\+\_\+\+M\+A\+X\+\_\+\+T\+H\+R\+E\+A\+D\+\_\+\+P\+R\+I\+O\+R\+I\+T\+I\+ES@{M\+O\+S\+\_\+\+M\+A\+X\+\_\+\+T\+H\+R\+E\+A\+D\+\_\+\+P\+R\+I\+O\+R\+I\+T\+I\+ES}}
+\index{M\+O\+S\+\_\+\+M\+A\+X\+\_\+\+T\+H\+R\+E\+A\+D\+\_\+\+P\+R\+I\+O\+R\+I\+T\+I\+ES@{M\+O\+S\+\_\+\+M\+A\+X\+\_\+\+T\+H\+R\+E\+A\+D\+\_\+\+P\+R\+I\+O\+R\+I\+T\+I\+ES}!mos\+\_\+config.\+h@{mos\+\_\+config.\+h}}
+\subsubsection{\texorpdfstring{M\+O\+S\+\_\+\+M\+A\+X\+\_\+\+T\+H\+R\+E\+A\+D\+\_\+\+P\+R\+I\+O\+R\+I\+T\+I\+ES}{MOS\_MAX\_THREAD\_PRIORITIES}}
+{\footnotesize\ttfamily \#define M\+O\+S\+\_\+\+M\+A\+X\+\_\+\+T\+H\+R\+E\+A\+D\+\_\+\+P\+R\+I\+O\+R\+I\+T\+I\+ES~4}
+
+\hyperlink{structThread}{Thread} priorities $<$=$>$ \mbox{[}0 ... M\+O\+S\+\_\+\+M\+A\+X\+\_\+\+T\+H\+R\+E\+A\+D\+\_\+\+P\+R\+I\+O\+R\+I\+T\+I\+ES -\/ 1\mbox{]}. The lower the number the higher the priority \mbox{\Hypertarget{mos__config_8h_a2db444cd6908c9bfd69826472a49c57c}\label{mos__config_8h_a2db444cd6908c9bfd69826472a49c57c}} 
+\index{mos\+\_\+config.\+h@{mos\+\_\+config.\+h}!M\+O\+S\+\_\+\+M\+I\+C\+R\+O\+\_\+\+S\+E\+C\+\_\+\+P\+E\+R\+\_\+\+T\+I\+CK@{M\+O\+S\+\_\+\+M\+I\+C\+R\+O\+\_\+\+S\+E\+C\+\_\+\+P\+E\+R\+\_\+\+T\+I\+CK}}
+\index{M\+O\+S\+\_\+\+M\+I\+C\+R\+O\+\_\+\+S\+E\+C\+\_\+\+P\+E\+R\+\_\+\+T\+I\+CK@{M\+O\+S\+\_\+\+M\+I\+C\+R\+O\+\_\+\+S\+E\+C\+\_\+\+P\+E\+R\+\_\+\+T\+I\+CK}!mos\+\_\+config.\+h@{mos\+\_\+config.\+h}}
+\subsubsection{\texorpdfstring{M\+O\+S\+\_\+\+M\+I\+C\+R\+O\+\_\+\+S\+E\+C\+\_\+\+P\+E\+R\+\_\+\+T\+I\+CK}{MOS\_MICRO\_SEC\_PER\_TICK}}
+{\footnotesize\ttfamily \#define M\+O\+S\+\_\+\+M\+I\+C\+R\+O\+\_\+\+S\+E\+C\+\_\+\+P\+E\+R\+\_\+\+T\+I\+CK~1000}
+
+Tick rate Interrupt tick rate \mbox{\Hypertarget{mos__config_8h_a01dd2ae0fb6d32216c7d55cc8b7dd11a}\label{mos__config_8h_a01dd2ae0fb6d32216c7d55cc8b7dd11a}} 
+\index{mos\+\_\+config.\+h@{mos\+\_\+config.\+h}!M\+O\+S\+\_\+\+S\+T\+A\+C\+K\+\_\+\+U\+S\+A\+G\+E\+\_\+\+M\+O\+N\+I\+T\+OR@{M\+O\+S\+\_\+\+S\+T\+A\+C\+K\+\_\+\+U\+S\+A\+G\+E\+\_\+\+M\+O\+N\+I\+T\+OR}}
+\index{M\+O\+S\+\_\+\+S\+T\+A\+C\+K\+\_\+\+U\+S\+A\+G\+E\+\_\+\+M\+O\+N\+I\+T\+OR@{M\+O\+S\+\_\+\+S\+T\+A\+C\+K\+\_\+\+U\+S\+A\+G\+E\+\_\+\+M\+O\+N\+I\+T\+OR}!mos\+\_\+config.\+h@{mos\+\_\+config.\+h}}
+\subsubsection{\texorpdfstring{M\+O\+S\+\_\+\+S\+T\+A\+C\+K\+\_\+\+U\+S\+A\+G\+E\+\_\+\+M\+O\+N\+I\+T\+OR}{MOS\_STACK\_USAGE\_MONITOR}}
+{\footnotesize\ttfamily \#define M\+O\+S\+\_\+\+S\+T\+A\+C\+K\+\_\+\+U\+S\+A\+G\+E\+\_\+\+M\+O\+N\+I\+T\+OR~true}
+
+Monitor maximum stack usage on context switches 
