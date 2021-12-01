@@ -1,8 +1,0 @@
-<map id="mos/context.h" name="mos/context.h">
-<area shape="rect" id="node2" href="$kernel_8h.html" title="MOS Microkernel. " alt="" coords="95,155,192,181"/>
-<area shape="rect" id="node9" href="$queue_8h.html" title="MOS Message Queues. " alt="" coords="163,80,260,107"/>
-<area shape="rect" id="node10" href="$trace_8h_source.html" title="mos/trace.h" alt="" coords="253,155,343,181"/>
-<area shape="rect" id="node3" href="$mos__config_8h.html" title="MOS Configuration File. " alt="" coords="5,229,105,256"/>
-<area shape="rect" id="node4" href="$defs_8h_source.html" title="mos/defs.h" alt="" coords="177,304,264,331"/>
-<area shape="rect" id="node8" href="$list_8h.html" title="Doubly&#45;Linked Circular Lists. " alt="" coords="181,229,260,256"/>
-</map>
