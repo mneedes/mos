@@ -52,8 +52,11 @@ typedef struct MosParams {
 
 // Mos Thread (opaque container)
 typedef struct MosThread {
-    u32 rsvd[21];
-    s32 ref_cnt;
+    u32       rsvd[20];
+    u16       rsvd2;
+    u16       user_data16;   /// 16-bit user data, sets to zero after thread initialization */
+    void    * user_ptr;      /// User data pointer, set to NULL after thread initialization */
+    s32       ref_cnt;       /// Reference counter, used by thread_heap.c */
 } MosThread;
 
 // Blocking mutex supporting recursion
@@ -64,9 +67,9 @@ typedef struct MosMutex {
 } MosMutex;
 
 typedef struct MosSem {
-    u32     value;
-    MosList pend_q;
-    MosLink evt_link;
+    u32      value;
+    MosList  pend_q;
+    MosLink  evt_link;
 } MosSem;
 
 typedef MosSem MosSignal;
@@ -76,7 +79,7 @@ typedef struct MosTimer {
     u32                wake_tick;
     MosLinkHet         tmr_link;
     MosTimerCallback * callback;
-    void             * priv_data;
+    void             * user_ptr;
 } MosTimer;
 
 /// Initialize MOS Microkernel.
@@ -118,7 +121,7 @@ MOS_ISR_SAFE void MosDelayMicroSec(u32 usec);
 // Timers - Call specified callback at a period of time
 
 void MosInitTimer(MosTimer * tmr, MosTimerCallback * callback);
-void MosSetTimer(MosTimer * tmr, u32 ticks, void * priv_data);
+void MosSetTimer(MosTimer * tmr, u32 ticks, void * user_ptr);
 void MosCancelTimer(MosTimer * tmr);
 void MosResetTimer(MosTimer * tmr);
 
@@ -161,10 +164,11 @@ void MosChangeThreadPriority(MosThread * thd, MosThreadPriority pri);
 
 // For requesting normal thread stop.  Note that normal thread stop does NOT result
 // in the invocation of the termination handler.
-void MosRequestThreadStop(MosThread * thd);
+//void MosRequestThreadStop(MosThread * thd);
 // A thread can poll for stop requests so it may return naturally from its initial
 // entry point.
-bool MosIsStopRequested(void);
+//bool MosIsStopRequested(void);
+
 // Waits for thread stop or termination.  If a thread terminates abnormally this is
 // invoked AFTER the termination handler.
 s32 MosWaitForThreadStop(MosThread * thd);

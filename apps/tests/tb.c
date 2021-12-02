@@ -66,6 +66,14 @@ static MosMutex TestMutex2;
 static u32 queue[4];
 static MosQueue TestQueue;
 
+bool IsStopRequested() {
+    return (bool)MosGetThreadPtr()->user_data16;
+}
+
+void RequestThreadStop(MosThread * thd) {
+    thd->user_data16 = 1;
+}
+
 // Induces a crash
 static MOS_INLINE void CauseCrash(void) {
 #if (MOS_ARCH_CAT == MOS_ARCH_ARM_CORTEX_M_BASE)
@@ -126,7 +134,7 @@ static const u32 pri_test_delay = 50;
 
 static s32 PriTestThread(s32 arg) {
     for (;;) {
-        if (MosIsStopRequested()) break;
+        if (IsStopRequested()) break;
         TestHisto[arg]++;
         // NOTE: Non-blocking delay
         MosDelayMicroSec(pri_test_delay * 1000);
@@ -196,7 +204,7 @@ static s32 FPTestThread(s32 arg) {
             (void)y;
             return TEST_FAIL;
         }
-        if (MosIsStopRequested()) break;
+        if (IsStopRequested()) break;
     }
     if ((float)TestHisto[arg] != x) return TEST_FAIL;
     else return TEST_PASS;
@@ -217,9 +225,9 @@ static bool ThreadTests(void) {
     MosInitAndRunThread(Threads[2], 2, PriTestThread, 1, Stacks[2], DFT_STACK_SIZE);
     MosInitAndRunThread(Threads[3], 3, PriTestThread, 2, Stacks[3], DFT_STACK_SIZE);
     MosDelayThread(test_time);
-    MosRequestThreadStop(Threads[1]);
-    MosRequestThreadStop(Threads[2]);
-    MosRequestThreadStop(Threads[3]);
+    RequestThreadStop(Threads[1]);
+    RequestThreadStop(Threads[2]);
+    RequestThreadStop(Threads[3]);
     if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[3]) != TEST_PASS) test_pass = false;
@@ -246,9 +254,9 @@ static bool ThreadTests(void) {
     MosChangeThreadPriority(Threads[1], 2);
     MosChangeThreadPriority(Threads[2], 1);
     MosDelayThread(test_time);
-    MosRequestThreadStop(Threads[1]);
-    MosRequestThreadStop(Threads[2]);
-    MosRequestThreadStop(Threads[3]);
+    RequestThreadStop(Threads[1]);
+    RequestThreadStop(Threads[2]);
+    RequestThreadStop(Threads[3]);
     if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[3]) != TEST_PASS) test_pass = false;
@@ -272,7 +280,7 @@ static bool ThreadTests(void) {
     MosInitAndRunThread(Threads[1], 1, PriTestThread, 0, Stacks[1], DFT_STACK_SIZE);
     s32 rtn_val;
     if (MosWaitForThreadStopOrTO(Threads[1], &rtn_val, test_time) != false) test_pass = false;
-    MosRequestThreadStop(Threads[1]);
+    RequestThreadStop(Threads[1]);
     if (MosWaitForThreadStopOrTO(Threads[1], &rtn_val, test_time) != true) test_pass = false;
     if (rtn_val != TEST_PASS) test_pass = false;
     DisplayHistogram(1);
@@ -301,8 +309,8 @@ static bool ThreadTests(void) {
     MosAllocAndRunThread(&thd[1], 1, PriTestThread, 1, DFT_STACK_SIZE);
     if (thd[0] && thd[1]) {
         MosDelayThread(2 * test_time);
-        MosRequestThreadStop(thd[0]);
-        MosRequestThreadStop(thd[1]);
+        RequestThreadStop(thd[0]);
+        RequestThreadStop(thd[1]);
         if (MosWaitForThreadStop(thd[0]) != TEST_PASS) test_pass = false;
         if (MosWaitForThreadStop(thd[1]) != TEST_PASS) test_pass = false;
         MosDecThreadRefCount(&thd[0]);
@@ -415,9 +423,9 @@ static bool ThreadTests(void) {
         MosInitAndRunThread(Threads[2], 1, FPTestThread, 1, Stacks[2], DFT_STACK_SIZE);
         MosInitAndRunThread(Threads[3], 1, PriTestThread, 2, Stacks[3], DFT_STACK_SIZE);
         MosDelayThread(test_time / 2);
-        MosRequestThreadStop(Threads[1]);
-        MosRequestThreadStop(Threads[2]);
-        MosRequestThreadStop(Threads[3]);
+        RequestThreadStop(Threads[1]);
+        RequestThreadStop(Threads[2]);
+        RequestThreadStop(Threads[3]);
         if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
         if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
         if (MosWaitForThreadStop(Threads[3]) != TEST_PASS) test_pass = false;
@@ -447,7 +455,7 @@ static const u32 timer_test_delay = 100;
 
 static s32 ThreadTimerTestThread(s32 arg) {
     for (;;) {
-        if (MosIsStopRequested()) break;
+        if (IsStopRequested()) break;
         MosDelayThread(timer_test_delay);
         TestHisto[arg]++;
     }
@@ -456,7 +464,7 @@ static s32 ThreadTimerTestThread(s32 arg) {
 
 static s32 ThreadTimerTestThread2(s32 arg) {
     for (;;) {
-        if (MosIsStopRequested()) break;
+        if (IsStopRequested()) break;
         MosDelayThread(timer_test_delay / 2);
         TestHisto[arg]++;
     }
@@ -465,7 +473,7 @@ static s32 ThreadTimerTestThread2(s32 arg) {
 
 static s32 ThreadTimerTestThread4(s32 arg) {
     for (;;) {
-        if (MosIsStopRequested()) break;
+        if (IsStopRequested()) break;
         MosDelayThread(timer_test_delay / 4);
         TestHisto[arg]++;
     }
@@ -474,7 +482,7 @@ static s32 ThreadTimerTestThread4(s32 arg) {
 
 static s32 ThreadTimerTestThreadOdd(s32 arg) {
     for (;;) {
-        if (MosIsStopRequested()) break;
+        if (IsStopRequested()) break;
         MosDelayThread(arg & 0xFFFF);
         TestHisto[arg >> 16]++;
     }
@@ -483,7 +491,7 @@ static s32 ThreadTimerTestThreadOdd(s32 arg) {
 
 static s32 ThreadTimerTestBusyThread(s32 arg) {
     for (;;) {
-        if (MosIsStopRequested()) break;
+        if (IsStopRequested()) break;
         TestHisto[arg]++;
     }
     return TEST_PASS;
@@ -492,7 +500,7 @@ static s32 ThreadTimerTestBusyThread(s32 arg) {
 static MosTimer self_timer;
 
 static bool MOS_ISR_SAFE ThreadTimerCallback(MosTimer * tmr) {
-    return MosTrySendToQueue32(&TestQueue, (u32)tmr->priv_data);
+    return MosTrySendToQueue32(&TestQueue, (u32)tmr->user_ptr);
 }
 
 static s32 MessageTimerTestThread(s32 arg) {
@@ -500,7 +508,7 @@ static s32 MessageTimerTestThread(s32 arg) {
     MosInitTimer(&self_timer, &ThreadTimerCallback);
     u32 cnt = 0xdeadbeef;
     for (;;) {
-        if (MosIsStopRequested()) break;
+        if (IsStopRequested()) break;
         MosSetTimer(&self_timer, timer_test_delay, (void *)cnt);
         u32 val = MosReceiveFromQueue32(&TestQueue);
         if (val != cnt) return TEST_FAIL;
@@ -527,8 +535,8 @@ static bool TimerTests(void) {
     MosInitAndRunThread(Threads[1], 1, ThreadTimerTestThreadOdd, 0, Stacks[1], DFT_STACK_SIZE);
     MosInitAndRunThread(Threads[2], 1, ThreadTimerTestThreadOdd, 37 | 0x10000, Stacks[2], DFT_STACK_SIZE);
     MosDelayThread(test_time);
-    MosRequestThreadStop(Threads[1]);
-    MosRequestThreadStop(Threads[2]);
+    RequestThreadStop(Threads[1]);
+    RequestThreadStop(Threads[2]);
     if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
     DisplayHistogram(2);
@@ -551,9 +559,9 @@ static bool TimerTests(void) {
     MosInitAndRunThread(Threads[2], 3, ThreadTimerTestThread, 1, Stacks[2], DFT_STACK_SIZE);
     MosInitAndRunThread(Threads[3], 3, ThreadTimerTestThread, 2, Stacks[3], DFT_STACK_SIZE);
     MosDelayThread(test_time);
-    MosRequestThreadStop(Threads[1]);
-    MosRequestThreadStop(Threads[2]);
-    MosRequestThreadStop(Threads[3]);
+    RequestThreadStop(Threads[1]);
+    RequestThreadStop(Threads[2]);
+    RequestThreadStop(Threads[3]);
     if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[3]) != TEST_PASS) test_pass = false;
@@ -576,9 +584,9 @@ static bool TimerTests(void) {
     MosInitAndRunThread(Threads[2], 3, ThreadTimerTestThread2, 1, Stacks[2], DFT_STACK_SIZE);
     MosInitAndRunThread(Threads[3], 3, ThreadTimerTestThread4, 2, Stacks[3], DFT_STACK_SIZE);
     MosDelayThread(test_time);
-    MosRequestThreadStop(Threads[1]);
-    MosRequestThreadStop(Threads[2]);
-    MosRequestThreadStop(Threads[3]);
+    RequestThreadStop(Threads[1]);
+    RequestThreadStop(Threads[2]);
+    RequestThreadStop(Threads[3]);
     if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[3]) != TEST_PASS) test_pass = false;
@@ -601,9 +609,9 @@ static bool TimerTests(void) {
     MosInitAndRunThread(Threads[2], 2, ThreadTimerTestThreadOdd, 33 | 0x10000, Stacks[2], DFT_STACK_SIZE);
     MosInitAndRunThread(Threads[3], 3, ThreadTimerTestThreadOdd, 37 | 0x20000, Stacks[3], DFT_STACK_SIZE);
     MosDelayThread(test_time);
-    MosRequestThreadStop(Threads[1]);
-    MosRequestThreadStop(Threads[2]);
-    MosRequestThreadStop(Threads[3]);
+    RequestThreadStop(Threads[1]);
+    RequestThreadStop(Threads[2]);
+    RequestThreadStop(Threads[3]);
     if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[3]) != TEST_PASS) test_pass = false;
@@ -626,9 +634,9 @@ static bool TimerTests(void) {
     MosInitAndRunThread(Threads[2], 1, ThreadTimerTestThread2, 1, Stacks[2], DFT_STACK_SIZE);
     MosInitAndRunThread(Threads[3], 2, ThreadTimerTestBusyThread, 2, Stacks[3], DFT_STACK_SIZE);
     MosDelayThread(test_time);
-    MosRequestThreadStop(Threads[1]);
-    MosRequestThreadStop(Threads[2]);
-    MosRequestThreadStop(Threads[3]);
+    RequestThreadStop(Threads[1]);
+    RequestThreadStop(Threads[2]);
+    RequestThreadStop(Threads[3]);
     if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[3]) != TEST_PASS) test_pass = false;
@@ -650,9 +658,9 @@ static bool TimerTests(void) {
     MosInitAndRunThread(Threads[2], 2, ThreadTimerTestBusyThread, 1, Stacks[2], DFT_STACK_SIZE);
     MosInitAndRunThread(Threads[3], 2, ThreadTimerTestBusyThread, 2, Stacks[3], DFT_STACK_SIZE);
     MosDelayThread(test_time);
-    MosRequestThreadStop(Threads[1]);
-    MosRequestThreadStop(Threads[2]);
-    MosRequestThreadStop(Threads[3]);
+    RequestThreadStop(Threads[1]);
+    RequestThreadStop(Threads[2]);
+    RequestThreadStop(Threads[3]);
     if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[3]) != TEST_PASS) test_pass = false;
@@ -671,7 +679,7 @@ static bool TimerTests(void) {
     ClearHistogram();
     MosInitAndRunThread(Threads[1], 1, MessageTimerTestThread, 0, Stacks[1], DFT_STACK_SIZE);
     MosDelayThread(test_time);
-    MosRequestThreadStop(Threads[1]);
+    RequestThreadStop(Threads[1]);
     if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
     DisplayHistogram(1);
     if (TestHisto[0] != exp_iter) test_pass = false;
@@ -684,7 +692,7 @@ static bool TimerTests(void) {
     ClearHistogram();
     MosInitAndRunThread(Threads[1], 1, MessageTimerTestThread2, 0, Stacks[1], DFT_STACK_SIZE);
     MosDelayThread(test_time);
-    MosRequestThreadStop(Threads[1]);
+    RequestThreadStop(Threads[1]);
     if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
     DisplayHistogram(1);
     if (TestHisto[0] != exp_iter) test_pass = false;
@@ -709,7 +717,7 @@ static s32 SemTestPendIRQ(s32 arg) {
         HalTestsTriggerInterrupt(0);
         TestHisto[arg]++;
         MosDelayThread(sem_test_delay);
-        if (MosIsStopRequested()) break;
+        if (IsStopRequested()) break;
     }
     return TEST_PASS;
 }
@@ -719,7 +727,7 @@ static s32 SemTestThreadTx(s32 arg) {
         MosIncrementSem(&TestSem);
         TestHisto[arg]++;
         MosDelayThread(sem_test_delay);
-        if (MosIsStopRequested()) break;
+        if (IsStopRequested()) break;
     }
     return TEST_PASS;
 }
@@ -729,7 +737,7 @@ static s32 SemTestThreadTxFast(s32 arg) {
         MosIncrementSem(&TestSem);
         MosDelayMicroSec(10);
         TestHisto[arg]++;
-        if (MosIsStopRequested()) break;
+        if (IsStopRequested()) break;
     }
     return TEST_PASS;
 }
@@ -738,7 +746,7 @@ static s32 SemTestThreadRx(s32 arg) {
     for (;;) {
         MosWaitForSem(&TestSem);
         TestHisto[arg]++;
-        if (MosIsStopRequested()) break;
+        if (IsStopRequested()) break;
     }
     return TEST_PASS;
 }
@@ -750,7 +758,7 @@ static s32 SemTestThreadRxTimeout(s32 arg) {
         } else {
             TestHisto[arg + 1]++;
         }
-        if (MosIsStopRequested()) break;
+        if (IsStopRequested()) break;
     }
     return TEST_PASS;
 }
@@ -760,7 +768,7 @@ static s32 SemTestThreadRxTry(s32 arg) {
         if (MosTrySem(&TestSem)) {
             TestHisto[arg]++;
         }
-        if (MosIsStopRequested()) break;
+        if (IsStopRequested()) break;
     }
     return TEST_PASS;
 }
@@ -770,7 +778,7 @@ static s32 SignalTestThreadTx(s32 arg) {
         MosRaiseSignal(&TestSem, 1 << arg);
         TestHisto[arg]++;
         MosDelayThread(sem_test_delay);
-        if (MosIsStopRequested()) break;
+        if (IsStopRequested()) break;
     }
     return TEST_PASS;
 }
@@ -782,7 +790,7 @@ static s32 SignalTestThreadRx(s32 arg) {
         MosAssert(flags <= 3);
         if (flags & 0x1) TestHisto[arg]++;
         if (flags & 0x2) TestHisto[arg + 1]++;
-        if (MosIsStopRequested()) break;
+        if (IsStopRequested()) break;
     }
     return TEST_PASS;
 }
@@ -795,7 +803,7 @@ static s32 SignalTestThreadRxTimeout(s32 arg) {
             if (flags & 0x1) TestHisto[arg]++;
             if (flags & 0x2) TestHisto[arg + 1]++;
         } else MosAssert(0);
-        if (MosIsStopRequested()) break;
+        if (IsStopRequested()) break;
     }
     return TEST_PASS;
 }
@@ -807,7 +815,7 @@ static s32 SignalTestPoll(s32 arg) {
             if (flags & 0x1) TestHisto[arg]++;
             if (flags & 0x2) TestHisto[arg + 1]++;
         }
-        if (MosIsStopRequested()) break;
+        if (IsStopRequested()) break;
     }
     return TEST_PASS;
 }
@@ -828,9 +836,9 @@ static bool SemTests(void) {
     MosInitAndRunThread(Threads[2], 3, SemTestThreadTx, 1, Stacks[2], DFT_STACK_SIZE);
     MosInitAndRunThread(Threads[3], 3, SemTestThreadRx, 2, Stacks[3], DFT_STACK_SIZE);
     MosDelayThread(test_time);
-    MosRequestThreadStop(Threads[1]);
-    MosRequestThreadStop(Threads[2]);
-    MosRequestThreadStop(Threads[3]);
+    RequestThreadStop(Threads[1]);
+    RequestThreadStop(Threads[2]);
+    RequestThreadStop(Threads[3]);
     MosIncrementSem(&TestSem);  // Unblock thread to stop
     if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
@@ -854,9 +862,9 @@ static bool SemTests(void) {
     MosInitAndRunThread(Threads[2], 3, SemTestThreadTx, 2, Stacks[2], DFT_STACK_SIZE);
     MosInitAndRunThread(Threads[3], 3, SemTestThreadRx, 3, Stacks[3], DFT_STACK_SIZE);
     MosDelayThread(test_time);
-    MosRequestThreadStop(Threads[1]);
-    MosRequestThreadStop(Threads[2]);
-    MosRequestThreadStop(Threads[3]);
+    RequestThreadStop(Threads[1]);
+    RequestThreadStop(Threads[2]);
+    RequestThreadStop(Threads[3]);
     MosIncrementSem(&TestSem); // Unblock thread to stop
     if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
@@ -880,9 +888,9 @@ static bool SemTests(void) {
     MosInitAndRunThread(Threads[2], 3, SemTestThreadTx, 1, Stacks[2], DFT_STACK_SIZE);
     MosInitAndRunThread(Threads[3], 3, SemTestThreadRxTimeout, 2, Stacks[3], DFT_STACK_SIZE);
     MosDelayThread(test_time);
-    MosRequestThreadStop(Threads[1]);
-    MosRequestThreadStop(Threads[2]);
-    MosRequestThreadStop(Threads[3]);
+    RequestThreadStop(Threads[1]);
+    RequestThreadStop(Threads[2]);
+    RequestThreadStop(Threads[3]);
     if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[3]) != TEST_PASS) test_pass = false;
@@ -907,10 +915,10 @@ static bool SemTests(void) {
     MosInitAndRunThread(Threads[2], 2, SemTestThreadTxFast, 0, Stacks[1], DFT_STACK_SIZE);
     MosInitAndRunThread(Threads[3], 2, SemTestThreadTxFast, 1, Stacks[2], DFT_STACK_SIZE);
     MosDelayThread(test_time);
-    MosRequestThreadStop(Threads[2]);
-    MosRequestThreadStop(Threads[3]);
+    RequestThreadStop(Threads[2]);
+    RequestThreadStop(Threads[3]);
     MosDelayThread(5);
-    MosRequestThreadStop(Threads[1]);
+    RequestThreadStop(Threads[1]);
     MosIncrementSem(&TestSem);  // Unblock thread to stop
     if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
@@ -934,9 +942,9 @@ static bool SemTests(void) {
     MosInitAndRunThread(Threads[2], 3, SemTestThreadTx, 1, Stacks[2], DFT_STACK_SIZE);
     MosInitAndRunThread(Threads[3], 3, SemTestThreadRxTry, 2, Stacks[3], DFT_STACK_SIZE);
     MosDelayThread(test_time);
-    MosRequestThreadStop(Threads[1]);
-    MosRequestThreadStop(Threads[2]);
-    MosRequestThreadStop(Threads[3]);
+    RequestThreadStop(Threads[1]);
+    RequestThreadStop(Threads[2]);
+    RequestThreadStop(Threads[3]);
     if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[3]) != TEST_PASS) test_pass = false;
@@ -959,9 +967,9 @@ static bool SemTests(void) {
     MosInitAndRunThread(Threads[2], 2, SignalTestThreadTx, 1, Stacks[2], DFT_STACK_SIZE);
     MosInitAndRunThread(Threads[3], 2, SignalTestThreadTx, 0, Stacks[3], DFT_STACK_SIZE);
     MosDelayThread(test_time);
-    MosRequestThreadStop(Threads[1]);
-    MosRequestThreadStop(Threads[2]);
-    MosRequestThreadStop(Threads[3]);
+    RequestThreadStop(Threads[1]);
+    RequestThreadStop(Threads[2]);
+    RequestThreadStop(Threads[3]);
     MosRaiseSignal(&TestSem, 2);
     if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
@@ -985,9 +993,9 @@ static bool SemTests(void) {
     MosInitAndRunThread(Threads[2], 2, SignalTestThreadTx, 1, Stacks[2], DFT_STACK_SIZE);
     MosInitAndRunThread(Threads[3], 2, SignalTestThreadTx, 0, Stacks[3], DFT_STACK_SIZE);
     MosDelayThread(test_time);
-    MosRequestThreadStop(Threads[1]);
-    MosRequestThreadStop(Threads[2]);
-    MosRequestThreadStop(Threads[3]);
+    RequestThreadStop(Threads[1]);
+    RequestThreadStop(Threads[2]);
+    RequestThreadStop(Threads[3]);
     MosRaiseSignal(&TestSem, 2);
     if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
@@ -1011,9 +1019,9 @@ static bool SemTests(void) {
     MosInitAndRunThread(Threads[2], 2, SignalTestThreadTx, 1, Stacks[2], DFT_STACK_SIZE);
     MosInitAndRunThread(Threads[3], 3, SignalTestPoll, 2, Stacks[3], DFT_STACK_SIZE);
     MosDelayThread(test_time);
-    MosRequestThreadStop(Threads[1]);
-    MosRequestThreadStop(Threads[2]);
-    MosRequestThreadStop(Threads[3]);
+    RequestThreadStop(Threads[1]);
+    RequestThreadStop(Threads[2]);
+    RequestThreadStop(Threads[3]);
     if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[3]) != TEST_PASS) test_pass = false;
@@ -1040,7 +1048,7 @@ static s32 QueueTestPendIRQ(s32 arg) {
         // Fire Software Interrupt
         HalTestsTriggerInterrupt(1);
         MosDelayThread(queue_test_delay);
-        if (MosIsStopRequested()) break;
+        if (IsStopRequested()) break;
     }
     return TEST_PASS;
 }
@@ -1050,7 +1058,7 @@ static s32 QueueTestThreadTx(s32 arg) {
         MosSendToQueue32(&TestQueue, arg);
         TestHisto[arg]++;
         MosDelayThread(queue_test_delay);
-        if (MosIsStopRequested()) break;
+        if (IsStopRequested()) break;
     }
     return TEST_PASS;
 }
@@ -1062,7 +1070,7 @@ static s32 QueueTestThreadTxTimeout(s32 arg) {
         } else {
             TestHisto[arg + 1]++;
         }
-        if (MosIsStopRequested()) break;
+        if (IsStopRequested()) break;
     }
     return TEST_PASS;
 }
@@ -1071,7 +1079,7 @@ static s32 QueueTestThreadRx(s32 arg) {
     for (;;) {
         u32 val = MosReceiveFromQueue32(&TestQueue);
         TestHisto[arg + val]++;
-        if (MosIsStopRequested()) break;
+        if (IsStopRequested()) break;
     }
     return TEST_PASS;
 }
@@ -1081,7 +1089,7 @@ static s32 QueueTestThreadRxTry(s32 arg) {
         u32 val;
         if (MosTryReceiveFromQueue32(&TestQueue, &val)) {
             TestHisto[arg + val]++;
-            if (MosIsStopRequested()) break;
+            if (IsStopRequested()) break;
         }
     }
     return TEST_PASS;
@@ -1091,7 +1099,7 @@ static s32 QueueTestThreadRxSlow(s32 arg) {
     for (;;) {
         u32 val = MosReceiveFromQueue32(&TestQueue);
         TestHisto[arg + val]++;
-        if (MosIsStopRequested()) break;
+        if (IsStopRequested()) break;
         MosDelayThread(queue_test_delay);
     }
     return TEST_PASS;
@@ -1105,7 +1113,7 @@ static s32 QueueTestThreadRxTimeout(s32 arg) {
         } else {
             TestHisto[arg + 3]++;
         }
-        if (MosIsStopRequested()) break;
+        if (IsStopRequested()) break;
     }
     return TEST_PASS;
 }
@@ -1126,11 +1134,11 @@ static bool QueueTests(void) {
     MosInitAndRunThread(Threads[2], 3, QueueTestThreadTx, 2, Stacks[2], DFT_STACK_SIZE);
     MosInitAndRunThread(Threads[3], 3, QueueTestThreadRx, 2, Stacks[3], DFT_STACK_SIZE);
     MosDelayThread(test_time);
-    MosRequestThreadStop(Threads[1]);
-    MosRequestThreadStop(Threads[2]);
+    RequestThreadStop(Threads[1]);
+    RequestThreadStop(Threads[2]);
     if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
-    MosRequestThreadStop(Threads[3]);
+    RequestThreadStop(Threads[3]);
     MosSendToQueue32(&TestQueue, 2); // Unblock thread to stop
     if (MosWaitForThreadStop(Threads[3]) != TEST_PASS) test_pass = false;
     DisplayHistogram(5);
@@ -1153,9 +1161,9 @@ static bool QueueTests(void) {
     MosInitAndRunThread(Threads[2], 3, QueueTestThreadTx, 2, Stacks[2], DFT_STACK_SIZE);
     MosInitAndRunThread(Threads[3], 3, QueueTestThreadRxTimeout, 2, Stacks[3], DFT_STACK_SIZE);
     MosDelayThread(test_time);
-    MosRequestThreadStop(Threads[1]);
-    MosRequestThreadStop(Threads[2]);
-    MosRequestThreadStop(Threads[3]);
+    RequestThreadStop(Threads[1]);
+    RequestThreadStop(Threads[2]);
+    RequestThreadStop(Threads[3]);
     if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[3]) != TEST_PASS) test_pass = false;
@@ -1182,13 +1190,13 @@ static bool QueueTests(void) {
     MosInitAndRunThread(Threads[2], 3, QueueTestThreadTxTimeout, 1, Stacks[2], DFT_STACK_SIZE);
     MosInitAndRunThread(Threads[3], 3, QueueTestThreadRxSlow, 2, Stacks[3], DFT_STACK_SIZE);
     MosDelayThread(test_time);
-    MosRequestThreadStop(Threads[1]);
-    MosRequestThreadStop(Threads[2]);
+    RequestThreadStop(Threads[1]);
+    RequestThreadStop(Threads[2]);
     if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
     // Give Thread 3 extra time to drain the queue
     MosDelayThread(queue_test_delay * (count_of(queue) + 1));
-    MosRequestThreadStop(Threads[3]);
+    RequestThreadStop(Threads[3]);
     MosSendToQueue32(&TestQueue, 2);
     if (MosWaitForThreadStop(Threads[3]) != TEST_PASS) test_pass = false;
     DisplayHistogram(5);
@@ -1212,9 +1220,9 @@ static bool QueueTests(void) {
     MosInitAndRunThread(Threads[2], 3, QueueTestThreadTx, 2, Stacks[2], DFT_STACK_SIZE);
     MosInitAndRunThread(Threads[3], 3, QueueTestThreadRxTry, 2, Stacks[3], DFT_STACK_SIZE);
     MosDelayThread(test_time);
-    MosRequestThreadStop(Threads[1]);
-    MosRequestThreadStop(Threads[2]);
-    MosRequestThreadStop(Threads[3]);
+    RequestThreadStop(Threads[1]);
+    RequestThreadStop(Threads[2]);
+    RequestThreadStop(Threads[3]);
     MosSendToQueue32(&TestQueue, 2); // Unblock thread to stop
     if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
@@ -1322,7 +1330,7 @@ static s32 MutexTestThread(s32 arg) {
             goto EXIT_MTT;
         }
         TestFlag = 1;
-        if (MosIsStopRequested())
+        if (IsStopRequested())
             goto EXIT_MTT;
         if (MutexRecursion(2) == TEST_FAIL) {
             status = TEST_FAIL;
@@ -1347,7 +1355,7 @@ static s32 MutexTryTestThread(s32 arg) {
                 goto EXIT_MTT;
             }
             TestFlag = 1;
-            if (MosIsStopRequested())
+            if (IsStopRequested())
                 goto EXIT_MTT;
             if (MutexRecursion(2) == TEST_FAIL) {
                 status = TEST_FAIL;
@@ -1387,7 +1395,7 @@ static s32 MutexDummyThread(s32 arg) {
             MosDelayThread(2);
         }
         TestHisto[arg]++;
-        if (MosIsStopRequested())
+        if (IsStopRequested())
             break;
     }
     return TEST_PASS;
@@ -1399,7 +1407,7 @@ static s32 MutexChangePrioThread(s32 arg) {
         MosUnlockMutex(&TestMutex);
         MosPrintf("Thread %d run\n", arg);
         TestHisto[arg]++;
-        if (MosIsStopRequested())
+        if (IsStopRequested())
             break;
     }
     return TEST_PASS;
@@ -1407,7 +1415,7 @@ static s32 MutexChangePrioThread(s32 arg) {
 
 static s32 MutexBusyThread(s32 arg) {
     for (;;) {
-        if (MosIsStopRequested()) break;
+        if (IsStopRequested()) break;
         TestHisto[arg]++;
     }
     return TEST_PASS;
@@ -1426,8 +1434,8 @@ static bool MutexTests(void) {
     MosInitAndRunThread(Threads[1], 3, MutexTestThread, 0, Stacks[1], DFT_STACK_SIZE);
     MosInitAndRunThread(Threads[2], 3, MutexTestThread, 1, Stacks[2], DFT_STACK_SIZE);
     MosDelayThread(5000);
-    MosRequestThreadStop(Threads[1]);
-    MosRequestThreadStop(Threads[2]);
+    RequestThreadStop(Threads[1]);
+    RequestThreadStop(Threads[2]);
     if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
     DisplayHistogram(2);
@@ -1447,9 +1455,9 @@ static bool MutexTests(void) {
     MosInitAndRunThread(Threads[2], 3, MutexTestThread, 1, Stacks[2], DFT_STACK_SIZE);
     MosInitAndRunThread(Threads[3], 3, MutexTestThread, 2, Stacks[3], DFT_STACK_SIZE);
     MosDelayThread(5000);
-    MosRequestThreadStop(Threads[1]);
-    MosRequestThreadStop(Threads[2]);
-    MosRequestThreadStop(Threads[3]);
+    RequestThreadStop(Threads[1]);
+    RequestThreadStop(Threads[2]);
+    RequestThreadStop(Threads[3]);
     if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[3]) != TEST_PASS) test_pass = false;
@@ -1469,8 +1477,8 @@ static bool MutexTests(void) {
     MosInitAndRunThread(Threads[1], 2, MutexTryTestThread, 0, Stacks[1], DFT_STACK_SIZE);
     MosInitAndRunThread(Threads[2], 2, MutexTryTestThread, 1, Stacks[2], DFT_STACK_SIZE);
     MosDelayThread(5000);
-    MosRequestThreadStop(Threads[1]);
-    MosRequestThreadStop(Threads[2]);
+    RequestThreadStop(Threads[1]);
+    RequestThreadStop(Threads[2]);
     if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
     DisplayHistogram(2);
@@ -1490,9 +1498,9 @@ static bool MutexTests(void) {
     MosInitAndRunThread(Threads[2], 2, MutexTryTestThread, 1, Stacks[2], DFT_STACK_SIZE);
     MosInitAndRunThread(Threads[3], 2, MutexTryTestThread, 2, Stacks[3], DFT_STACK_SIZE);
     MosDelayThread(5000);
-    MosRequestThreadStop(Threads[1]);
-    MosRequestThreadStop(Threads[2]);
-    MosRequestThreadStop(Threads[3]);
+    RequestThreadStop(Threads[1]);
+    RequestThreadStop(Threads[2]);
+    RequestThreadStop(Threads[3]);
     if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[3]) != TEST_PASS) test_pass = false;
@@ -1515,9 +1523,9 @@ static bool MutexTests(void) {
     MosInitAndRunThread(Threads[2], 2, MutexDummyThread, 1, Stacks[2], DFT_STACK_SIZE);
     MosInitAndRunThread(Threads[3], 3, MutexTestThread, 0, Stacks[3], DFT_STACK_SIZE);
     MosDelayThread(5000);
-    MosRequestThreadStop(Threads[1]);
-    MosRequestThreadStop(Threads[2]);
-    MosRequestThreadStop(Threads[3]);
+    RequestThreadStop(Threads[1]);
+    RequestThreadStop(Threads[2]);
+    RequestThreadStop(Threads[3]);
     if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[3]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
@@ -1570,10 +1578,10 @@ static bool MutexTests(void) {
     if (MosGetThreadPriority(Threads[2]) != 2) test_pass = false;
     if (MosGetThreadPriority(Threads[3]) != 0) test_pass = false;
     if (MosGetThreadPriority(Threads[4]) != 1) test_pass = false;
-    MosRequestThreadStop(Threads[1]);
-    MosRequestThreadStop(Threads[2]);
-    MosRequestThreadStop(Threads[3]);
-    MosRequestThreadStop(Threads[4]);
+    RequestThreadStop(Threads[1]);
+    RequestThreadStop(Threads[2]);
+    RequestThreadStop(Threads[3]);
+    RequestThreadStop(Threads[4]);
     if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[3]) != TEST_PASS) test_pass = false;
@@ -1790,7 +1798,7 @@ static s32 SecurityThread(s32 arg) {
         SECURE_TakeSomeTime();
         MosReleaseSecureContext();
         TestHisto[arg]++;
-        if (MosIsStopRequested()) break;
+        if (IsStopRequested()) break;
     }
     return TEST_PASS;
 }
@@ -1809,10 +1817,10 @@ static bool SecurityTests(void) {
     MosInitAndRunThread(Threads[3], 2, SecurityThread, 2, Stacks[3], DFT_STACK_SIZE);
     MosInitAndRunThread(Threads[4], 2, SecurityThread, 3, Stacks[4], DFT_STACK_SIZE);
     MosDelayThread(10000);
-    MosRequestThreadStop(Threads[1]);
-    MosRequestThreadStop(Threads[2]);
-    MosRequestThreadStop(Threads[3]);
-    MosRequestThreadStop(Threads[4]);
+    RequestThreadStop(Threads[1]);
+    RequestThreadStop(Threads[2]);
+    RequestThreadStop(Threads[3]);
+    RequestThreadStop(Threads[4]);
     if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[3]) != TEST_PASS) test_pass = false;
@@ -1834,10 +1842,10 @@ static bool SecurityTests(void) {
     MosInitAndRunThread(Threads[3], 2, SecurityThread, 2, Stacks[3], DFT_STACK_SIZE);
     MosInitAndRunThread(Threads[4], 2, SecurityThread, 3, Stacks[4], DFT_STACK_SIZE);
     MosDelayThread(10000);
-    MosRequestThreadStop(Threads[1]);
-    MosRequestThreadStop(Threads[2]);
-    MosRequestThreadStop(Threads[3]);
-    MosRequestThreadStop(Threads[4]);
+    RequestThreadStop(Threads[1]);
+    RequestThreadStop(Threads[2]);
+    RequestThreadStop(Threads[3]);
+    RequestThreadStop(Threads[4]);
     if (MosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
     if (MosWaitForThreadStop(Threads[3]) != TEST_PASS) test_pass = false;

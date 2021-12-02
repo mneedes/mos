@@ -16,6 +16,7 @@
 
 // TODO: Hooks for other timers such as LPTIM ?
 // TODO: auto tick startup?
+// TODO: smaller init for term handlers
 
 #define NO_SUCH_THREAD       NULL
 #define STACK_FILL_VALUE     0xca5eca11
@@ -71,8 +72,8 @@ typedef struct Thread {
     void              * blocked_on;
     MosThreadPriority   pri;
     MosThreadPriority   nom_pri;
-    u8                  stop_request;
     u8                  timed_out;
+    u8                  pad;
     s32                 rtn_val;
     MosThreadEntry    * term_handler;
     s32                 term_arg;
@@ -81,8 +82,9 @@ typedef struct Thread {
     const char        * name;
     s8                  secure_context;
     s8                  secure_context_new;
-    u16                 pad;
-    s32                 ref_cnt;
+    u16                 user_data16;
+    void              * user_ptr;
+    u32                 ref_cnt;
 } Thread;
 
 // Ensure opaque thread structure has same size as internal structure
@@ -276,10 +278,10 @@ static void AddTimer(MosTimer * tmr) {
     MosAddToListBefore(elm, &tmr->tmr_link.link);
 }
 
-void MosSetTimer(MosTimer * tmr, u32 ticks, void * priv_data) {
+void MosSetTimer(MosTimer * tmr, u32 ticks, void * user_ptr) {
     LockScheduler(IntPriMaskLow);
     tmr->ticks = ticks;
-    tmr->priv_data = priv_data;
+    tmr->user_ptr = user_ptr;
     AddTimer(tmr);
     UnlockScheduler();
 }
@@ -359,16 +361,13 @@ InitThread(Thread * thd, MosThreadPriority pri, MosThreadEntry * entry, s32 arg,
         for (; fill >= (u32 *)stack_bottom; fill--) {
             *fill = STACK_FILL_VALUE;
         }
-    } else {
-        *((u32 *)stack_bottom) = STACK_FILL_VALUE;
-    }
+    } else *((u32 *)stack_bottom) = STACK_FILL_VALUE;
     // Initialize context and state
     thd->sp = (u32)sf;
     thd->mtx_cnt = 0;
     thd->err_no = 0;
     thd->pri = pri;
     thd->nom_pri = pri;
-    thd->stop_request = false;
     thd->term_handler = ThreadExit;
     thd->term_arg = 0;
     thd->stack_bottom = stack_bottom;
@@ -376,6 +375,8 @@ InitThread(Thread * thd, MosThreadPriority pri, MosThreadEntry * entry, s32 arg,
     thd->name = "";
     thd->secure_context     = MOS_DEFAULT_SECURE_CONTEXT;
     thd->secure_context_new = MOS_DEFAULT_SECURE_CONTEXT;
+    thd->user_data16 = 0;
+    thd->user_ptr = NULL;
     // ref_cnt is not initialized here, it is manipulated externally
 }
 
@@ -576,8 +577,7 @@ MosThreadState MosGetThreadState(MosThread * _thd, s32 * rtn_val) {
         state = MOS_THREAD_STOP_REQUEST;
         break;
     default:
-        if (thd->stop_request) state = MOS_THREAD_STOP_REQUEST;
-        else state = MOS_THREAD_RUNNING;
+        state = MOS_THREAD_RUNNING;
         break;
     }
     UnlockScheduler();
@@ -634,15 +634,6 @@ void MosChangeThreadPriority(MosThread * _thd, MosThreadPriority new_pri) {
         if (thd->pri > curr_pri) YieldThread();
     } else if (thd->pri < curr_pri) YieldThread();
     UnlockScheduler();
-}
-
-void MosRequestThreadStop(MosThread * _thd) {
-    Thread * thd = (Thread *)_thd;
-    thd->stop_request = true;
-}
-
-bool MosIsStopRequested(void) {
-    return (bool)RunningThread->stop_request;
 }
 
 s32 MosWaitForThreadStop(MosThread * _thd) {
