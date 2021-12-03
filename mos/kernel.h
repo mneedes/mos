@@ -78,8 +78,8 @@ typedef struct MosTimer {
     u32                ticks;
     u32                wake_tick;
     MosLinkHet         tmr_link;
-    MosTimerCallback * callback;
-    void             * user_ptr;
+    MosTimerCallback * callback;   /// Callback function
+    void             * user_ptr;   /// User data pointer for callback
 } MosTimer;
 
 /// Initialize MOS Microkernel.
