@@ -9,11 +9,11 @@
 //
 
 #include <mos/kernel.h>
-#include <mos_s/kernel_s.h>
+#include <mos/kernel_s.h>
 
 #include <mos/internal/arch.h>
 #include <mos/internal/security.h>
-#include <mos_s/format_string_s.h>
+#include <mos/format_string_s.h>
 
 #if (MOS_ARM_RTOS_ON_SECURE_SIDE == true)
 
