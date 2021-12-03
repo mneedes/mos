@@ -72,7 +72,7 @@ bool MosTryMutex(MosMutex * mtx) {
     LockScheduler(IntPriMaskLow);
     asm volatile ( "dsb" );
     if (mtx->owner == NO_SUCH_THREAD) {
-        RunningThread->mtx_cnt++;
+        if (RunningThread) RunningThread->mtx_cnt++;
         mtx->owner = (MosThread *)RunningThread;
     }
     if (mtx->owner == (MosThread *)RunningThread) {
@@ -89,7 +89,7 @@ void MosUnlockMutex(MosMutex * mtx) {
     LockScheduler(IntPriMaskLow);
     asm volatile ( "dmb" );
     if (--mtx->depth == 0) {
-        if (--RunningThread->mtx_cnt == 0 &&
+        if (RunningThread && --RunningThread->mtx_cnt == 0 &&
         	    RunningThread->pri != RunningThread->nom_pri) {
             // Reset priority inheritance
             RunningThread->pri = RunningThread->nom_pri;

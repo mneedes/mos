@@ -82,9 +82,10 @@ void MOS_NAKED MosLockMutex(MosMutex * mtx) {
       "IncLM:\n"
         "ldr r2, [r0, #4]\n"
         "cbnz r2, SkipAddLM\n"
-    	"ldr r3, [r1, #4]\n"
-    	"add r3, #1\n"
-    	"str r3, [r1, #4]\n"
+        "cbz r1, SkipAddLM\n"
+        "ldr r3, [r1, #4]\n"
+        "add r3, #1\n"
+        "str r3, [r1, #4]\n"
       "SkipAddLM:\n"
         "add r2, #1\n"
         "str r2, [r0, #4]\n"
@@ -120,10 +121,11 @@ bool MOS_NAKED MosTryMutex(MosMutex * mtx) {
         "bne RetryTRM\n"
       "IncTRM:\n"
         "ldr r2, [r0, #4]\n"
-		"cbnz r2, SkipAddTRM\n"
-		"ldr r3, [r1, #4]\n"
-		"add r3, #1\n"
-		"str r3, [r1, #4]\n"
+        "cbnz r2, SkipAddTRM\n"
+        "cbz r1, SkipAddTRM\n"
+        "ldr r3, [r1, #4]\n"
+        "add r3, #1\n"
+        "str r3, [r1, #4]\n"
       "SkipAddTRM:\n"
         "add r2, #1\n"
         "str r2, [r0, #4]\n"
@@ -141,8 +143,8 @@ bool MOS_NAKED MosTryMutex(MosMutex * mtx) {
 
 static void MOS_USED ReleaseMutex(MosMutex * mtx) {
     LockScheduler(IntPriMaskLow);
-    if (--RunningThread->mtx_cnt == 0 &&
-    	    RunningThread->pri != RunningThread->nom_pri) {
+    if (RunningThread && --RunningThread->mtx_cnt == 0 &&
+            RunningThread->pri != RunningThread->nom_pri) {
         // Reset priority inheritance
         RunningThread->pri = RunningThread->nom_pri;
         MosRemoveFromList(&RunningThread->run_link);
