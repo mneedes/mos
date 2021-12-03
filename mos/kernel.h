@@ -106,32 +106,48 @@ const MosParams * MosGetParams(void);
 
 // Time and Delays
 
+/// Obtain the lower half of the tick count
+///
 MOS_ISR_SAFE u32 MosGetTickCount(void);
-// For high-resolution time
+/// Get the monotonic cycle counter
+///
 MOS_ISR_SAFE u64 MosGetCycleCount(void);
-
+/// Advance the tick counter
+///
 void MosAdvanceTickCount(u32 ticks);
-
-// Delay thread a number of ticks, zero yields thread.
+/// Delay thread a number of ticks, zero input yields thread.
+///
 void MosDelayThread(u32 ticks);
-// For short delays, e.g.: useful for bit-banging.
-//   Keep in mind there is an upper limit to usec.
+
+/// Delay for a number of microseconds, e.g.: useful for bit-banging
+///   NOTE: There is an upper limit for usec that is clock-speed dependent
 MOS_ISR_SAFE void MosDelayMicroSec(u32 usec);
 
 // Timers - Call specified callback at a period of time
 
+/// Initialize a timer instance
+///    Supply ISR_SAFE callback function to be called upon timer expiration.
 void MosInitTimer(MosTimer * tmr, MosTimerCallback * callback);
+/// Set Timer to expire after a number of ticks
+///
 void MosSetTimer(MosTimer * tmr, u32 ticks, void * user_ptr);
+/// Cancel running timer
+///
 void MosCancelTimer(MosTimer * tmr);
+/// Reset (Restart) timer
+///
 void MosResetTimer(MosTimer * tmr);
 
 // Thread Functions
 
-// Can use MosYieldThread() for cooperative multitasking
+/// Yield current thread
+///   Can be used for cooperative multitasking with threads of same priority.
 MOS_ISR_SAFE void MosYieldThread(void);
+/// Obtain pointer to currently running thread.
 MosThread * MosGetThreadPtr(void);
 
-// To get the current stack depth of current thread
+/// Obtain stack depth of current thread
+///
 static MOS_INLINE u32 MosGetStackDepth(u8 * top) {
     u32 sp;
     asm volatile (
@@ -142,15 +158,31 @@ static MOS_INLINE u32 MosGetStackDepth(u8 * top) {
 }
 
 // Thread stack methods
-void MosGetStackStats(MosThread * thd, u32 * stack_size, u32 * stack_usage, u32 * max_stack_usage);
-u8 * MosGetStackBottom(MosThread * thd);
-u32 MosGetStackSize(MosThread * thd);
-void MosSetStack(MosThread * thd, u8 * stack_bottom, u32 stack_size);
 
+/// Get stack usage statistics for given thread
+///
+void MosGetStackStats(MosThread * thd, u32 * stack_size, u32 * stack_usage, u32 * max_stack_usage);
+/// Get pointer to bottom of given thread
+///
+u8 * MosGetStackBottom(MosThread * thd);
+/// Get size of given thread's stack in bytes
+///
+u32 MosGetStackSize(MosThread * thd);
+/// Set thread stack to the given stack with the given size
+///
+void MosSetStack(MosThread * thd, u8 * stack_bottom, u32 stack_size);
+/// Set pointer to the thread's name
+///
 void MosSetThreadName(MosThread * thd, const char * name);
+/// Initialize a thread instance, but do not start
+///
 bool MosInitThread(MosThread * thd, MosThreadPriority pri, MosThreadEntry * entry,
                    s32 arg, u8 * stack_bottom, u32 stack_size);
+/// Run a thread that has been initialized via MosInitThread()
+///
 bool MosRunThread(MosThread * thd);
+/// Initialize and start a thread
+///
 bool MosInitAndRunThread(MosThread * thd, MosThreadPriority pri,
                          MosThreadEntry * entry, s32 arg, u8 * stack_bottom,
                          u32 stack_size);
@@ -161,13 +193,6 @@ MosThreadPriority MosGetThreadPriority(MosThread * thd);
 
 // Change thread priority
 void MosChangeThreadPriority(MosThread * thd, MosThreadPriority pri);
-
-// For requesting normal thread stop.  Note that normal thread stop does NOT result
-// in the invocation of the termination handler.
-//void MosRequestThreadStop(MosThread * thd);
-// A thread can poll for stop requests so it may return naturally from its initial
-// entry point.
-//bool MosIsStopRequested(void);
 
 // Waits for thread stop or termination.  If a thread terminates abnormally this is
 // invoked AFTER the termination handler.
