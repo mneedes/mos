@@ -41,6 +41,7 @@
 #define MOS__LINE__            MOS_TO_STR(__LINE__)
 
 #define MOS_INLINE             __attribute__((always_inline)) inline
+#define MOS_PACKED             __attribute__((packed))
 #define MOS_NO_INLINE          __attribute__((noinline))
 #define MOS_NAKED              __attribute__((naked))
 #define MOS_USED               __attribute__((used))

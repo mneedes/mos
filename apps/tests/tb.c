@@ -21,6 +21,7 @@
 #include <mos/trace.h>
 #include <mos/shell.h>
 #include <mos/security.h>
+#include <mos/registry.h>
 
 #include <bsp_hal.h>
 #include <bsp/hal_tb.h>
@@ -60,7 +61,7 @@ static volatile u32 SchedCount;
 // Test Sem / Mutex / Mux
 static MosSem TestSem;
 static MosMutex TestMutex;
-static MosMutex TestMutex2;
+//static MosMutex TestMutex2;
 
 // Test Message Queue
 static u32 queue[4];
@@ -2115,6 +2116,24 @@ static s32 CmdClearTickHisto(s32 argc, char * argv[]) {
     return CMD_OK;
 }
 
+static s32 CmdRegistry(s32 argc, char * argv[]) {
+    if (argc == 3) {
+        if (strcmp(argv[1], "get") == 0) {
+            char string[64];
+            u32 size = sizeof(string);
+            if (MosGetStringEntry(NULL, argv[2], string, &size)) {
+                MosPrintf("%s\n", string);
+            } else return CMD_ERR;
+        }
+    } else if (argc == 4) {
+        if (strcmp(argv[1], "set") == 0) {
+            if (!MosSetStringEntry(NULL, argv[2], argv[3]))
+                return CMD_ERR;
+        }
+    }
+    return CMD_OK;
+}
+
 #define MAX_CMD_BUFFER_LENGTH   10
 #define MAX_CMD_LINE_SIZE       128
 
@@ -2129,6 +2148,7 @@ static s32 TestShell(s32 arg) {
         { CmdTime,           "t",   "Print time", "", {0} },
         { CmdPigeon,         "p",   "Toggle Pigeon Printing", "", {0} },
         { CmdClearTickHisto, "cth", "Clear tick histogram", "", {0} },
+        { CmdRegistry,       "reg", "Registry", "set|get name [value]", {0} },
     };
     for (u32 ix = 0; ix < count_of(list_cmds); ix++) {
         MosAddCommand(&Shell, &list_cmds[ix]);
@@ -2154,6 +2174,7 @@ int InitTestBench() {
 
     MosInitHeap(&TestThreadHeapDesc, TestThreadHeap, sizeof(TestThreadHeap), MOS_STACK_ALIGNMENT);
     MosInitThreadHeap(&TestThreadHeapDesc);
+    MosRegistryInit(&TestThreadHeapDesc, '.');
 
     if (!MosAllocAndRunThread(&Threads[TEST_SHELL_THREAD_ID], 0, TestShell,
                               0, TEST_SHELL_STACK_SIZE)) {
