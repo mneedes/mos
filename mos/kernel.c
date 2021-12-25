@@ -418,19 +418,16 @@ static s32 IdleThreadEntry(s32 arg) {
         if (WakeHook) (*WakeHook)();
         if (load) {
             MOS_REG(TICK_CTRL) = MOS_REG_VALUE(TICK_DISABLE);
-            if (MOS_REG(TICK_CTRL) & MOS_REG_VALUE(TICK_FLAG)) {
-                // If counter rolled over then account for all ticks
-                MOS_REG(TICK_LOAD) = CyclesPerTick - 1;
-                MOS_REG(TICK_VAL) = 0;
-                Tick.count += tick_interval;
-            } else {
+            if ((MOS_REG(TICK_CTRL) & MOS_REG_VALUE(TICK_FLAG)) == 0) {
                 // Interrupt was early so account for elapsed ticks
-                u32 adj_tick_interval = (load - MOS_REG(TICK_VAL)) / CyclesPerTick;
-                MOS_REG(TICK_LOAD) = MOS_REG(TICK_VAL);
-                MOS_REG(TICK_VAL) = 0;
-                MOS_REG(TICK_LOAD) = CyclesPerTick - 1;
-                Tick.count += adj_tick_interval;
+                u32 tick_val = MOS_REG(TICK_VAL);
+                tick_interval = (load - tick_val) / CyclesPerTick;
+                tick_val = load - (tick_interval * CyclesPerTick);
+                MOS_REG(TICK_LOAD) = tick_val;
             }
+            MOS_REG(TICK_LOAD) = CyclesPerTick - 1;
+            MOS_REG(TICK_VAL) = 0;
+            Tick.count += tick_interval;
             MOS_REG(TICK_CTRL) = MOS_REG_VALUE(TICK_ENABLE);
         }
         asm volatile ( "dsb\n"
