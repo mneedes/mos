@@ -2065,6 +2065,14 @@ static s32 CmdTest(s32 argc, char * argv[]) {
     return CMD_ERR_NOT_FOUND;
 }
 
+static s32 CmdTime(s32 argc, char * argv[]) {
+    static u64 start_ns = 0;
+    u64 ns = (u64) MosGetCycleCount() * (s64)1000 / 110;
+    if (!start_ns) start_ns = ns;
+    MosPrintf("Time ns: %llu\n", ns - start_ns);
+    return CMD_OK;
+}
+
 static volatile bool PigeonFlag = false;
 
 static s32 PigeonThread(s32 arg) {
@@ -2118,6 +2126,7 @@ static s32 TestShell(s32 arg) {
     MosInitShell(&Shell, MAX_CMD_BUFFER_LENGTH, MAX_CMD_LINE_SIZE, (void *)CmdBuffers, true);
     static MosShellCommand list_cmds[] = {
         { CmdTest,           "run", "Run Test", "[TEST]", {0} },
+        { CmdTime,           "t",   "Print time", "", {0} },
         { CmdPigeon,         "p",   "Toggle Pigeon Printing", "", {0} },
         { CmdClearTickHisto, "cth", "Clear tick histogram", "", {0} },
     };

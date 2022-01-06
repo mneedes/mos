@@ -404,8 +404,8 @@ static s32 IdleThreadEntry(s32 arg) {
             }
         }
         u32 load = 0;
-        if (tick_interval != 1) {
-            load = (tick_interval - 1) * CyclesPerTick + MOS_REG(TICK_VAL) - 1;
+        if (tick_interval > 1) {
+            load = (tick_interval - 1) * CyclesPerTick + MOS_REG(TICK_VAL);
             MOS_REG(TICK_LOAD) = load;
             MOS_REG(TICK_VAL) = 0;
         }
@@ -418,17 +418,20 @@ static s32 IdleThreadEntry(s32 arg) {
         if (WakeHook) (*WakeHook)();
         if (load) {
             MOS_REG(TICK_CTRL) = MOS_REG_VALUE(TICK_DISABLE);
-            if ((MOS_REG(TICK_CTRL) & MOS_REG_VALUE(TICK_FLAG)) == 0) {
-                // Interrupt was early so account for elapsed ticks
-                u32 tick_val = MOS_REG(TICK_VAL);
-                tick_interval = (load - tick_val) / CyclesPerTick;
-                tick_val = load - (tick_interval * CyclesPerTick);
-                MOS_REG(TICK_LOAD) = tick_val;
+            if (MOS_REG(TICK_CTRL) & MOS_REG_VALUE(TICK_FLAG)) {
+                MOS_REG(TICK_LOAD) = CyclesPerTick - (load - MOS_REG(TICK_VAL)) - 1;
+            } else {
+                u32 elapsed_cycles = tick_interval * CyclesPerTick - MOS_REG(TICK_VAL);
+                tick_interval = elapsed_cycles / CyclesPerTick;
+                MOS_REG(TICK_LOAD) = (tick_interval + 1) * CyclesPerTick - elapsed_cycles;
             }
-            MOS_REG(TICK_LOAD) = CyclesPerTick - 1;
-            MOS_REG(TICK_VAL) = 0;
-            Tick.count += tick_interval;
+            // TODO: What happens when LOAD is very small ? (Race condition between load and re-load)
+            //   Perhaps need to manually launch SysTick and not reset VAL.
+            //   Maybe better way to disable tick
+            MOS_REG(TICK_VAL)  = 0;
             MOS_REG(TICK_CTRL) = MOS_REG_VALUE(TICK_ENABLE);
+            MOS_REG(TICK_LOAD) = CyclesPerTick - 1;
+            Tick.count += tick_interval;
         }
         asm volatile ( "dsb\n"
                        "cpsie i\n"

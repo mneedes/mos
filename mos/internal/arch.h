@@ -104,7 +104,7 @@ static MOS_INLINE void UnlockScheduler(void) {
 #define MOS_REG_TICK_LOAD      (*(volatile u32 *)0xe000e014)
 #define MOS_REG_TICK_VAL       (*(volatile u32 *)0xe000e018)
 #define MOS_VAL_TICK_ENABLE    0x7
-#define MOS_VAL_TICK_DISABLE   0x4
+#define MOS_VAL_TICK_DISABLE   0x6
 #define MOS_VAL_TICK_FLAG      (0x1 << 16)
 
 // Register Access
