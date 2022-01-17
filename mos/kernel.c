@@ -209,9 +209,12 @@ u32 MosGetTickCount(void) {
 
 MOS_ISR_SAFE u64 MosGetCycleCount(void) {
     u32 mask = MosDisableInterrupts();
-    if (MOS_REG(TICK_CTRL) & MOS_REG_VALUE(TICK_FLAG)) Tick.count++;
     s64 tmp = Tick.count;
     u32 val = MOS_REG(TICK_VAL);
+    if (MOS_REG(TICK_CTRL) & MOS_REG_VALUE(TICK_FLAG)) {
+        tmp = ++Tick.count;
+        val = MOS_REG(TICK_VAL);
+    }
     MosEnableInterrupts(mask);
     return (tmp * CyclesPerTick) - val;
 }
