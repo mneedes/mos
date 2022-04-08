@@ -19,7 +19,7 @@ typedef struct Entry {
     MosLink  link;
     union {
         s64     int_value;     // integer value
-        MosList entries;       // list of entries
+        MosList entries;       // child list
         struct {
             u8 * data;
             u32  size;         // blob size (includes '\0' for string)
@@ -37,6 +37,29 @@ typedef struct Entry {
     // }
 } Entry;
 
+typedef struct Entry2 {
+    MosLink  link;             // tree link
+    MosLink  op_link;          // operation link
+    union {
+        s64     int_value;     // integer value
+        MosList entries;       // child list
+        struct {
+            u8 * data;         // pointer to blob data
+            u32  size;         // blob size (includes '\0' for string)
+        } blob;                // blob value (e.g: binary/string)
+        struct {
+            void * interface;
+            void * priv_data;
+        } external;            // external interface
+    };
+    MosEntryType type;
+    u8 rsvd[3];
+    u32 offset;                // offset in external storage
+    // Payload {
+    //   char name[];          // Entry name
+    // }
+} Entry2;
+
 typedef struct Registry {
     MosMutex  mutex;
     Entry   * root;
@@ -49,36 +72,43 @@ static Registry reg;
 static const char * MatchEntryName(char * entry_name, const char * path_name) {
     u32 idx = 0;
     while (1) {
-        /* Path name ends at delimiter or \0 */
-        bool at_path_end = (path_name[idx] == '\0' || path_name[idx] == reg.delimiter);
-        /* Entry name ends at \0 */
-        if (at_path_end && entry_name[idx] == '\0') return (path_name + idx);
-        else if (at_path_end) break;
+        /* Path name ends at \0 or delimiter, entry ends at \0 */
+        if (path_name[idx] == '\0' || path_name[idx] == reg.delimiter) {
+            if (entry_name[idx] == '\0') return (path_name + idx);
+            else break;
+        }
         if (entry_name[idx] != path_name[idx]) break;
         idx++;
     }
     return NULL;
 }
 
-static Entry * FindEntry(Entry * entry, const char * path) {
+static Entry * FindEntry2(Entry * entry, const char ** path, bool * leaf_found) {
     if (!entry) entry = reg.root;
-    if (*path == '\0') return entry;
+    if (**path == '\0') {
+        *leaf_found = false;
+        return entry;
+    }
 FindNext:
     if (entry->type != MosEntryTypeInternal) return NULL;
     MosLink * elm = entry->entries.next;
     for (; elm != &entry->entries; elm = elm->next) {
         Entry * check_entry = container_of(elm, Entry, link);
-        const char * matched_path = MatchEntryName((char *)(check_entry + 1), path);
+        const char * matched_path = MatchEntryName((char *)(check_entry + 1), *path);
         if (matched_path) {
-            if (*matched_path == '\0') return check_entry;
+            if (*matched_path == '\0') {
+                *leaf_found = true;
+                return check_entry;
+            }
             else {
-                path = matched_path + 1;
+                *path = matched_path + 1;
                 entry = check_entry;
                 goto FindNext;
             }
         }
     }
-    return NULL;
+    *leaf_found = false;
+    return entry;
 }
 
 static Entry * AllocAndFillEntry(const char ** _path, const u8 * data, u32 blob_size) {
@@ -104,7 +134,29 @@ static Entry * AllocAndFillEntry(const char ** _path, const u8 * data, u32 blob_
     return entry;
 }
 
+static Entry * FindEntry(Entry * entry, const char * path) {
+    if (!entry) entry = reg.root;
+    if (*path == '\0') return entry;
+FindNext:
+    if (entry->type != MosEntryTypeInternal) return NULL;
+    MosLink * elm = entry->entries.next;
+    for (; elm != &entry->entries; elm = elm->next) {
+        Entry * check_entry = container_of(elm, Entry, link);
+        const char * matched_path = MatchEntryName((char *)(check_entry + 1), path);
+        if (matched_path) {
+            if (*matched_path == '\0') return check_entry;
+            else {
+                path = matched_path + 1;
+                entry = check_entry;
+                goto FindNext;
+            }
+        }
+    }
+    return NULL;
+}
+
 static Entry * CreateEntry(Entry * entry, const char * path, const u8 * data, u32 blob_size) {
+#if 0
     if (!entry) entry = reg.root;
     if (*path == '\0') return entry;
 FindNext: {
@@ -114,7 +166,7 @@ FindNext: {
             Entry * check_entry = container_of(elm, Entry, link);
             const char * matched_path = MatchEntryName((char *)(check_entry + 1), path);
             if (matched_path) {
-                if (*matched_path == '\0') return check_entry;
+                if (*matched_path == '\0') return check_entry;  // If Entry already exists...
                 else {
                     path = matched_path + 1;
                     entry = check_entry;
@@ -123,6 +175,11 @@ FindNext: {
             }
         }
     }
+#endif
+    bool leaf_found;
+    entry = FindEntry2(entry, &path, &leaf_found);
+    if (!entry) return NULL;
+    if (leaf_found) return entry;
     Entry * new_entry;
     while (1) {
         new_entry = AllocAndFillEntry(&path, data, blob_size);
@@ -185,6 +242,20 @@ bool MosGetStringEntry(MosEntry root, const char * path, char * data, u32 * size
     MosUnlockMutex(&reg.mutex);
     return success;
 }
+
+#if 0
+bool MosSetIntegerEntry(MosEntry root, const char * path, const s64 data) {
+    bool success = false;
+    MosLockMutex(&reg.mutex);
+    Entry * entry = FindEntry((Entry *)root, path);
+    if (entry && entry->type == MosEntryTypeInteger) {
+        *data = entry->int_value;
+        success = true;
+    }
+    MosUnlockMutex(&reg.mutex);
+    return success;
+}
+#endif
 
 bool MosGetIntegerEntry(MosEntry root, const char * path, s64 * data) {
     bool success = false;

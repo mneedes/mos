@@ -23,6 +23,7 @@ enum MosEntryType {
 };
 
 // Handle to a registry entry (i.e.: tree node)
+//  NULL refers to the root entry.
 typedef void * MosEntry;
 
 typedef bool (MosRegistrySetFunc)(char * val, u32 n);
@@ -39,6 +40,7 @@ MosEntry MosRegistryInit(MosHeap * heap, char delimiter);
 
 /// Get handle to tree entry given path
 /// \note The entry is handle to the root of the sub-tree and the path is a relative path from there.
+/// \note MosEntry of NULL refers to the root entry.
 MosEntry MosFindEntry(MosEntry root, const char * path);
 
 /// Obtain type of entry
