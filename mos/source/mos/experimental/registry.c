@@ -10,7 +10,7 @@
 
 #include <string.h>
 
-#include <mos/registry.h>
+#include <mos/experimental/registry.h>
 #include <mos/list.h>
 
 #include <mos/trace.h>

@@ -4,7 +4,7 @@
 // terms and conditions contained within the LICENSE file (the
 // "License") included under this distribution.
 
-#include <mos/slab.h>
+#include <mos/experimental/slab.h>
 
 /*
  * MOS Slab Allocator

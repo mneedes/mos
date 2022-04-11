@@ -15,13 +15,15 @@
 #include <mos/kernel.h>
 #include <mos/heap.h>
 #include <mos/queue.h>
-#include <mos/slab.h>
+
 #include <mos/thread_heap.h>
 #include <mos/format_string.h>
 #include <mos/trace.h>
 #include <mos/shell.h>
 #include <mos/security.h>
-#include <mos/registry.h>
+
+#include <mos/experimental/slab.h>
+#include <mos/experimental/registry.h>
 
 #include <bsp_hal.h>
 #include <bsp/hal_tb.h>
