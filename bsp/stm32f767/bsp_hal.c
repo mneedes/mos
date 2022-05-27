@@ -218,6 +218,12 @@ static void MX_ETH_Init(void)
 }
 #endif
 
+u32 HalGetRandomU32(void) {
+    /* Check if data register contains valid random data */
+    while ((hrng.Instance->SR & RNG_FLAG_DRDY) == 0);
+    return hrng.Instance->DR;
+}
+
 /**
   * @brief RNG Initialization Function
   * @param None

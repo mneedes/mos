@@ -1,5 +1,5 @@
 
-// Copyright 2021 Matthew C Needes
+// Copyright 2021-2022 Matthew C Needes
 // You may not use this source file except in compliance with the
 // terms and conditions contained within the LICENSE file (the
 // "License") included under this distribution.
@@ -203,7 +203,6 @@ MosEntry MosRegistryInit(MosHeap * heap, char delimiter) {
         reg.root->type = MosEntryTypeInternal;
         MosInitList(&reg.root->entries);
     }
-    MosPrintf("SiZE: %u\n", sizeof(Entry));
     return (MosEntry)reg.root;
 }
 

@@ -1,5 +1,5 @@
 
-// Copyright 2019-2021 Matthew C Needes
+// Copyright 2019-2022 Matthew C Needes
 // You may not use this source file except in compliance with the
 // terms and conditions contained within the LICENSE file (the
 // "License") included under this distribution.
@@ -9,8 +9,8 @@
 //   Use this API to implement your BSP
 //
 
-#ifndef _HAL_H_
-#define _HAL_H_
+#ifndef _MOS_HAL_H_
+#define _MOS_HAL_H_
 
 #include <mos/defs.h>
 

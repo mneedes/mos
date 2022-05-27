@@ -1,5 +1,5 @@
 
-// Copyright 2021 Matthew C Needes
+// Copyright 2021-2022 Matthew C Needes
 // You may not use this source file except in compliance with the
 // terms and conditions contained within the LICENSE file (the
 // "License") included under this distribution.
@@ -198,7 +198,7 @@ s32
 MosVSNPrintf(char * restrict buffer, mos_size sz, const char * restrict fmt, va_list args) {
     const char * restrict ch = fmt;
     char * restrict out = buffer;
-    s32 rem = (s32)sz;
+    s32 rem = (s32)--sz;
     State state = { .in_arg = false };
     for (; *ch != '\0'; ch++) {
         if (!state.in_arg) {
@@ -315,7 +315,7 @@ MosVSNPrintf(char * restrict buffer, mos_size sz, const char * restrict fmt, va_
             }
         }
     }
-    if (rem > 0) *out = '\0';
+    *out = '\0';
     return (s32)sz - rem;
 }
 

@@ -1,5 +1,5 @@
 
-//  Copyright 2019-2020 Matthew C Needes
+//  Copyright 2019-2022 Matthew C Needes
 //  You may not use this source file except in compliance with the
 //  terms and conditions contained within the LICENSE file (the
 //  "License") included under this distribution.
@@ -19,6 +19,7 @@
 
 static MosSem pulse_sem;
 static u32 pulse_counter;
+static bool stop_thread;
 
 void EXTI15_10_IRQHandler(void) {
     __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_13);
@@ -43,12 +44,33 @@ static s32 HalPulseReceiverThread(s32 arg) {
         pulse_counter++;
         if ((pulse_counter % (1 << 12)) == 0) {
             MosPrintf("Pulses: %08x\n", pulse_counter);
+            if (stop_thread) break;
         }
     }
-    return TEST_FAIL;
+    return TEST_PASS;
 }
 
-static MosThread * thread = { 0 };
+static s32 HalRandomPulseThread(s32 arg) {
+    pulse_counter = 0;
+    for (u32 ix = 0; ix < arg; ix++) {
+        u32 rn = HalGetRandomU32();
+        u32 mask = MosDisableInterrupts();
+        HalSetGpio(0, true);
+        MosDelayMicroSec(8 + (rn & 0x1F));
+        HalSetGpio(0, false);
+        MosEnableInterrupts(mask);
+        pulse_counter++;
+        if ((pulse_counter % (1 << 12)) == 0) {
+            MosPrintf("Pulses: %08x\n", pulse_counter);
+        }
+        MosDelayMicroSec(800 + (rn >> 23));
+        if (stop_thread) break;
+    }
+    MosPrintf("Total Pulses: %08x\n", pulse_counter);
+    return TEST_PASS;
+}
+
+static MosThread * pThread = { 0 };
 
 void EXTI0_IRQHandler(void) {
     IRQ0_Callback();
@@ -82,19 +104,26 @@ bool HalTests(int argc, char * argv[]) {
         return false;
     }
     bool success = true;
-    if (strcmp(argv[0], "start") == 0) {
-        if (MosAllocAndRunThread(&thread, 0, HalPulseReceiverThread, 0, 512)) {
+    if (strcmp(argv[0], "rxstart") == 0) {
+        stop_thread = false;
+        if (MosAllocAndRunThread(&pThread, 0, HalPulseReceiverThread, 0, 512)) {
             MosPrint("Hal Pulse Receiver Test START\n");
         }
-        if (!thread) success = false;
+        if (!pThread) success = false;
+    } else if (strcmp(argv[0], "txstart") == 0) {
+        stop_thread = false;
+        if (MosAllocAndRunThread(&pThread, 0, HalRandomPulseThread, 0x1000000, 512)) {
+            MosPrint("Hal Pulse Transmitter Test START\n");
+        }
+        if (!pThread) success = false;
     } else if (strcmp(argv[0], "stop") == 0) {
-        if (thread == NULL) {
+        if (pThread == NULL) {
             success = false;
         } else {
-            MosKillThread(thread);
-            if (MosWaitForThreadStop(thread) != TEST_PASS) success = false;
-            MosDecThreadRefCount(&thread);
-            MosPrint("Hal Pulse Receiver Test STOP\n");
+            stop_thread = true;
+            if (MosWaitForThreadStop(pThread) != TEST_PASS) success = false;
+            MosDecThreadRefCount(&pThread);
+            MosPrint("Hal Pulse Test STOP\n");
         }
     }
     return success;

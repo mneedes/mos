@@ -1,5 +1,5 @@
 
-// Copyright 2019-2021 Matthew C Needes
+// Copyright 2019-2022 Matthew C Needes
 // You may not use this source file except in compliance with the
 // terms and conditions contained within the LICENSE file (the
 // "License") included under this distribution.
@@ -1951,6 +1951,12 @@ static bool MiscTests(void) {
         if (strcmp(buf, " deadbee90")) test_pass = false;
         if (MosSNPrintf(buf, 8, "%c%%%d%%d%c%", '*', -1, '$') != 7) test_pass = false;
         if (strcmp(buf, "*%-1%d$")) test_pass = false;
+        memset(buf, '*', sizeof(buf));
+        buf[sizeof(buf) - 1] = '\0';
+        s32 rtn = MosSNPrintf(buf, 8, "%lu", 123456789);
+        MosPrintf("RTN: %d *%s*\n", rtn, buf);
+        if (rtn != 9) test_pass = false;
+        if (strcmp(buf, "1234567")) test_pass = false;
         float flt = -1.375;
         MosSNPrintf(buf, sizeof(buf), "%0.4f", flt);
         if (strcmp(buf, "-1.3750")) test_pass = false;
