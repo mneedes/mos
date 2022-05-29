@@ -1940,68 +1940,91 @@ static bool MiscTests(void) {
     test_pass = true;
     MosPrint("Misc Test: MosSNPrintf()\n");
     {
-        char * dummy = "bummy_dummy_mummy_";
         char buf[128];
-        if (MosSNPrintf(buf, 32, "%s%s%s", dummy, dummy, dummy) != 54) test_pass = false;
-        if (MosSNPrintf(buf, sizeof(buf), "%s", dummy) != (s32)strlen(dummy)) test_pass = false;
-        if (strcmp(buf, dummy)) test_pass = false;
-        if (MosSNPrintf(buf, 11, "%010llx", 0xdeadbee90) != 10) test_pass = false;
-        if (strcmp(buf, "0deadbee90")) test_pass = false;
-        if (MosSNPrintf(buf, 11, "%10llx", 0xdeadbee90) != 10) test_pass = false;
-        if (strcmp(buf, " deadbee90")) test_pass = false;
-        if (MosSNPrintf(buf, 8, "%c%%%d%%d%c%", '*', -1, '$') != 7) test_pass = false;
-        if (strcmp(buf, "*%-1%d$")) test_pass = false;
-        memset(buf, '*', sizeof(buf));
-        buf[sizeof(buf) - 1] = '\0';
-        s32 rtn = MosSNPrintf(buf, 8, "%lu", 123456789);
-        MosPrintf("RTN: %d *%s*\n", rtn, buf);
-        if (rtn != 9) test_pass = false;
-        if (strcmp(buf, "1234567")) test_pass = false;
-        float flt = -1.375;
-        MosSNPrintf(buf, sizeof(buf), "%0.4f", flt);
-        if (strcmp(buf, "-1.3750")) test_pass = false;
-        u64 p0 = 0x3FD5555555555555;
+        {   // String, Char, %%, Int
+            char * dummy = "bummy_dummy_mummy_";
+            if (MosSNPrintf(buf, 32, "%s%s%s", dummy, dummy, dummy) != 54) test_pass = false;
+            if (MosSNPrintf(buf, sizeof(buf), "%s", dummy) != (s32)strlen(dummy)) test_pass = false;
+            if (strcmp(buf, dummy)) test_pass = false;
+            if (MosSNPrintf(buf, 8, "%c%%%d%%d%c%", '*', -1, '$') != 7) test_pass = false;
+            if (strcmp(buf, "*%-1%d$")) test_pass = false;
+        }
+        {   // Int / Int64
+            if (MosSNPrintf(buf, 11, "%010llx", 0xdeadbee90) != 10) test_pass = false;
+            if (strcmp(buf, "0deadbee90")) test_pass = false;
+            if (MosSNPrintf(buf, 11, "%10llx", 0xdeadbee90) != 10) test_pass = false;
+            if (strcmp(buf, " deadbee90")) test_pass = false;
+            // Truncation
+            if (MosSNPrintf(buf, 8, "%lu", 123456789) != 9) test_pass = false;
+            if (strcmp(buf, "1234567")) test_pass = false;
+        }
+        double dbl;
+        u64 p0;
         double * pf = (double *) &p0;
-        MosSNPrintf(buf, sizeof(buf), "%0.16f", *pf);
-        if (strcmp(buf, "0.3333333333333333")) test_pass = false;
-        MosPrintf("%s\n", buf);
-        p0 = 0x400921fb54442d18;
-        MosSNPrintf(buf, sizeof(buf), "%0.9f", *pf);
-        if (strcmp(buf, "3.141592654")) test_pass = false;
-        double dbl = 123456789;
-        MosSNPrintf(buf, sizeof(buf), "%f", dbl);
-        if (strcmp(buf, "123456789.000000")) test_pass = false;
-        // Note: Tests rounding since 123456789.1 -> 123456789.099999
-        dbl = -123456789.1;
-        MosSNPrintf(buf, sizeof(buf), "%.0f", dbl);
-        if (strcmp(buf, "-123456789")) test_pass = false;
-        MosSNPrintf(buf, sizeof(buf), "%.1f", dbl);
-        if (strcmp(buf, "-123456789.1")) test_pass = false;
-        MosPrintf("*%f*\n", dbl);
-        MosSNPrintf(buf, sizeof(buf), "%f", *pf);
-        if (strcmp(buf, "3.141593")) test_pass = false;
-        MosPrintf("%s\n", buf);
-        dbl = 10.501;
-        MosSNPrintf(buf, sizeof(buf), "%.0f", dbl);
-        if (strcmp(buf, "11")) test_pass = false;
-        MosSNPrintf(buf, sizeof(buf), "%.1f", dbl);
-        if (strcmp(buf, "10.5")) test_pass = false;
-        MosSNPrintf(buf, sizeof(buf), "%.2f", dbl);
-        if (strcmp(buf, "10.50")) test_pass = false;
-        MosSNPrintf(buf, sizeof(buf), "%.3f", dbl);
-        if (strcmp(buf, "10.501")) test_pass = false;
-        p0 = 0x7ff0000000000000;
-        MosSNPrintf(buf, sizeof(buf), "%f", *pf);
-        if (strcmp(buf, "+Inf")) test_pass = false;
-        p0 = 0xfff0000000000000;
-        MosSNPrintf(buf, sizeof(buf), "%f", *pf);
-        if (strcmp(buf, "-Inf")) test_pass = false;
-        p0 = 0x7ff0000000000001;
-        MosSNPrintf(buf, sizeof(buf), "%f", *pf);
-        if (strcmp(buf, "NaN")) test_pass = false;
-        p0 = 0x7ff8000000000001;
-        MosSNPrintf(buf, sizeof(buf), "%f", *pf);
-        if (strcmp(buf, "NaN")) test_pass = false;
+        {   // %f - Float / Double rounding
+            float flt = -1.375;
+            MosSNPrintf(buf, sizeof(buf), "%0.4f", flt);
+            if (strcmp(buf, "-1.3750")) test_pass = false;
+            p0 = 0x3FD5555555555555;
+            dbl = 0;
+            if (MosSNPrintf(buf, sizeof(buf), "%f", dbl) != 8) test_pass = false;
+            if (strcmp(buf, "0.000000")) test_pass = false;
+            if (MosSNPrintf(buf, sizeof(buf), "%.0f", dbl) != 1) test_pass = false;
+            if (strcmp(buf, "0")) test_pass = false;
+            MosSNPrintf(buf, sizeof(buf), "%0.16f", *pf);
+            if (strcmp(buf, "0.3333333333333333")) test_pass = false;
+            p0 = 0x400921fb54442d18;
+            MosSNPrintf(buf, sizeof(buf), "%0.9f", *pf);
+            if (strcmp(buf, "3.141592654")) test_pass = false;
+            dbl = 123456789;
+            MosSNPrintf(buf, sizeof(buf), "%f", dbl);
+            if (strcmp(buf, "123456789.000000")) test_pass = false;
+            // Note: Tests rounding since 123456789.1 -> 123456789.099999
+            dbl = -123456789.1;
+            MosSNPrintf(buf, sizeof(buf), "%.0f", dbl);
+            if (strcmp(buf, "-123456789")) test_pass = false;
+            if (MosSNPrintf(buf, sizeof(buf), "%.1f", dbl) != 12) test_pass = false;
+            if (strcmp(buf, "-123456789.1")) test_pass = false;
+            if (MosSNPrintf(buf, sizeof(buf), "%f", *pf) != 8) test_pass = false;
+            if (strcmp(buf, "3.141593")) test_pass = false;
+        }
+        {   // 10.501 rounding test
+            dbl = 10.501;
+            MosSNPrintf(buf, sizeof(buf), "%.0f", dbl);
+            if (strcmp(buf, "11")) test_pass = false;
+            MosSNPrintf(buf, sizeof(buf), "%.1f", dbl);
+            if (strcmp(buf, "10.5")) test_pass = false;
+            MosSNPrintf(buf, sizeof(buf), "%.2f", dbl);
+            if (strcmp(buf, "10.50")) test_pass = false;
+            MosSNPrintf(buf, sizeof(buf), "%.3f", dbl);
+            if (strcmp(buf, "10.501")) test_pass = false;
+        }
+        {
+            // Inf / NaN
+            p0 = 0x7ff0000000000000;
+            if (MosSNPrintf(buf, sizeof(buf), "%f", *pf) != 3) test_pass = false;
+            if (strcmp(buf, "inf")) test_pass = false;
+            p0 = 0xfff0000000000000;
+            if (MosSNPrintf(buf, sizeof(buf), "%f", *pf) != 4) test_pass = false;
+            if (strcmp(buf, "-inf")) test_pass = false;
+            p0 = 0xfff0000000000001;
+            MosSNPrintf(buf, sizeof(buf), "%f", *pf);
+            if (strcmp(buf, "nan")) test_pass = false;
+            p0 = 0xfff8000000000001;
+            if (MosSNPrintf(buf, sizeof(buf), "%f", *pf) != 3) test_pass = false;
+            if (strcmp(buf, "nan")) test_pass = false;
+            p0 = 0x7ff0000000000001;
+            MosSNPrintf(buf, sizeof(buf), "%f", *pf);
+            if (strcmp(buf, "nan")) test_pass = false;
+            p0 = 0x7ff8000000000000;
+            MosSNPrintf(buf, sizeof(buf), "%f", *pf);
+            if (strcmp(buf, "nan")) test_pass = false;
+        }
+#if 0
+        dbl = 2.71828182845904;
+        MosSNPrintf(buf, sizeof(buf), "%.15g", dbl, dbl);
+        MosPrintf("*%s*\n", buf);
+#endif
     }
     if (test_pass) MosPrint(" Passed\n");
     else {

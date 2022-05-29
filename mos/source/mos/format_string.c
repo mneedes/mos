@@ -9,6 +9,12 @@
 static const char LowerCaseDigits[] = "0123456789abcdef";
 static const char UpperCaseDigits[] = "0123456789ABCDEF";
 
+// %f -> precision is number of digits past decimal point, displayed even if they are zero
+//         if precision IS zero, then decimal point is NOT printed
+// %g -> precision is max number of significant digits, either side of decimal
+//         zeros and decimal point are trimmed.
+//         This implementation does not handle scientific notation.
+
 // This structure limits the stack depth
 typedef struct {
     // Format settings
@@ -25,6 +31,7 @@ typedef struct {
     u8   long_cnt;
 } State;
 
+// No-inline prevents inadvertent entry into lazy-stacking floating point modes
 static u32 MOS_NO_INLINE LLtoa(char * restrict out, State * state, s64 in) {
     u64 adj = (u64)in;
     u8 shift = 0;
@@ -126,28 +133,29 @@ u32 MosItoa(char * restrict out, s32 input, u16 base, bool is_upper,
     return Itoa(out, &format, input);
 }
 
+// No-inline prevents inadvertent entry into lazy-stacking floating point modes
 static u32 MOS_NO_INLINE Dtoa(char * restrict out, State * state, double in) {
     u64 * _in_p = (u64 *)&in;
     u64 _in = *_in_p;
     // First evaluate special values (e.g.: NaN / Inf)
-    u32 pfx = (u32) (_in >> 32);
-    if ((pfx & 0x7ff7ffff) == 0x7ff00000) {
-        u32 sfx = (u32) (_in & 0xffffffff);
+    u32 pfx = (u32)(_in >> 32);
+    if ((pfx & 0x7ff00000) == 0x7ff00000) {
+        u32 sfx = (u32)(_in & 0xffffffff);
         if (sfx == 0x0) {
             if (pfx == 0xfff00000) {
-                out[0] = '-'; out[1] = 'I';
+                out[0] = '-'; out[1] = 'i';
                 out[2] = 'n'; out[3] = 'f';
                 return 4;
             } else if (pfx == 0x7ff00000) {
-                out[0] = '+'; out[1] = 'I';
-                out[2] = 'n'; out[3] = 'f';
-                return 4;
-            }
-        } else if (sfx == 0x1) {
-            if (pfx == 0x7ff00000 || pfx == 0x7ff80000) {
-                out[0] = 'N'; out[1] = 'a'; out[2] = 'N';
+                out[0] = 'i'; out[1] = 'n'; out[2] = 'f';
+                return 3;
+            } else {
+                out[0] = 'n'; out[1] = 'a'; out[2] = 'n';
                 return 3;
             }
+        } else {
+            out[0] = 'n'; out[1] = 'a'; out[2] = 'n';
+            return 3;
         }
     }
     // Round
