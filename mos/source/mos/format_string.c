@@ -158,8 +158,8 @@ static u32 MOS_NO_INLINE Dtoa(char * restrict out, State * state, double in) {
             return 3;
         }
     }
-    // Round
     bool negative = in < 0;
+    // Round
     double p = negative ? -0.5 : 0.5;
     for (u32 ix = 0; ix < state->prec; ix++) p *= 0.1;
     in += p;
@@ -167,6 +167,10 @@ static u32 MOS_NO_INLINE Dtoa(char * restrict out, State * state, double in) {
     s64 int_part = (s64)in;
     in -= (double)int_part;
     if (negative) in = -in;
+    if (in >= (double)0x7fffffffffffffff) {
+        int_part = negative ? 0x8000000000000000 : 0x7fffffffffffffff;
+        state->prec = 0;
+    }
     state->base      = 10;
     state->is_upper  = false;
     state->is_signed = true;
