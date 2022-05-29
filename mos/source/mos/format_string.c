@@ -135,6 +135,7 @@ u32 MosItoa(char * restrict out, s32 input, u16 base, bool is_upper,
 
 // No-inline prevents inadvertent entry into lazy-stacking floating point modes
 static u32 MOS_NO_INLINE Dtoa(char * restrict out, State * state, double in) {
+    char * out_p = out;
     u64 * _in_p = (u64 *)&in;
     u64 _in = *_in_p;
     // First evaluate special values (e.g.: NaN / Inf)
@@ -163,21 +164,24 @@ static u32 MOS_NO_INLINE Dtoa(char * restrict out, State * state, double in) {
     double p = negative ? -0.5 : 0.5;
     for (u32 ix = 0; ix < state->prec; ix++) p *= 0.1;
     in += p;
+    if (negative) {
+        in = -in;
+        *out++ = '-';
+    }
     // Get integer part
     s64 int_part = (s64)in;
     in -= (double)int_part;
-    if (negative) in = -in;
-    if (in >= (double)0x7fffffffffffffff) {
-        int_part = negative ? 0x8000000000000000 : 0x7fffffffffffffff;
+    // Clamp
+    if (in >= (double)0xffffffffffffffff) {
+        int_part = 0xffffffffffffffff;
         state->prec = 0;
     }
     state->base      = 10;
     state->is_upper  = false;
-    state->is_signed = true;
+    state->is_signed = false;
     state->min_width = 0;
     state->pad_char  = '0';
-    u32 cnt = LLtoa(out, state, int_part);
-    out += cnt;
+    out += LLtoa(out, state, int_part);
     // Get fractional part
     if (state->prec) {
         *out++ = '.';
@@ -187,9 +191,9 @@ static u32 MOS_NO_INLINE Dtoa(char * restrict out, State * state, double in) {
         int_part = (s64)in;
         state->is_signed = false;
         state->min_width = state->prec;
-        cnt += LLtoa(out, state, int_part) + 1;
+        out += LLtoa(out, state, int_part);
     }
-    return cnt;
+    return out - out_p;
 }
 
 static void
