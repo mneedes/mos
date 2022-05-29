@@ -1988,6 +1988,14 @@ static bool MiscTests(void) {
             if (MosSNPrintf(buf, sizeof(buf), "%f", *pf) != 8) test_pass = false;
             if (strcmp(buf, "3.141593")) test_pass = false;
         }
+        {   // Large number clamp test
+            dbl = -5.391245e44;
+            if (MosSNPrintf(buf, sizeof(buf), "%.15f", dbl) != 4) test_pass = false;
+            if (strcmp(buf, "-ovf")) test_pass = false;
+            dbl = 1.7976931348623157E+308;
+            if (MosSNPrintf(buf, sizeof(buf), "%.15f", dbl) != 3) test_pass = false;
+            if (strcmp(buf, "ovf")) test_pass = false;
+        }
         {   // 10.501 rounding test
             dbl = 10.501;
             MosSNPrintf(buf, sizeof(buf), "%.0f", dbl);

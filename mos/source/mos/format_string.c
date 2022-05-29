@@ -136,44 +136,40 @@ u32 MosItoa(char * restrict out, s32 input, u16 base, bool is_upper,
 // No-inline prevents inadvertent entry into lazy-stacking floating point modes
 static u32 MOS_NO_INLINE Dtoa(char * restrict out, State * state, double in) {
     char * out_p = out;
-    u64 * _in_p = (u64 *)&in;
-    u64 _in = *_in_p;
-    // First evaluate special values (e.g.: NaN / Inf)
-    u32 pfx = (u32)(_in >> 32);
-    if ((pfx & 0x7ff00000) == 0x7ff00000) {
-        u32 sfx = (u32)(_in & 0xffffffff);
-        if (sfx == 0x0) {
-            if (pfx == 0xfff00000) {
-                out[0] = '-'; out[1] = 'i';
-                out[2] = 'n'; out[3] = 'f';
-                return 4;
-            } else if (pfx == 0x7ff00000) {
-                out[0] = 'i'; out[1] = 'n'; out[2] = 'f';
-                return 3;
-            } else {
-                out[0] = 'n'; out[1] = 'a'; out[2] = 'n';
-                return 3;
-            }
-        } else {
-            out[0] = 'n'; out[1] = 'a'; out[2] = 'n';
-            return 3;
-        }
-    }
-    // Round
-    double p = negative ? -0.5 : 0.5;
-    for (u32 ix = 0; ix < state->prec; ix++) p *= 0.1;
-    in += p;
+    bool negative = in < 0;
     if (negative) {
         in = -in;
         *out++ = '-';
     }
+    // First evaluate special values (e.g.: NaN / Inf)
+    u64 * _in_p = (u64 *)&in;
+    u64 _in = *_in_p;
+    u32 pfx = (u32)(_in >> 32);
+    if ((pfx & 0x7ff00000) == 0x7ff00000) {
+        u32 sfx = (u32)(_in & 0xffffffff);
+        if (sfx == 0x0) {
+            if (pfx == 0x7ff00000) {
+                out[0] = 'i'; out[1] = 'n'; out[2] = 'f';
+            } else {
+                out[0] = 'n'; out[1] = 'a'; out[2] = 'n';
+            }
+            return negative + 3;
+        } else {
+            out[0] = 'n'; out[1] = 'a'; out[2] = 'n';
+            return negative + 3;
+        }
+    }
+    // Round
+    double p = 0.5;
+    for (u32 ix = 0; ix < state->prec; ix++) p *= 0.1;
+    in += p;
     // Get integer part
     s64 int_part = (s64)in;
     in -= (double)int_part;
-    // Clamp
+    // Overflow clamp
     if (in >= (double)0xffffffffffffffff) {
-        int_part = 0xffffffffffffffff;
-        state->prec = 0;
+        out[0] = 'o'; out[1] = 'v'; out[2] = 'f';
+        return negative + 3;
     }
     state->base      = 10;
     state->is_signed = false;
