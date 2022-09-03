@@ -34,133 +34,133 @@ enum {
 };
 
 typedef struct {
-    MosList blk_q;
-    MosLink slab_link;
-    u32 avail_blocks;
-    u8 align_pad_and_blocks[0];
+    MosList  blkQ;
+    MosLink  slabLink;
+    u32      availBlocks;
+    u8       alignPadAndBlocks[0];
 } Slab;
 
 typedef struct {
-    Slab * slab;
+    Slab * pSlab;
     union { // <--  Alignment guaranteed here
-        MosLink fl_link;
+        MosLink flLink;
         u8 payload[0];
     };
 } Block;
 
 MOS_STATIC_ASSERT(Block, sizeof(Block) == 12);
 
-void MosInitPool(MosPool * pool, MosHeap * heap, u32 blocks_per_slab, u32 block_size, u16 alignment) {
+void MosInitPool(MosPool * pPool, MosHeap * pHeap, u32 blocksPerSlab, u32 blockSize, u16 alignment) {
     // Alignment must be a power of 2, and at a minimum should be the pointer size.
     alignment = (alignment > sizeof(void *)) ? alignment : sizeof(void *);
-    pool->align_mask = alignment - 1;
-    MosAssert((alignment & pool->align_mask) == 0);
+    pPool->alignMask = alignment - 1;
+    MosAssert((alignment & pPool->alignMask) == 0);
     // Actual block size has overhead bytes and minimum size
-    if (block_size < MIN_PAYLOAD_SIZE) block_size = MIN_PAYLOAD_SIZE;
-    block_size = MOS_ALIGN32(block_size + sizeof(Slab *), pool->align_mask);
-    pool->block_size = block_size;
-    u32 heap_alignment = heap->align_mask + 1;
-    u32 max_align_offset = alignment;
-    if (heap_alignment < alignment) {
-        max_align_offset -= heap_alignment;
-    } else max_align_offset -= MIN_ALIGNMENT;
+    if (blockSize < MIN_PAYLOAD_SIZE) blockSize = MIN_PAYLOAD_SIZE;
+    blockSize = MOS_ALIGN32(blockSize + sizeof(Slab *), pPool->alignMask);
+    pPool->blockSize = blockSize;
+    u32 heapAlignment = pHeap->alignMask + 1;
+    u32 maxAlignOffset = alignment;
+    if (heapAlignment < alignment) {
+        maxAlignOffset -= heapAlignment;
+    } else maxAlignOffset -= MIN_ALIGNMENT;
     // Allocate over-sized slab to provide enough adjustment room to guarantee block alignment.
-    pool->slab_size = sizeof(Slab) + max_align_offset + block_size * blocks_per_slab;
-    MosAssert(blocks_per_slab > 0);
-    pool->blocks_per_slab = blocks_per_slab;
-    pool->avail_blocks = 0;
-    pool->heap = heap;
-    MosInitList(&pool->part_q);
-    MosInitList(&pool->free_q);
-    MosInitList(&pool->full_q);
+    pPool->slabSize = sizeof(Slab) + maxAlignOffset + blockSize * blocksPerSlab;
+    MosAssert(blocksPerSlab > 0);
+    pPool->blocksPerSlab = blocksPerSlab;
+    pPool->availBlocks = 0;
+    pPool->pHeap = pHeap;
+    MosInitList(&pPool->partQ);
+    MosInitList(&pPool->freeQ);
+    MosInitList(&pPool->fullQ);
 }
 
-u32 MosAddSlabsToPool(MosPool * pool, u32 max_to_add) {
-    u32 slabs_added_cnt = 0;
-    for (; slabs_added_cnt < max_to_add; slabs_added_cnt++) {
-        // Allocate slab
-        Slab * slab = MosAlloc(pool->heap, pool->slab_size);
-        if (!slab) break;
-        MosInitList(&slab->blk_q);
-        MosInitList(&slab->slab_link);
+u32 MosAddSlabsToPool(MosPool * pPool, u32 maxToAdd) {
+    u32 slabsAddedCount = 0;
+    for (; slabsAddedCount < maxToAdd; slabsAddedCount++) {
+        // Allocate pSlab
+        Slab * pSlab = MosAlloc(pPool->pHeap, pPool->slabSize);
+        if (!pSlab) break;
+        MosInitList(&pSlab->blkQ);
+        MosInitList(&pSlab->slabLink);
         // Align here
-        u8 * buf = (u8 *) slab + sizeof(Slab) + sizeof(Slab *);
-        buf = (u8 *) MOS_ALIGN_PTR(buf, pool->align_mask) - sizeof(Slab *);
+        u8 * pBuf = (u8 *) pSlab + sizeof(Slab) + sizeof(Slab *);
+        pBuf = (u8 *) MOS_ALIGN_PTR(pBuf, pPool->alignMask) - sizeof(Slab *);
         // Link up blocks
-        for (u32 ix = 0; ix < pool->blocks_per_slab; ix++) {
-            Block * block = (Block *) buf;
-            block->slab = slab;
-            MosAddToList(&slab->blk_q, &block->fl_link);
-            buf += pool->block_size;
+        for (u32 ix = 0; ix < pPool->blocksPerSlab; ix++) {
+            Block * pBlock = (Block *) pBuf;
+            pBlock->pSlab = pSlab;
+            MosAddToList(&pSlab->blkQ, &pBlock->flLink);
+            pBuf += pPool->blockSize;
         }
-        slab->avail_blocks = pool->blocks_per_slab;
+        pSlab->availBlocks = pPool->blocksPerSlab;
         _MosDisableInterrupts();
-        MosAddToList(&pool->free_q, &slab->slab_link);
-        pool->avail_blocks += pool->blocks_per_slab;
+        MosAddToList(&pPool->freeQ, &pSlab->slabLink);
+        pPool->availBlocks += pPool->blocksPerSlab;
         _MosEnableInterrupts();
     }
-    return slabs_added_cnt;
+    return slabsAddedCount;
 }
 
-u32 MosFreeUnallocatedSlabs(MosPool * pool, u32 max_to_remove) {
+u32 MosFreeUnallocatedSlabs(MosPool * pPool, u32 maxToRemove) {
     // Remove free slabs
-    u32 slabs_removed_cnt = 0;
+    u32 slabsRemovedCount = 0;
     while (1) {
-        if (slabs_removed_cnt == max_to_remove) break;
+        if (slabsRemovedCount == maxToRemove) break;
         _MosDisableInterrupts();
-        if (MosIsListEmpty(&pool->free_q)) {
+        if (MosIsListEmpty(&pPool->freeQ)) {
             _MosEnableInterrupts();
             break;
         }
-        pool->avail_blocks -= pool->blocks_per_slab;
-        MosList * elm = pool->free_q.pNext;
-        MosRemoveFromList(elm);
+        pPool->availBlocks -= pPool->blocksPerSlab;
+        MosList * pElm = pPool->freeQ.pNext;
+        MosRemoveFromList(pElm);
         _MosEnableInterrupts();
-        MosFree(pool->heap, container_of(elm, Slab, slab_link));
-        slabs_removed_cnt++;
+        MosFree(pPool->pHeap, container_of(pElm, Slab, slabLink));
+        slabsRemovedCount++;
     }
-    return slabs_removed_cnt;
+    return slabsRemovedCount;
 }
 
-MOS_ISR_SAFE void * MosAllocFromSlab(MosPool * pool) {
+MOS_ISR_SAFE void * MosAllocFromSlab(MosPool * pPool) {
     u32 mask = MosDisableInterrupts();
-    if (pool->avail_blocks) {
-        pool->avail_blocks--;
-        Slab * slab;
-        if (!MosIsListEmpty(&pool->part_q)) {
-            slab = container_of(pool->part_q.pNext, Slab, slab_link);
-            if (--slab->avail_blocks == 0) {
-                MosRemoveFromList(&slab->slab_link);
-                MosAddToList(&pool->full_q, &slab->slab_link);
+    if (pPool->availBlocks) {
+        pPool->availBlocks--;
+        Slab * pSlab;
+        if (!MosIsListEmpty(&pPool->partQ)) {
+            pSlab = container_of(pPool->partQ.pNext, Slab, slabLink);
+            if (--pSlab->availBlocks == 0) {
+                MosRemoveFromList(&pSlab->slabLink);
+                MosAddToList(&pPool->fullQ, &pSlab->slabLink);
             }
         } else {
-            slab = container_of(pool->free_q.pNext, Slab, slab_link);
-            slab->avail_blocks--;
-            MosRemoveFromList(&slab->slab_link);
-            MosAddToList(&pool->part_q, &slab->slab_link);
+            pSlab = container_of(pPool->freeQ.pNext, Slab, slabLink);
+            pSlab->availBlocks--;
+            MosRemoveFromList(&pSlab->slabLink);
+            MosAddToList(&pPool->partQ, &pSlab->slabLink);
         }
-        MosList * elm = slab->blk_q.pNext;
-        MosRemoveFromList(elm);
-        Block * block = container_of(elm, Block, fl_link);
+        MosList * pElm = pSlab->blkQ.pNext;
+        MosRemoveFromList(pElm);
+        Block * pBlock = container_of(pElm, Block, flLink);
         MosEnableInterrupts(mask);
-        return &block->payload;
+        return &pBlock->payload;
     }
     MosEnableInterrupts(mask);
     return NULL;
 }
 
-MOS_ISR_SAFE void MosFreeToSlab(MosPool * pool, void * _block) {
-    Block * block = (Block *) ((u32 *) _block - 1);
+MOS_ISR_SAFE void MosFreeToSlab(MosPool * pPool, void * pBlock_) {
+    Block * pBlock = (Block *) ((u32 *) pBlock_ - 1);
     u32 mask = MosDisableInterrupts();
-    pool->avail_blocks++;
-    MosAddToList(&block->slab->blk_q, &block->fl_link);
-    block->slab->avail_blocks++;
-    if (block->slab->avail_blocks == 1) {
-        MosRemoveFromList(&block->slab->slab_link);
-        MosAddToList(&pool->part_q, &block->slab->slab_link);
-    } else if (block->slab->avail_blocks == pool->blocks_per_slab) {
-        MosRemoveFromList(&block->slab->slab_link);
-        MosAddToList(&pool->free_q, &block->slab->slab_link);
+    pPool->availBlocks++;
+    MosAddToList(&pBlock->pSlab->blkQ, &pBlock->flLink);
+    pBlock->pSlab->availBlocks++;
+    if (pBlock->pSlab->availBlocks == 1) {
+        MosRemoveFromList(&pBlock->pSlab->slabLink);
+        MosAddToList(&pPool->partQ, &pBlock->pSlab->slabLink);
+    } else if (pBlock->pSlab->availBlocks == pPool->blocksPerSlab) {
+        MosRemoveFromList(&pBlock->pSlab->slabLink);
+        MosAddToList(&pPool->freeQ, &pBlock->pSlab->slabLink);
     }
     MosEnableInterrupts(mask);
 }

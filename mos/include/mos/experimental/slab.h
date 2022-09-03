@@ -13,23 +13,23 @@
 //   anticipated ISR usage.
 
 typedef struct {
-    MosList part_q;
-    MosList free_q;
-    MosList full_q;
-    u32 avail_blocks;
-    MosHeap * heap;
-    u32 block_size;
-    u32 slab_size;
-    u16 blocks_per_slab;
-    u16 align_mask;
+    MosList   partQ;
+    MosList   freeQ;
+    MosList   fullQ;
+    u32       availBlocks;
+    MosHeap * pHeap;
+    u32       blockSize;
+    u32       slabSize;
+    u16       blocksPerSlab;
+    u16       alignMask;
 } MosPool;
 
-void MosInitPool(MosPool * pool, MosHeap * heap, u32 blocks_per_slab,
-                 u32 block_size, u16 alignment);
-u32 MosAddSlabsToPool(MosPool * pool, u32 max_to_add);
-u32 MosFreeUnallocatedSlabs(MosPool * pool, u32 max_to_remove);
+void MosInitPool(MosPool * pPool, MosHeap * pHeap, u32 blocksPerSlab,
+                 u32 blockSize, u16 alignment);
+u32 MosAddSlabsToPool(MosPool * pPool, u32 maxToAdd);
+u32 MosFreeUnallocatedSlabs(MosPool * pPool, u32 maxToRemove);
 
-MOS_ISR_SAFE void * MosAllocFromSlab(MosPool * pool);
-MOS_ISR_SAFE void MosFreeToSlab(MosPool * pool, void * block);
+MOS_ISR_SAFE void * MosAllocFromSlab(MosPool * pPool);
+MOS_ISR_SAFE void MosFreeToSlab(MosPool * pPool, void * pBlock);
 
 #endif

@@ -8,16 +8,17 @@
 /// \brief Shared Contexts
 ///
 /// Shared contexts allow multiple client modules to share the same resources,
-/// including a single run thread, thread stack and message queue. In addition,
-/// shared contexts can reduce or eliminate mutex contention since clients in
-/// the same shared context are guaranteed to not preempt each other.  In
-/// general, shared contexts should be implemented at lower thread priorities
-/// than most other functionality. Think of contexts as a form of cooperative
-/// multitasking where memory savings are a lot more important than deadlines.
+/// including a single run thread, thread stack and message queue. Shared
+/// contexts can reduce or altogether eliminate mutex contention since clients
+/// in the same shared context are guaranteed to not preempt each other. In
+/// general shared contexts probably should be implemented at lower thread
+/// priorities than most other functionality. Shared contexts may be thought
+/// of as a form of cooperative multitasking where memory savings are a lot
+/// more important than deadlines.
 ///
 /// Contexts use a shared message queue for inter-client communication. The
 /// maximum latency depends on the maximum processing time for all messages
-/// in the context. Context clients should be implemented as state machines
+/// in the context. Context clients can be implemented as state machines
 /// that multiplex received messages. Contexts can send and receive messages
 /// to or from ISRs or other threads on the system. Clients should not block
 /// or wait very long otherwise they might starve other clients sharing the

@@ -1,13 +1,16 @@
 
-#include <stdio.h>
-#include "mos/defs.h" 
+// Copyright 2021-2022 Matthew C Needes
+// You may not use this source file except in compliance with the
+// terms and conditions contained within the LICENSE file (the
+// "License") included under this distribution.
 
+#include "mos/defs.h"
 #include "mos/format_string.h"
 
 static const char LowerCaseDigits[] = "0123456789abcdef";
 static const char UpperCaseDigits[] = "0123456789ABCDEF";
 
-/* This structure limits the stack depth */
+/* This structure reduces the required stack depth */
 typedef struct {
     // Format settings
     u8   base;
@@ -179,42 +182,6 @@ static u32 MOS_NO_INLINE Dtoa(char * restrict pOut, State * pState, double in) {
     }
     return pOut - pOut_;
 }
-
-#if 0
-    s32 exp = (s32)(_in >> 52) - 1023;
-    u32 shift = (-1 - exp) & 0x1f;
-    printf("s: %d\n", shift);
-    u64 mant = (_in | (((u64)0x1) << 52)) << 11;
-    printf("mant: %016lx  exp: %d\n", mant, exp);
-    u32 acc0 = (mant >> (32 + shift));
-    u32 acc1 = (mant >> shift);
-    u32 acc2 = (mant << (32 - shift));
-    printf("acc0: %08x acc1: %08x acc2: %08x\n", acc0, acc1, acc2);
-    u64 tmp;
-    exp = (exp) & 0xffffffffc;
-    do {
-        tmp = (u64)acc2 * 10;
-        acc2 = (u32)(tmp & 0xffffffff);
-        u32 carry = (u32)(tmp >> 32);
-        tmp = ((u64)acc1 * 10) + carry;
-        carry = (u32)(tmp >> 32);
-        acc1 = (u32)(tmp & 0xffffffff);
-        tmp = ((u64)acc0 * 10) + carry;
-        carry = (u32)(tmp >> 32);
-        acc0 = (u32)(tmp & 0xffffffff);
-        exp += 4;
-        char c = carry + '0';
-        if (exp >= 0) {
-            printf("exp: %d %c\n", exp, c);
-        } else {
-            if (acc2 == 0) {
-                acc2 = acc1;
-                acc1 = acc0;
-                acc0 = carry;
-            }
-        }
-    } while (acc0 || acc1 || acc2);
-#endif
 
 /*
  * A pre-scaling algorithm is used in lieu of arbitrary precision arithmetic for
@@ -492,4 +459,3 @@ MosSNPrintf(char * restrict pDest, mos_size size, const char * restrict pFmt, ..
     va_end(args);
     return cnt;
 }
-

@@ -14,17 +14,18 @@
 
 typedef struct {
     MosMutex mtx;
-    MosList fl;
-    u32 bytes_free;
-    u32 min_bytes_free;
-    u16 align_mask;
-    u16 fl_block_cnt;
-    u16 min_block_size;
+    MosList  fl;
+    u32      bytesFree;
+    u32      minBytesFree;
+    u16      alignMask;
+    u16      flBlockCount;
+    u16      minBlockSize;
 } MosHeap;
 
 void MosInitHeap(MosHeap * pHeap, u8 * pData, u32 heapSize, u32 alignment);
 void * MosAlloc(MosHeap * pHeap, u32 size);
 void * MosReAlloc(MosHeap * pHeap, void * pBlock, u32 newSize);
+void * MosReAllocWithoutCopy(MosHeap * pHeap, void * pBlock, u32 newSize);
 void MosFree(MosHeap * pHeap, void * pBlock);
 
 #endif
