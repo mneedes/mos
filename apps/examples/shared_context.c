@@ -47,11 +47,15 @@ enum AppClientMessageID {
 //
 static bool ClientHandler(MosContextMessage * pMsg) {
     // Number of pings plus final StopContext
-    const u16 maxCount = 200 + 1;
+    const u16 maxCount = 100 + 1;
     MosClient * pClient = pMsg->pClient;
+    static u32 count = 0;
+    static u32 burstCount = 0;
     switch (pMsg->id) {
     case MosContextMessageID_StartClient:
         MosPrintf("Start %d\n", (u32)pClient->pPrivData);
+        count = 0;
+        burstCount = 0;
         if (pClient == &AppClient1) {
             MosInitContextTimer(&AppTimer, &AppContext);
             MosSetContextMessage(pMsg, &AppClient1, AppClientMessageID_SendBurst);
@@ -63,8 +67,6 @@ static bool ClientHandler(MosContextMessage * pMsg) {
         break;
     case AppClientMessageID_SendBurst:
     case MosContextMessageID_ResumeClient: {
-        static u32 count = 0;
-        static u32 burstCount = 0;
         while (1) {
             // After pings are sent, context shuts itself down via broadcast
             if (count < maxCount) MosSetContextMessage(pMsg, &AppClient2, AppClientMessageID_Ping);
@@ -97,6 +99,11 @@ static s32 RunApp(s32 arg) {
     // In this case, context stops itself
     MosWaitForContextStop(&AppContext);
     MosPrintf("Application exit\n");
+    MosInitContext(&AppContext, 2, AppStack, sizeof(AppStack), AppQueue, count_of(AppQueue));
+    MosStartClient(&AppContext, &AppClient1, ClientHandler, (void *)AppClientID_1);
+    MosStartClient(&AppContext, &AppClient2, ClientHandler, (void *)AppClientID_2);
+    MosStartContext(&AppContext);
+    MosPrintf("Application exit 2\n");
     return 0;
 }
 
@@ -112,12 +119,13 @@ int main() {
     MosPrintf("\nMaintainable OS (Version " MOS_VERSION_STRING ")\n");
     MosPrint("Copyright 2019-2022, Matthew Needes  All Rights Reserved\n");
 
-    // Start and stop a background app with a few clients
+    // Start a background app with a few clients
     MosInitContext(&AppContext, 2, AppStack, sizeof(AppStack), AppQueue, count_of(AppQueue));
     MosStartClient(&AppContext, &AppClient1, ClientHandler, (void *)AppClientID_1);
     MosStartClient(&AppContext, &AppClient2, ClientHandler, (void *)AppClientID_2);
     MosStartContext(&AppContext);
 
+    /* Start application to monitor context */
     MosInitAndRunThread(&RunAppThread, 1, RunApp, 3, RunAppStack, sizeof(RunAppStack));
     MosRunScheduler();
     return -1;
