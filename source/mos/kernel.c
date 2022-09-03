@@ -443,13 +443,6 @@ static s32 IdleThreadEntry(s32 arg) {
     return 0;
 }
 
-MOS_ISR_SAFE void MosYieldThread(void) {
-    if (pRunningThread == NO_SUCH_THREAD) return;
-    // Invoke PendSV handler to potentially perform context switch
-    MOS_REG(ICSR) = MOS_REG_VALUE(ICSR_PENDSV);
-    asm volatile ( "dsb" );
-}
-
 MosThread * MosGetThreadPtr(void) {
     return (MosThread *)pRunningThread;
 }
