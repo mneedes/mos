@@ -36,7 +36,7 @@ typedef struct MosQueue {
 /// Set buffer to use for queue, queue element size and number of elements.
 /// Invoke this before calling any other queue API functions.
 /// \note Element size must be a multiple of 4 (32-bits).
-void MosInitQueue(MosQueue * pQueue, void * buf, u32 elmSize, u32 numElm);
+void MosInitQueue(MosQueue * pQueue, void * pBuffer, u32 elmSize, u32 numElm);
 
 /// Send message to queue, blocking if queue full.
 ///
@@ -81,8 +81,8 @@ s16 MosWaitOnMultiQueueOrTO(MosSignal * pSignal, u32 * pFlags, u32 ticks);
 
 /// Initialize queue for 32-bit data
 ///
-MOS_INLINE void MosInitQueue32(MosQueue * pQueue, u32 * pBuf, u32 numElm) {
-    MosInitQueue(pQueue, pBuf, sizeof(u32), numElm);
+MOS_INLINE void MosInitQueue32(MosQueue * pQueue, u32 * pBuffer, u32 numElm) {
+    MosInitQueue(pQueue, pBuffer, sizeof(u32), numElm);
 }
 
 /// Send to queue containing 32-bit data

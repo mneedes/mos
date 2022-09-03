@@ -89,8 +89,8 @@ typedef struct MosTimer {
 void MosInit(void);
 
 /// Run Scheduler.
-/// Enables multithreading, running all threads that been started prior to its
-/// to invocation. Any code following this call will normally be unreachable.
+/// Enables multi-threading, running all threads that been started prior to its
+/// to invocation. Any code following this call is not reachable.
 void MosRunScheduler(void);
 
 // Hooks
@@ -106,47 +106,48 @@ const MosParams * MosGetParams(void);
 
 // Time and Delays
 
-/// Obtain the lower half of the tick count
+/// Obtain the lower half of the tick count.
 ///
 MOS_ISR_SAFE u32 MosGetTickCount(void);
-/// Get the monotonic cycle counter
+/// Get the monotonic cycle counter.
 ///
 MOS_ISR_SAFE u64 MosGetCycleCount(void);
-/// Advance the tick counter
+/// Advance the tick counter.
 ///
 void MosAdvanceTickCount(u32 ticks);
 /// Delay thread a number of ticks, zero input yields thread.
 ///
 void MosDelayThread(u32 ticks);
 
-/// Delay for a number of microseconds, e.g.: useful for bit-banging
-///   NOTE: There is an upper limit for usec that is clock-speed dependent
+/// Delay for a number of microseconds, e.g.: useful for bit-banging.
+///   \note There is an upper limit for usec that is clock-speed dependent.
 MOS_ISR_SAFE void MosDelayMicroSec(u32 usec);
 
 // Timers - Call specified callback at a period of time
 
-/// Initialize a timer instance
-///    Supply ISR_SAFE callback function to be called upon timer expiration.
+/// Initialize a timer instance.
+///    Supply a ISR Safe callback function to be called upon timer expiration.
 void MosInitTimer(MosTimer * pTmr, MosTimerCallback * pCallback);
-/// Set Timer to expire after a number of ticks
+/// Set Timer to expire after a number of ticks.
 ///
 void MosSetTimer(MosTimer * pTmr, u32 ticks, void * pUser);
-/// Cancel running timer
+/// Cancel running timer.
 ///
 void MosCancelTimer(MosTimer * pTmr);
-/// Reset (Restart) timer
+/// Reset (Restart) timer.
 ///
 void MosResetTimer(MosTimer * pTmr);
 
 // Thread Functions
 
-/// Yield current thread
-///   Can be used for cooperative multitasking with threads of same priority.
+/// Yield current thread.
+///   Can be utilized for cooperative multitasking between threads of same priority.
 MOS_ISR_SAFE void MosYieldThread(void);
 /// Obtain pointer to currently running thread.
+///
 MosThread * MosGetThreadPtr(void);
 
-/// Obtain stack depth of current thread
+/// Obtain current stack depth of currently running thread.
 ///
 static MOS_INLINE u32 MosGetStackDepth(u8 * pTop) {
     u32 sp;
@@ -159,47 +160,52 @@ static MOS_INLINE u32 MosGetStackDepth(u8 * pTop) {
 
 // Thread stack methods
 
-/// Get stack usage statistics for given thread
+/// Get stack usage statistics for given thread.
 ///
 void MosGetStackStats(MosThread * pThd, u32 * pStackSize, u32 * pStackUsage, u32 * pMaxStackUsage);
-/// Get pointer to bottom of given thread
+/// Get pointer to bottom of memory for the given thread's stack.
 ///
 u8 * MosGetStackBottom(MosThread * pThd);
-/// Get size of given thread's stack in bytes
+/// Get size of given thread's stack in bytes.
 ///
 u32 MosGetStackSize(MosThread * pThd);
-/// Set thread stack to the given stack with the given size
+/// Set thread stack to the given stack with the given size.
 ///
 void MosSetStack(MosThread * pThd, u8 * pStackBottom, u32 stackSize);
-/// Set pointer to the thread's name
+/// Set pointer to the thread's name.
 ///
 void MosSetThreadName(MosThread * pThd, const char * name);
-/// Initialize a thread instance, but do not start
+/// Initialize a thread instance, but do not start.
 ///
 bool MosInitThread(MosThread * pThd, MosThreadPriority pri, MosThreadEntry * pEntry,
                    s32 arg, u8 * pStackBottom, u32 stackSize);
-/// Run a thread that has been initialized via MosInitThread()
+/// Run a thread that has been initialized via MosInitThread() or MosAllocThread().
 ///
 bool MosRunThread(MosThread * pThd);
-/// Initialize and start a thread
+/// Initialize and start a thread.
 ///
 bool MosInitAndRunThread(MosThread * pThd, MosThreadPriority pri,
                          MosThreadEntry * pEntry, s32 arg, u8 * pStackBottom,
                          u32 stackSize);
 
-// Obtain thread state and priority
+/// Obtain thread state and priority.
+///
 MosThreadState MosGetThreadState(MosThread * pThd, s32 * pRtnVal);
+/// Get current priority for given thread.
+///
 MosThreadPriority MosGetThreadPriority(MosThread * pThd);
 
-// Change thread priority
+/// Change thread priority.
+///
 void MosChangeThreadPriority(MosThread * pThd, MosThreadPriority pri);
 
-// Waits for thread stop or termination.  If a thread terminates abnormally this is
-// invoked AFTER the termination handler.
+/// Waits for thread stop or termination. If a thread terminates abnormally this is
+/// invoked AFTER the termination handler.
 s32 MosWaitForThreadStop(MosThread * pThd);
 bool MosWaitForThreadStopOrTO(MosThread * pThd, s32 * pRtnVal, u32 ticks);
 
 // Forcible stop, works on blocked threads, results in invocation of termination handler.
+//
 void MosKillThread(MosThread * pThd);
 // Sets handler to run if thread is killed or dies via exception.  Thread can set its own
 // termination handler entry and/or argument.  If entry is null it will use the default
@@ -242,19 +248,19 @@ u32 MosWaitForSignalOrTO(MosSignal * pSignal, u32 ticks);
 MOS_ISR_SAFE u32 MosPollSignal(MosSignal * pSignal);
 MOS_ISR_SAFE void MosRaiseSignal(MosSignal * pSignal, u32 flags);
 
-/// A channel is one bit in a signal
+/// Raise signal on a channel. A channel is one bit in the signal.
 ///
 MOS_ISR_SAFE static MOS_INLINE void MosRaiseSignalForChannel(MosSignal * pSignal, u16 channel) {
     MosRaiseSignal(pSignal, 1 << channel);
 }
 
-/// Obtain next set channel from flags
+/// Obtain next set channel from flags.
 /// \return highest priority channel set in flags or -1 if no channel
 MOS_ISR_SAFE static MOS_INLINE s16 MosGetNextChannelFromFlags(u32 * pFlags) {
     if (*pFlags == 0) return -1;
     return (s16)__builtin_ctz(*pFlags);
 }
-/// Clear flag associated with channel
+/// Clear flag associated with channel.
 ///
 MOS_ISR_SAFE static MOS_INLINE void MosClearChannelFlag(u32 * pFlags, s16 channel) {
     if (channel >= 0) *pFlags &= ~(1 << channel);

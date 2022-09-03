@@ -1610,7 +1610,7 @@ static bool HeapTests(void) {
     {
         const u32 alignment = 4;
         const u32 block_size = 20;
-        MosInitHeap(&TestHeapDesc, TestHeap, sizeof(TestHeap), 8);
+        MosInitHeap(&TestHeapDesc, 8, TestHeap, sizeof(TestHeap));
         MosPool TestPoolDesc;
         MosInitPool(&TestPoolDesc, &TestHeapDesc, 32, 20, alignment);
         if (MosAllocFromSlab(&TestPoolDesc) != NULL) test_pass = false;
@@ -1655,7 +1655,7 @@ static bool HeapTests(void) {
     {
         const u32 alignment = 32;
         const u32 block_size = 64;
-        MosInitHeap(&TestHeapDesc, TestHeap, sizeof(TestHeap), 8);
+        MosInitHeap(&TestHeapDesc, 8, TestHeap, sizeof(TestHeap));
         MosPool TestPoolDesc;
         MosInitPool(&TestPoolDesc, &TestHeapDesc, 64, block_size, alignment);
         if (MosAddSlabsToPool(&TestPoolDesc, 2) != 2) test_pass = false;
@@ -1697,7 +1697,7 @@ static bool HeapTests(void) {
     test_pass = true;
     MosPrint("Heap Test 3: Reallocation\n");
     u32 alignment = 8;
-    MosInitHeap(&TestHeapDesc, TestHeap, sizeof(TestHeap), alignment);
+    MosInitHeap(&TestHeapDesc, alignment, TestHeap, sizeof(TestHeap));
     u8 * fun[8];
     for (u32 ix = 0; ix < count_of(fun); ix++) {
         fun[ix] = MosAlloc(&TestHeapDesc, 400);
@@ -2211,8 +2211,8 @@ int InitTestBench() {
 
     MosRegisterEventHook(EventCallback);
 
-    MosInitHeap(&TestThreadHeapDesc, TestThreadHeap, sizeof(TestThreadHeap), MOS_STACK_ALIGNMENT);
-    MosInitThreadHeap(&TestThreadHeapDesc);
+    MosInitHeap(&TestThreadHeapDesc, MOS_STACK_ALIGNMENT, TestThreadHeap, sizeof(TestThreadHeap));
+    MosSetThreadHeap(&TestThreadHeapDesc);
     MosRegistryInit(&TestThreadHeapDesc, '.');
 
     if (!MosAllocAndRunThread(&Threads[TEST_SHELL_THREAD_ID], 0, TestShell,

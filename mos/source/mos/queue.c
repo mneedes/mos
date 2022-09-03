@@ -26,10 +26,10 @@ MOS_ISR_SAFE static void CopyFromHead(MosQueue * pQueue, u32 * pData) {
     MosEnableInterrupts(mask);
 }
 
-void MosInitQueue(MosQueue * pQueue, void * pBegin, u32 elmSize, u32 numElm) {
+void MosInitQueue(MosQueue * pQueue, void * pBuffer, u32 elmSize, u32 numElm) {
     MosAssert((elmSize & 0x3) == 0x0);
     pQueue->elmSize  = elmSize >> 2;
-    pQueue->pBegin   = (u32 *)pBegin;
+    pQueue->pBegin   = (u32 *)pBuffer;
     pQueue->pEnd     = pQueue->pBegin + (numElm * pQueue->elmSize);
     pQueue->pTail    = pQueue->pBegin;
     pQueue->pHead    = pQueue->pBegin;

@@ -4,7 +4,7 @@
 // terms and conditions contained within the LICENSE file (the
 // "License") included under this distribution.
 
-/// \file  mos/pList.h
+/// \file  mos/list.h
 /// \brief Doubly-Linked Circular Lists
 
 #ifndef _MOS_LIST_H_

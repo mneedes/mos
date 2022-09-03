@@ -84,11 +84,11 @@ u32 MosAddSlabsToPool(MosPool * pPool, u32 maxToAdd) {
         MosInitList(&pSlab->blkQ);
         MosInitList(&pSlab->slabLink);
         // Align here
-        u8 * pBuf = (u8 *) pSlab + sizeof(Slab) + sizeof(Slab *);
-        pBuf = (u8 *) MOS_ALIGN_PTR(pBuf, pPool->alignMask) - sizeof(Slab *);
+        u8 * pBuf = (u8 *)pSlab + sizeof(Slab) + sizeof(Slab *);
+        pBuf = (u8 *)MOS_ALIGN_PTR(pBuf, pPool->alignMask) - sizeof(Slab *);
         // Link up blocks
         for (u32 ix = 0; ix < pPool->blocksPerSlab; ix++) {
-            Block * pBlock = (Block *) pBuf;
+            Block * pBlock = (Block *)pBuf;
             pBlock->pSlab = pSlab;
             MosAddToList(&pSlab->blkQ, &pBlock->flLink);
             pBuf += pPool->blockSize;
@@ -150,7 +150,7 @@ MOS_ISR_SAFE void * MosAllocFromSlab(MosPool * pPool) {
 }
 
 MOS_ISR_SAFE void MosFreeToSlab(MosPool * pPool, void * pBlock_) {
-    Block * pBlock = (Block *) ((u32 *) pBlock_ - 1);
+    Block * pBlock = (Block *)((u32 *)pBlock_ - 1);
     u32 mask = MosDisableInterrupts();
     pPool->availBlocks++;
     MosAddToList(&pBlock->pSlab->blkQ, &pBlock->flLink);
