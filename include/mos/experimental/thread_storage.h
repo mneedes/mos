@@ -24,4 +24,3 @@ void * MosThreadStorageObtain(u32 unique_id, mos_size size, MosThreadStorageRele
 void * MosThreadStorageReturn(u32 unique_id, void * pStorage);
 
 #endif
-

@@ -1,5 +1,5 @@
 
-// Copyright 2019-2021 Matthew C Needes
+// Copyright 2019-2022 Matthew C Needes
 // You may not use this source file except in compliance with the
 // terms and conditions contained within the LICENSE file (the
 // "License") included under this distribution.
@@ -194,13 +194,14 @@ void MosChangeThreadPriority(MosThread * pThd, MosThreadPriority pri);
 /// invoked AFTER the termination handler.
 s32 MosWaitForThreadStop(MosThread * pThd);
 bool MosWaitForThreadStopOrTO(MosThread * pThd, s32 * pRtnVal, u32 ticks);
-// Forcible stop, works on blocked threads, results in invocation of termination handler.
-//
+/// Forcible stop, works on blocked threads, results in invocation of termination handler.
+///
 void MosKillThread(MosThread * pThd);
-// Sets handler to run if thread is killed or dies via exception.  Thread can set its own
-// termination handler entry and/or argument.  If entry is null it will use the default
-// termination handler.  Another thread can use the return value from MosWaitForThreadStop()
-// to detect abnormal termination of a thread.
+/// Sets handler to run if thread is killed or dies via exception. Thread can set its own
+/// termination handler entry and/or argument. If entry is null it will use the default
+/// termination handler. Another thread can use the return value from MosWaitForThreadStop()
+/// to detect abnormal termination of a thread. Termination handlers can be used to recover
+/// resources or restart the original thread.
 void MosSetTermHandler(MosThread * pThd, MosThreadEntry * pEntry, s32 arg);
 void MosSetTermArg(MosThread * pThd, s32 arg);
 
