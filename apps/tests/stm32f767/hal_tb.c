@@ -15,7 +15,7 @@
 #include <mos/thread_heap.h>
 #include <mos/trace.h>
 
-#include <bsp/hal_tb.h>
+#include <hal_tb.h>
 
 static MosSem pulse_sem;
 static u32 pulse_counter;

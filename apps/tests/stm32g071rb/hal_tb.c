@@ -1,5 +1,5 @@
 
-//  Copyright 2021 Matthew C Needes
+//  Copyright 2019-2020 Matthew C Needes
 //  You may not use this source file except in compliance with the
 //  terms and conditions contained within the LICENSE file (the
 //  "License") included under this distribution.
@@ -15,43 +15,15 @@
 #include <mos/thread_heap.h>
 #include <mos/trace.h>
 
-#include <bsp/hal_tb.h>
+#include <hal_tb.h>
 
 static MosSem pulse_sem;
 static u32 pulse_counter;
 
-void EXTI0_IRQHandler(void) {
-    IRQ0_Callback();
-}
-
-void EXTI10_IRQHandler(void) {
-    IRQ1_Callback();
-}
-
-void HalTestsInit(void) {
-    NVIC_EnableIRQ(EXTI0_IRQn);
-    NVIC_EnableIRQ(EXTI10_IRQn);
-}
-
-void HalTestsTriggerInterrupt(u32 num) {
-    switch (num) {
-    case 0:
-        NVIC_SetPendingIRQ(EXTI0_IRQn);
-        break;
-    case 1:
-        NVIC_SetPendingIRQ(EXTI10_IRQn);
-        break;
-    default:
-        break;
-    }
-}
-
-#if 0
 void EXTI15_10_IRQHandler(void) {
 	__HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_13);
-	MosGiveSem(&pulse_sem);
+	MosIncrementSem(&pulse_sem);
 }
-#endif
 
 static s32 HalPulseReceiverTermHandler(s32 arg) {
     MosPrintf("Total Received Pulses: %08x\n", pulse_counter);
@@ -79,6 +51,32 @@ static s32 HalPulseReceiverThread(s32 arg) {
 }
 
 static MosThread * thread = { 0 };
+
+void EXTI0_1_IRQHandler(void) {
+    IRQ0_Callback();
+}
+
+void EXTI2_3_IRQHandler(void) {
+    IRQ1_Callback();
+}
+
+void HalTestsInit(void) {
+    NVIC_EnableIRQ(EXTI0_1_IRQn);
+    NVIC_EnableIRQ(EXTI2_3_IRQn);
+}
+
+void HalTestsTriggerInterrupt(u32 num) {
+    switch (num) {
+    case 0:
+        NVIC_SetPendingIRQ(EXTI0_1_IRQn);
+        break;
+    case 1:
+        NVIC_SetPendingIRQ(EXTI2_3_IRQn);
+        break;
+    default:
+        break;
+    }
+}
 
 bool HalTests(int argc, char * argv[]) {
 	if (argc == 0) {

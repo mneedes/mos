@@ -26,7 +26,7 @@
 #include <mos/experimental/registry.h>
 
 #include <bsp_hal.h>
-#include <bsp/hal_tb.h>
+#include <hal_tb.h>
 
 #include "tb.h"
 

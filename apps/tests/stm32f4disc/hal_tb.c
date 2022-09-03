@@ -12,7 +12,7 @@
 #include <mos/kernel.h>
 #include <mos/thread_heap.h>
 #include <mos/trace.h>
-#include <bsp/hal_tb.h>
+#include <hal_tb.h>
 
 // GPIOs are mapped to pin 12 through 15 on STM32F4 Discovery
 #define GPIO_BASE   0x40020C00
