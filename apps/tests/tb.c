@@ -70,11 +70,11 @@ static u32 queue[4];
 static MosQueue TestQueue;
 
 bool IsStopRequested() {
-    return (bool)MosGetThreadPtr()->user_data16;
+    return (bool)MosGetThreadPtr()->userData16;
 }
 
-void RequestThreadStop(MosThread * thd) {
-    thd->user_data16 = 1;
+void RequestThreadStop(MosThread * pThd) {
+    pThd->userData16 = 1;
 }
 
 // Induces a crash
@@ -362,7 +362,7 @@ static bool ThreadTests(void) {
     MosDelayThread(10);
     MosKillThread(Threads[1]);
     if (MosWaitForThreadStop(Threads[1]) != TEST_PASS_HANDLER) test_pass = false;
-    if (TestMutex.owner != NULL) test_pass = false;
+    if (TestMutex.pOwner != NULL) test_pass = false;
     if (test_pass) MosPrint(" Passed\n");
     else {
         MosPrint(" Failed\n");
@@ -379,7 +379,7 @@ static bool ThreadTests(void) {
     MosInitAndRunThread(Threads[1], 1, KillSelfTestThread, 1, Stacks[1], DFT_STACK_SIZE);
     MosDelayThread(10);
     if (MosWaitForThreadStop(Threads[1]) != TEST_PASS_HANDLER) test_pass = false;
-    if (TestMutex.owner != NULL) test_pass = false;
+    if (TestMutex.pOwner != NULL) test_pass = false;
     if (test_pass) MosPrint(" Passed\n");
     else {
         MosPrint(" Failed\n");
@@ -418,7 +418,7 @@ static bool ThreadTests(void) {
     //
     // Try some floating point
     //
-    if (MosGetParams()->fp_support_en == true) {
+    if (MosGetParams()->fpSupportEn == true) {
         test_pass = true;
         MosPrint("FP Test\n");
         ClearHistogram();
@@ -503,7 +503,7 @@ static s32 ThreadTimerTestBusyThread(s32 arg) {
 static MosTimer self_timer;
 
 static bool MOS_ISR_SAFE ThreadTimerCallback(MosTimer * tmr) {
-    return MosTrySendToQueue32(&TestQueue, (u32)tmr->user_ptr);
+    return MosTrySendToQueue32(&TestQueue, (u32)tmr->pUser);
 }
 
 static s32 MessageTimerTestThread(s32 arg) {
@@ -1147,7 +1147,7 @@ static bool QueueTests(void) {
     DisplayHistogram(5);
     if (TestHisto[3] != TestHisto[0]) test_pass = false;
     if (TestHisto[4] != TestHisto[2] + 1) test_pass = false;
-    if (TestQueue.head != TestQueue.tail) test_pass = false;
+    if (TestQueue.pHead != TestQueue.pTail) test_pass = false;
     if (test_pass) MosPrint(" Passed\n");
     else {
         MosPrint(" Failed\n");
@@ -1174,7 +1174,7 @@ static bool QueueTests(void) {
     if (TestHisto[3] != TestHisto[0]) test_pass = false;
     if (TestHisto[4] != TestHisto[2]) test_pass = false;
     if (TestHisto[5] != exp_cnt + 1) test_pass = false;
-    if (TestQueue.head != TestQueue.tail) test_pass = false;
+    if (TestQueue.pHead != TestQueue.pTail) test_pass = false;
     if (test_pass) MosPrint(" Passed\n");
     else {
         MosPrint(" Failed\n");
@@ -1206,7 +1206,7 @@ static bool QueueTests(void) {
     if (TestHisto[2] != exp_cnt) test_pass = false;
     if (TestHisto[3] != TestHisto[0]) test_pass = false;
     if (TestHisto[4] != TestHisto[1] + 1) test_pass = false;
-    if (TestQueue.head != TestQueue.tail) test_pass = false;
+    if (TestQueue.pHead != TestQueue.pTail) test_pass = false;
     if (test_pass) MosPrint(" Passed\n");
     else {
         MosPrint(" Failed\n");
@@ -1233,7 +1233,7 @@ static bool QueueTests(void) {
     DisplayHistogram(5);
     if (TestHisto[3] != TestHisto[0]) test_pass = false;
     if (TestHisto[4] != TestHisto[2] + 1) test_pass = false;
-    if (TestQueue.head != TestQueue.tail) test_pass = false;
+    if (TestQueue.pHead != TestQueue.pTail) test_pass = false;
     if (test_pass) MosPrint(" Passed\n");
     else {
         MosPrint(" Failed\n");
@@ -2017,10 +2017,10 @@ static bool MiscTests(void) {
             if (strcmp(buf, "-inf")) test_pass = false;
             p0 = 0xfff0000000000001;
             MosSNPrintf(buf, sizeof(buf), "%f", *pf);
-            if (strcmp(buf, "nan")) test_pass = false;
+            if (strcmp(buf, "-nan")) test_pass = false;
             p0 = 0xfff8000000000001;
-            if (MosSNPrintf(buf, sizeof(buf), "%f", *pf) != 3) test_pass = false;
-            if (strcmp(buf, "nan")) test_pass = false;
+            if (MosSNPrintf(buf, sizeof(buf), "%f", *pf) != 4) test_pass = false;
+            if (strcmp(buf, "-nan")) test_pass = false;
             p0 = 0x7ff0000000000001;
             MosSNPrintf(buf, sizeof(buf), "%f", *pf);
             if (strcmp(buf, "nan")) test_pass = false;

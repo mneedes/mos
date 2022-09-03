@@ -22,9 +22,9 @@ typedef struct {
     u16 min_block_size;
 } MosHeap;
 
-void MosInitHeap(MosHeap * heap, u8 * data, u32 heap_size, u32 alignment);
-void * MosAlloc(MosHeap * heap, u32 size);
-void * MosReAlloc(MosHeap * heap, void * block, u32 new_size);
-void MosFree(MosHeap * heap, void * block);
+void MosInitHeap(MosHeap * pHeap, u8 * pData, u32 heapSize, u32 alignment);
+void * MosAlloc(MosHeap * pHeap, u32 size);
+void * MosReAlloc(MosHeap * pHeap, void * pBlock, u32 newSize);
+void MosFree(MosHeap * pHeap, void * pBlock);
 
 #endif

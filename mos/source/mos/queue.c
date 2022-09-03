@@ -10,107 +10,107 @@
 
 #include <mos/queue.h>
 
-MOS_ISR_SAFE static void CopyToTail(MosQueue * queue, const u32 * data) {
+MOS_ISR_SAFE static void CopyToTail(MosQueue * pQueue, const u32 * pData) {
     u32 mask = MosDisableInterrupts();
-    for (u32 ix = 0; ix < queue->elm_size; ix++) *queue->tail++ = *data++;
-    if (queue->tail == queue->end) queue->tail = queue->begin;
+    for (u32 ix = 0; ix < pQueue->elmSize; ix++) *pQueue->pTail++ = *pData++;
+    if (pQueue->pTail == pQueue->pEnd) pQueue->pTail = pQueue->pBegin;
     asm volatile ( "dmb" );
     MosEnableInterrupts(mask);
 }
 
-MOS_ISR_SAFE static void CopyFromHead(MosQueue * queue, u32 * data) {
+MOS_ISR_SAFE static void CopyFromHead(MosQueue * pQueue, u32 * pData) {
     u32 mask = MosDisableInterrupts();
-    for (u32 ix = 0; ix < queue->elm_size; ix++) *data++ = *queue->head++;
-    if (queue->head == queue->end) queue->head = queue->begin;
+    for (u32 ix = 0; ix < pQueue->elmSize; ix++) *pData++ = *pQueue->pHead++;
+    if (pQueue->pHead == pQueue->pEnd) pQueue->pHead = pQueue->pBegin;
     asm volatile ( "dmb" );
     MosEnableInterrupts(mask);
 }
 
-void MosInitQueue(MosQueue * queue, void * begin, u32 elm_size, u32 num_elm) {
-    MosAssert((elm_size & 0x3) == 0x0);
-    queue->elm_size = elm_size >> 2;
-    queue->begin    = (u32 *)begin;
-    queue->end      = queue->begin + (num_elm * queue->elm_size);
-    queue->tail     = queue->begin;
-    queue->head     = queue->begin;
-    queue->signal   = NULL;
-    MosInitSem(&queue->sem_tail, num_elm);
-    MosInitSem(&queue->sem_head, 0);
+void MosInitQueue(MosQueue * pQueue, void * pBegin, u32 elmSize, u32 numElm) {
+    MosAssert((elmSize & 0x3) == 0x0);
+    pQueue->elmSize  = elmSize >> 2;
+    pQueue->pBegin   = (u32 *)pBegin;
+    pQueue->pEnd     = pQueue->pBegin + (numElm * pQueue->elmSize);
+    pQueue->pTail    = pQueue->pBegin;
+    pQueue->pHead    = pQueue->pBegin;
+    pQueue->pSignal  = NULL;
+    MosInitSem(&pQueue->semTail, numElm);
+    MosInitSem(&pQueue->semHead, 0);
 }
 
-void MosSetMultiQueueChannel(MosQueue * queue, MosSignal * signal, u16 channel) {
-    queue->channel = channel;
-    queue->signal  = signal;
+void MosSetMultiQueueChannel(MosQueue * pQueue, MosSignal * pSignal, u16 channel) {
+    pQueue->channel = channel;
+    pQueue->pSignal = pSignal;
 }
 
-void MosSendToQueue(MosQueue * queue, const void * data) {
+void MosSendToQueue(MosQueue * pQueue, const void * pData) {
     // After taking semaphore context has a "license to write one entry,"
     // but it still must wait if another context is trying to do the same
     // thing in a thread.
-    MosWaitForSem(&queue->sem_tail);
-    CopyToTail(queue, data);
-    MosIncrementSem(&queue->sem_head);
-    if (queue->signal) MosRaiseSignalForChannel(queue->signal, queue->channel);
+    MosWaitForSem(&pQueue->semTail);
+    CopyToTail(pQueue, pData);
+    MosIncrementSem(&pQueue->semHead);
+    if (pQueue->pSignal) MosRaiseSignalForChannel(pQueue->pSignal, pQueue->channel);
 }
 
-MOS_ISR_SAFE bool MosTrySendToQueue(MosQueue * queue, const void * data) {
+MOS_ISR_SAFE bool MosTrySendToQueue(MosQueue * pQueue, const void * pData) {
     // MosTrySendToQueue() and MosTryReceiveFromQueue() are ISR safe since
     // they do not block and interrupts are locked out when queues are being
     // manipulated.
-    if (!MosTrySem(&queue->sem_tail)) return false;
-    CopyToTail(queue, data);
-    MosIncrementSem(&queue->sem_head);
-    if (queue->signal) MosRaiseSignalForChannel(queue->signal, queue->channel);
+    if (!MosTrySem(&pQueue->semTail)) return false;
+    CopyToTail(pQueue, pData);
+    MosIncrementSem(&pQueue->semHead);
+    if (pQueue->pSignal) MosRaiseSignalForChannel(pQueue->pSignal, pQueue->channel);
     return true;
 }
 
-bool MosSendToQueueOrTO(MosQueue * queue, const void * data, u32 ticks) {
-    if (MosWaitForSemOrTO(&queue->sem_tail, ticks)) {
-        CopyToTail(queue, data);
-        MosIncrementSem(&queue->sem_head);
-        if (queue->signal) MosRaiseSignalForChannel(queue->signal, queue->channel);
+bool MosSendToQueueOrTO(MosQueue * pQueue, const void * pData, u32 ticks) {
+    if (MosWaitForSemOrTO(&pQueue->semTail, ticks)) {
+        CopyToTail(pQueue, pData);
+        MosIncrementSem(&pQueue->semHead);
+        if (pQueue->pSignal) MosRaiseSignalForChannel(pQueue->pSignal, pQueue->channel);
         return true;
     }
     return false;
 }
 
-void MosReceiveFromQueue(MosQueue * queue, void * data) {
-    MosWaitForSem(&queue->sem_head);
-    CopyFromHead(queue, data);
-    MosIncrementSem(&queue->sem_tail);
+void MosReceiveFromQueue(MosQueue * pQueue, void * pData) {
+    MosWaitForSem(&pQueue->semHead);
+    CopyFromHead(pQueue, pData);
+    MosIncrementSem(&pQueue->semTail);
 }
 
-MOS_ISR_SAFE bool MosTryReceiveFromQueue(MosQueue * queue, void * data) {
-    if (MosTrySem(&queue->sem_head)) {
-        CopyFromHead(queue, data);
-        MosIncrementSem(&queue->sem_tail);
+MOS_ISR_SAFE bool MosTryReceiveFromQueue(MosQueue * pQueue, void * pData) {
+    if (MosTrySem(&pQueue->semHead)) {
+        CopyFromHead(pQueue, pData);
+        MosIncrementSem(&pQueue->semTail);
         return true;
     }
     return false;
 }
 
-bool MosReceiveFromQueueOrTO(MosQueue * queue, void * data, u32 ticks) {
-    if (MosWaitForSemOrTO(&queue->sem_head, ticks)) {
-        CopyFromHead(queue, data);
-        MosIncrementSem(&queue->sem_tail);
+bool MosReceiveFromQueueOrTO(MosQueue * pQueue, void * pData, u32 ticks) {
+    if (MosWaitForSemOrTO(&pQueue->semHead, ticks)) {
+        CopyFromHead(pQueue, pData);
+        MosIncrementSem(&pQueue->semTail);
         return true;
     }
     return false;
 }
 
-s16 MosWaitOnMultiQueue(MosSignal * signal, u32 * flags) {
+s16 MosWaitOnMultiQueue(MosSignal * pSignal, u32 * pFlags) {
     // Update flags in case some are still set, then block if needed
-    *flags |= MosPollSignal(signal);
-    if (*flags == 0) *flags = MosWaitForSignal(signal);
-    return MosGetNextChannelFromFlags(flags);
+    *pFlags |= MosPollSignal(pSignal);
+    if (*pFlags == 0) *pFlags = MosWaitForSignal(pSignal);
+    return MosGetNextChannelFromFlags(pFlags);
 }
 
-s16 MosWaitOnMultiQueueOrTO(MosSignal * signal, u32 * flags, u32 ticks) {
+s16 MosWaitOnMultiQueueOrTO(MosSignal * pSignal, u32 * pFlags, u32 ticks) {
     // Update flags in case some are still set, then block if needed
-    *flags |= MosPollSignal(signal);
-    if (*flags == 0) {
-        *flags = MosWaitForSignalOrTO(signal, ticks);
-        if (*flags == 0) return -1;
+    *pFlags |= MosPollSignal(pSignal);
+    if (*pFlags == 0) {
+        *pFlags = MosWaitForSignalOrTO(pSignal, ticks);
+        if (*pFlags == 0) return -1;
     }
-    return MosGetNextChannelFromFlags(flags);
+    return MosGetNextChannelFromFlags(pFlags);
 }

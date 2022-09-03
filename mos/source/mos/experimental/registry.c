@@ -91,8 +91,8 @@ static Entry * FindEntry2(Entry * entry, const char ** path, bool * leaf_found) 
     }
 FindNext:
     if (entry->type != MosEntryTypeInternal) return NULL;
-    MosLink * elm = entry->entries.next;
-    for (; elm != &entry->entries; elm = elm->next) {
+    MosLink * elm = entry->entries.pNext;
+    for (; elm != &entry->entries; elm = elm->pNext) {
         Entry * check_entry = container_of(elm, Entry, link);
         const char * matched_path = MatchEntryName((char *)(check_entry + 1), *path);
         if (matched_path) {
@@ -139,8 +139,8 @@ static Entry * FindEntry(Entry * entry, const char * path) {
     if (*path == '\0') return entry;
 FindNext:
     if (entry->type != MosEntryTypeInternal) return NULL;
-    MosLink * elm = entry->entries.next;
-    for (; elm != &entry->entries; elm = elm->next) {
+    MosLink * elm = entry->entries.pNext;
+    for (; elm != &entry->entries; elm = elm->pNext) {
         Entry * check_entry = container_of(elm, Entry, link);
         const char * matched_path = MatchEntryName((char *)(check_entry + 1), path);
         if (matched_path) {
@@ -161,8 +161,8 @@ static Entry * CreateEntry(Entry * entry, const char * path, const u8 * data, u3
     if (*path == '\0') return entry;
 FindNext: {
         if (entry->type != MosEntryTypeInternal) return NULL;
-        MosLink * elm = entry->entries.next;
-        for (; elm != &entry->entries; elm = elm->next) {
+        MosLink * elm = entry->entries.pNext;
+        for (; elm != &entry->entries; elm = elm->pNext) {
             Entry * check_entry = container_of(elm, Entry, link);
             const char * matched_path = MatchEntryName((char *)(check_entry + 1), path);
             if (matched_path) {

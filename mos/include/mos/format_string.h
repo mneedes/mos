@@ -12,13 +12,13 @@
 
 /// Convert 32-bit integers to string, returns number of digits
 ///
-u32 MosItoa(char * restrict out, s32 input, u16 base, bool is_upper,
-            u16 min_width, char pad_char, bool is_signed);
+u32 MosItoa(char * restrict pOut, s32 input, u16 base, bool isUpper,
+            u16 minWidth, char padChar, bool isSigned);
 
-/// Write up to size-1 bytes to destination buffer and terminate with nul character
-///   Returns number of characters written had dest been sufficiently large,
-///      not counting nul.
-s32 MosVSNPrintf(char * dest, mos_size size, const char * fmt, va_list arg);
-s32 MosSNPrintf(char * dest, mos_size size, const char * fmt, ...);
+/// Write up to size-1 bytes to destination buffer and terminates with nul character
+///   Returns number of characters written had pDest been sufficiently large,
+///      not counting the nul.
+s32 MosVSNPrintf(char * pDest, mos_size size, const char * pFmt, va_list arg);
+s32 MosSNPrintf(char * pDest, mos_size size, const char * pFmt, ...);
 
 #endif

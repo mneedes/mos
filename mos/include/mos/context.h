@@ -63,9 +63,9 @@ enum MosContextMessageID {
 struct MosClient;
 
 typedef struct {
-    struct MosClient    * client; /* Destination Client. If NULL, message is broadcast */
-    MosContextMessageID   id;     /* Message ID */
-    void                * data;   /* User data (e.g.: Message Payload) */
+    struct MosClient    * pClient; /* Destination Client. If NULL, message is broadcast */
+    MosContextMessageID   id;      /* Message ID */
+    void                * pData;   /* User data (e.g.: Message Payload) */
 } MosContextMessage;
 
 
@@ -76,24 +76,24 @@ typedef struct {
 typedef bool (MosClientHandler)(MosContextMessage *);
 
 typedef struct MosClient {
-    MosClientHandler * handler;
-    void             * priv_data;
-    MosLink            client_link;
-    MosLink            resume_link;
+    MosClientHandler * pHandler;
+    void             * pPrivData;
+    MosLink            clientLink;
+    MosLink            resumeLink;
     bool               completed;
 } MosClient;
 
 typedef struct {
     MosMutex   mtx;
-    MosQueue   msg_q;
-    MosList    client_q;
-    MosList    resume_q;
+    MosQueue   msgQ;
+    MosList    clientQ;
+    MosList    resumeQ;
     MosThread  thd;
 } MosContext;
 
 typedef struct {
     MosTimer           tmr;      /* Timer */
-    MosContext       * context;  /* Context */
+    MosContext       * pContext; /* Context */
     MosContextMessage  msg;      /* Message to send on Timer Expiration */
 } MosContextTimer;
 
@@ -101,64 +101,64 @@ typedef struct {
 
 // Initialize context thread and data structure
 // Queue depth should be ample enough to allow the contexts to initialize
-MOS_CLIENT_UNSAFE void MosInitContext(MosContext * context, MosThreadPriority prio, u8 * stack_bottom,
-                                          u32 stack_size, MosContextMessage * msg_queue_buf,
-                                          u32 msg_queue_depth);
+MOS_CLIENT_UNSAFE void MosInitContext(MosContext * pContext, MosThreadPriority prio, u8 * pStackBottom,
+                                          u32 stackSize, MosContextMessage * pMsgQueueBuf,
+                                          u32 msgQueueDepth);
 // Start context thread
-MOS_CLIENT_UNSAFE void MosStartContext(MosContext * context);
+MOS_CLIENT_UNSAFE void MosStartContext(MosContext * pContext);
 // Broadcast stop message to all clients to stop context and terminate context thread
-MOS_CLIENT_UNSAFE void MosStopContext(MosContext * context);
+MOS_CLIENT_UNSAFE void MosStopContext(MosContext * pContext);
 // Wait until a context is finished
-MOS_CLIENT_UNSAFE void MosWaitForContextStop(MosContext * context);
+MOS_CLIENT_UNSAFE void MosWaitForContextStop(MosContext * pContext);
 // Start an individual client and attach it to the context,
 //   Note that clients won't actually start until MosStartContext() is invoked for the first
 //   time. If clients are started after MosStartContext() they will be sent start messages
 //   individually.
-MOS_CLIENT_UNSAFE void MosStartClient(MosContext * context, MosClient * client,
-                                          MosClientHandler * handler, void * priv_data);
+MOS_CLIENT_UNSAFE void MosStartClient(MosContext * pContext, MosClient * pClient,
+                                         MosClientHandler * pHandler, void * pPrivData);
 // Send a stop client message,
 //   note that the context will not terminate until a _broadcast_ stop message is sent
 //   to the context. The Client will remain attached to the context until the _broadcast_
 //   stop message is sent.
-MOS_CLIENT_UNSAFE void MosStopClient(MosContext * context, MosClient * client);
+MOS_CLIENT_UNSAFE void MosStopClient(MosContext * pContext, MosClient * pClient);
 
 MOS_ISR_SAFE MOS_INLINE void
-MosSetContextMessage(MosContextMessage * msg, MosClient * client, MosContextMessageID id) {
-    msg->client = client;
-    msg->id = id;
+MosSetContextMessage(MosContextMessage * pMsg, MosClient * pClient, MosContextMessageID id) {
+    pMsg->pClient = pClient;
+    pMsg->id = id;
 }
 MOS_ISR_SAFE MOS_INLINE void
-MosSetContextBroadcastMessage(MosContextMessage * msg, MosContextMessageID id) {
-    msg->client = NULL;
-    msg->id = id;
+MosSetContextBroadcastMessage(MosContextMessage * pMsg, MosContextMessageID id) {
+    pMsg->pClient = NULL;
+    pMsg->id = id;
 }
 MOS_ISR_SAFE MOS_INLINE void
-MosSetContextMessageData(MosContextMessage * msg, void * data) {
-    msg->data = data;
+MosSetContextMessageData(MosContextMessage * pMsg, void * pData) {
+    pMsg->pData = pData;
 }
 /* May safely be used in any context, recommended for inter-client messaging within the same context */
 MOS_ISR_SAFE MOS_INLINE bool
-MosTrySendMessageToContext(MosContext * context, MosContextMessage * msg) {
-    return MosTrySendToQueue(&context->msg_q, msg);
+MosTrySendMessageToContext(MosContext * pContext, MosContextMessage * pMsg) {
+    return MosTrySendToQueue(&pContext->msgQ, pMsg);
 }
 /* May safely be used only inter-context (between contexts). */
-MOS_INLINE void MosSendMessageToContext(MosContext * context, MosContextMessage * msg) {
-    MosAssert(MosGetThreadPtr() != &context->thd);
-    MosSendToQueue(&context->msg_q, msg);
+MOS_INLINE void MosSendMessageToContext(MosContext * pContext, MosContextMessage * pMsg) {
+    MosAssert(MosGetThreadPtr() != &pContext->thd);
+    MosSendToQueue(&pContext->msgQ, pMsg);
 }
 
 /* Context timer messages */
 
-void MosInitContextTimer(MosContextTimer * tmr, MosContext * context);
-MOS_INLINE void MosSetContextTimer(MosContextTimer * tmr, u32 ticks, MosContextMessage * msg) {
-    tmr->msg = *msg;
-    MosSetTimer(&tmr->tmr, ticks, NULL);
+void MosInitContextTimer(MosContextTimer * pTmr, MosContext * pContext);
+MOS_INLINE void MosSetContextTimer(MosContextTimer * pTmr, u32 ticks, MosContextMessage * pMsg) {
+    pTmr->msg = *pMsg;
+    MosSetTimer(&pTmr->tmr, ticks, NULL);
 }
-MOS_INLINE void MosCancelContextTimer(MosContextTimer * tmr) {
-    MosCancelTimer(&tmr->tmr);
+MOS_INLINE void MosCancelContextTimer(MosContextTimer * pTmr) {
+    MosCancelTimer(&pTmr->tmr);
 }
-MOS_INLINE void MosResetContextTimer(MosContextTimer * tmr) {
-    MosResetTimer(&tmr->tmr);
+MOS_INLINE void MosResetContextTimer(MosContextTimer * pTmr) {
+    MosResetTimer(&pTmr->tmr);
 }
 
 #endif

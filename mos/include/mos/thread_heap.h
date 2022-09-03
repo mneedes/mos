@@ -14,17 +14,17 @@
 #include <mos/kernel.h>
 #include <mos/heap.h>
 
-void MosInitThreadHeap(MosHeap * heap);
+void MosInitThreadHeap(MosHeap * pHeap);
 
 // Allocate threads, setting reference count to 1
-bool MosAllocThread(MosThread ** thd, u32 stack_size);
-bool MosAllocAndRunThread(MosThread ** thd, MosThreadPriority pri,
-                          MosThreadEntry * entry, s32 arg, u32 stack_size);
+bool MosAllocThread(MosThread ** ppThd, u32 stackSize);
+bool MosAllocAndRunThread(MosThread ** ppThd, MosThreadPriority pri,
+                          MosThreadEntry * pEntry, s32 arg, u32 stackSize);
 // Increment reference count (used when sharing handles between threads)
-bool MosIncThreadRefCount(MosThread ** thd);
+bool MosIncThreadRefCount(MosThread ** ppThd);
 
 // Decrement reference count (frees thread when reference count is zero)
 // NOTE: A running thread should not have its reference count decremented.
-bool MosDecThreadRefCount(MosThread ** thd);
+bool MosDecThreadRefCount(MosThread ** ppThd);
 
 #endif

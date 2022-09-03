@@ -44,30 +44,30 @@ void MOS_NAKED PendSV_Handler(void) {
 
 #endif
 
-static void MOS_USED BlockOnMutex(MosMutex * mtx) {
+static void MOS_USED BlockOnMutex(MosMutex * pMtx) {
     LockScheduler(IntPriMaskLow);
     // Retry (don't block) if mutex has since been given
-    if (mtx->owner != NO_SUCH_THREAD) {
+    if (pMtx->pOwner != NO_SUCH_THREAD) {
         // Move thread to pend queue
-        SortThreadByPriority(RunningThread, &mtx->pend_q);
+        SortThreadByPriority(pRunningThread, &pMtx->pendQ);
         // Basic priority inheritance
-        Thread * thd = (Thread *)mtx->owner;
-        if (RunningThread->pri < thd->pri) {
-            thd->pri = RunningThread->pri;
-            if (thd->state == THREAD_RUNNABLE) {
-                MosRemoveFromList(&thd->run_link);
-                MosAddToFrontOfList(&RunQueues[thd->pri], &thd->run_link);
+        Thread * pThd = (Thread *)pMtx->pOwner;
+        if (pRunningThread->pri < pThd->pri) {
+            pThd->pri = pRunningThread->pri;
+            if (pThd->state == THREAD_RUNNABLE) {
+                MosRemoveFromList(&pThd->runLink);
+                MosAddToFrontOfList(&RunQueues[pThd->pri], &pThd->runLink);
             }
         }
-        RunningThread->blocked_on = mtx;
-        SetThreadState(RunningThread, THREAD_WAIT_FOR_MUTEX);
+        pRunningThread->pBlockedOn = pMtx;
+        SetThreadState(pRunningThread, THREAD_WAIT_FOR_MUTEX);
         YieldThread();
     }
     UnlockScheduler();
 }
 
-void MOS_NAKED MosLockMutex(MosMutex * mtx) {
-    MOS_USED_PARAM(mtx);
+void MOS_NAKED MosLockMutex(MosMutex * pMtx) {
+    MOS_USED_PARAM(pMtx);
     asm volatile (
         "ldr r1, _ThreadID\n"
         "ldr r1, [r1]\n"
@@ -97,17 +97,17 @@ void MOS_NAKED MosLockMutex(MosMutex * mtx) {
         "pop {r0, r1, lr}\n"
         "b RetryLM\n"
         ".balign 4\n"
-      "_ThreadID: .word RunningThread"
+      "_ThreadID: .word pRunningThread"
             // Explicit clobber list prevents compiler from making
             // assumptions about registers not being changed as
-            // this assembly code calls a C function.  Normally C
+            // this aspSembly code calls a C function.  Normally C
             // ABI treats r0-r3 as input or scratch registers.
             : : : "r0", "r1", "r2", "r3"
     );
 }
 
-bool MOS_NAKED MosTryMutex(MosMutex * mtx) {
-    MOS_USED_PARAM(mtx);
+bool MOS_NAKED MosTryMutex(MosMutex * pMtx) {
+    MOS_USED_PARAM(pMtx);
     asm volatile (
         "ldr r1, _ThreadID2\n"
         "ldr r1, [r1]\n"
@@ -136,36 +136,36 @@ bool MOS_NAKED MosTryMutex(MosMutex * mtx) {
         "mov r0, #0\n"
         "bx lr\n"
         ".balign 4\n"
-      "_ThreadID2: .word RunningThread"
+      "_ThreadID2: .word pRunningThread"
             : : : "r0", "r1", "r2", "r3"
     );
 }
 
-static void MOS_USED ReleaseMutex(MosMutex * mtx) {
+static void MOS_USED ReleaseMutex(MosMutex * pMtx) {
     LockScheduler(IntPriMaskLow);
-    if (RunningThread && --RunningThread->mtx_cnt == 0 &&
-            RunningThread->pri != RunningThread->nom_pri) {
+    if (pRunningThread && --pRunningThread->mtxCnt == 0 &&
+            pRunningThread->pri != pRunningThread->nomPri) {
         // Reset priority inheritance
-        RunningThread->pri = RunningThread->nom_pri;
-        MosRemoveFromList(&RunningThread->run_link);
-        MosAddToFrontOfList(&RunQueues[RunningThread->pri],
-                                &RunningThread->run_link);
+        pRunningThread->pri = pRunningThread->nomPri;
+        MosRemoveFromList(&pRunningThread->runLink);
+        MosAddToFrontOfList(&RunQueues[pRunningThread->pri],
+                                &pRunningThread->runLink);
     }
-    if (!MosIsListEmpty(&mtx->pend_q)) {
-        MosLink * elm = mtx->pend_q.next;
-        Thread * thd = container_of(elm, Thread, run_link);
-        MosRemoveFromList(elm);
-        MosAddToFrontOfList(&RunQueues[thd->pri], elm);
-        if (MosIsOnList(&thd->tmr_link.link))
-            MosRemoveFromList(&thd->tmr_link.link);
-        SetThreadState(thd, THREAD_RUNNABLE);
-        if (thd->pri < RunningThread->pri) YieldThread();
+    if (!MosIsListEmpty(&pMtx->pendQ)) {
+        MosLink * pElm = pMtx->pendQ.pNext;
+        Thread * pThd = container_of(pElm, Thread, runLink);
+        MosRemoveFromList(pElm);
+        MosAddToFrontOfList(&RunQueues[pThd->pri], pElm);
+        if (MosIsOnList(&pThd->tmrLink.link))
+            MosRemoveFromList(&pThd->tmrLink.link);
+        SetThreadState(pThd, THREAD_RUNNABLE);
+        if (pThd->pri < pRunningThread->pri) YieldThread();
     }
     UnlockScheduler();
 }
 
-void MOS_NAKED MosUnlockMutex(MosMutex * mtx) {
-    MOS_USED_PARAM(mtx);
+void MOS_NAKED MosUnlockMutex(MosMutex * pMtx) {
+    MOS_USED_PARAM(pMtx);
     asm volatile (
         "dmb\n"
         "ldr r1, [r0, #4]\n"
@@ -185,23 +185,23 @@ void MOS_NAKED MosUnlockMutex(MosMutex * mtx) {
     );
 }
 
-static void MOS_USED BlockOnSem(MosSem * sem) {
-    // Lock in case semaphore is about to be given by another context.
+static void MOS_USED BlockOnSem(MosSem * pSem) {
+    // Lock in case pSemaphore is about to be given by another context.
     _MosDisableInterrupts();
     // Retry (don't block) if count has since incremented
-    if (sem->value == 0) {
+    if (pSem->value == 0) {
         // Can directly manipulate run queues here since scheduler
         // and other other interrupts are locked out.
-        SortThreadByPriority(RunningThread, &sem->pend_q);
-        RunningThread->blocked_on = sem;
-        RunningThread->state = THREAD_WAIT_FOR_SEM;
+        SortThreadByPriority(pRunningThread, &pSem->pendQ);
+        pRunningThread->pBlockedOn = pSem;
+        pRunningThread->state = THREAD_WAIT_FOR_SEM;
         YieldThread();
     }
     _MosEnableInterrupts();
 }
 
-void MOS_NAKED MosWaitForSem(MosSem * sem) {
-    MOS_USED_PARAM(sem);
+void MOS_NAKED MosWaitForSem(MosSem * pSem) {
+    MOS_USED_PARAM(pSem);
     asm volatile (
       "RetryTS:\n"
         "ldrex r1, [r0]\n"
@@ -221,29 +221,29 @@ void MOS_NAKED MosWaitForSem(MosSem * sem) {
     );
 }
 
-static bool MOS_USED BlockOnSemOrTO(MosSem * sem) {
+static bool MOS_USED BlockOnSemOrTO(MosSem * pSem) {
     bool timeout = false;
-    // Lock in case semaphore is about to be given by another context.
+    // Lock in case pSemaphore is about to be given by another context.
     _MosDisableInterrupts();
     // Immediately retry (don't block) if count has since incremented
-    if (sem->value == 0) {
+    if (pSem->value == 0) {
         // Can directly manipulate run queues here since scheduler
         // and other other interrupts are locked out.
-        SortThreadByPriority(RunningThread, &sem->pend_q);
-        RunningThread->timed_out = 0;
-        RunningThread->blocked_on = sem;
-        RunningThread->state = THREAD_WAIT_FOR_SEM_OR_TICK;
+        SortThreadByPriority(pRunningThread, &pSem->pendQ);
+        pRunningThread->timedOut = 0;
+        pRunningThread->pBlockedOn = pSem;
+        pRunningThread->state = THREAD_WAIT_FOR_SEM_OR_TICK;
         YieldThread();
         // Must enable interrupts before checking timeout to allow pend
         // Barrier ensures that pend occurs before checking timeout.
         _MosEnableInterruptsWithBarrier();
-        if (RunningThread->timed_out) timeout = true;
+        if (pRunningThread->timedOut) timeout = true;
     } else _MosEnableInterrupts();
     return timeout;
 }
 
-bool MOS_NAKED MosWaitForSemOrTO(MosSem * sem, u32 ticks) {
-    MOS_USED_PARAM(sem);
+bool MOS_NAKED MosWaitForSemOrTO(MosSem * pSem, u32 ticks) {
+    MOS_USED_PARAM(pSem);
     MOS_USED_PARAM(ticks);
     asm volatile (
         "push {r0, lr}\n"
@@ -272,8 +272,8 @@ bool MOS_NAKED MosWaitForSemOrTO(MosSem * sem, u32 ticks) {
     );
 }
 
-MOS_ISR_SAFE bool MOS_NAKED MosTrySem(MosSem * sem) {
-    MOS_USED_PARAM(sem);
+MOS_ISR_SAFE bool MOS_NAKED MosTrySem(MosSem * pSem) {
+    MOS_USED_PARAM(pSem);
     asm volatile (
       "RetryTRS:\n"
         "ldrex r1, [r0]\n"
@@ -292,24 +292,24 @@ MOS_ISR_SAFE bool MOS_NAKED MosTrySem(MosSem * sem) {
     );
 }
 
-// For yielding when semaphore is given
-MOS_ISR_SAFE static void MOS_USED ReleaseOnSem(MosSem * sem) {
-    // This places the semaphore on event queue to be processed by
+// For yielding when pSemaphore is given
+MOS_ISR_SAFE static void MOS_USED ReleaseOnSem(MosSem * pSem) {
+    // This places the pSemaphore on event queue to be processed by
     // scheduler to avoid direct manipulation of run queues.  If run
     // queues were manipulated here critical sections would be larger.
     u32 mask = MosDisableInterrupts();
-    // Only add event if pend_q is not empty and event not already queued
-    if (!MosIsListEmpty(&sem->pend_q) && !MosIsOnList(&sem->evt_link)) {
-        MosAddToList(&ISREventQueue, &sem->evt_link);
-        Thread * thd = container_of(sem->pend_q.next, Thread, run_link);
+    // Only add event if pendQ is not empty and event not already queued
+    if (!MosIsListEmpty(&pSem->pendQ) && !MosIsOnList(&pSem->evtLink)) {
+        MosAddToList(&ISREventQueue, &pSem->evtLink);
+        Thread * pThd = container_of(pSem->pendQ.pNext, Thread, runLink);
         // Yield if released thread has higher priority than running thread
-        if (RunningThread && thd->pri < RunningThread->pri) YieldThread();
+        if (pRunningThread && pThd->pri < pRunningThread->pri) YieldThread();
     }
     MosEnableInterrupts(mask);
 }
 
-MOS_ISR_SAFE void MOS_NAKED MosIncrementSem(MosSem * sem) {
-    MOS_USED_PARAM(sem);
+MOS_ISR_SAFE void MOS_NAKED MosIncrementSem(MosSem * pSem) {
+    MOS_USED_PARAM(pSem);
     asm volatile (
         "push { lr }\n"
       "RetryIS:\n"
@@ -325,8 +325,8 @@ MOS_ISR_SAFE void MOS_NAKED MosIncrementSem(MosSem * sem) {
     );
 }
 
-u32 MOS_NAKED MosWaitForSignal(MosSem * sem) {
-    MOS_USED_PARAM(sem);
+u32 MOS_NAKED MosWaitForSignal(MosSem * pSem) {
+    MOS_USED_PARAM(pSem);
     asm volatile (
         "mov r3, #0\n"
       "RetryWS:\n"
@@ -347,8 +347,8 @@ u32 MOS_NAKED MosWaitForSignal(MosSem * sem) {
     );
 }
 
-u32 MOS_NAKED MosWaitForSignalOrTO(MosSem * sem, u32 ticks) {
-    MOS_USED_PARAM(sem);
+u32 MOS_NAKED MosWaitForSignalOrTO(MosSem * pSem, u32 ticks) {
+    MOS_USED_PARAM(pSem);
     MOS_USED_PARAM(ticks);
     asm volatile (
         "push {r0, lr}\n"
@@ -377,8 +377,8 @@ u32 MOS_NAKED MosWaitForSignalOrTO(MosSem * sem, u32 ticks) {
     );
 }
 
-MOS_ISR_SAFE u32 MOS_NAKED MosPollSignal(MosSem * sem) {
-    MOS_USED_PARAM(sem);
+MOS_ISR_SAFE u32 MOS_NAKED MosPollSignal(MosSem * pSem) {
+    MOS_USED_PARAM(pSem);
     asm volatile (
         "mov r3, #0\n"
       "RetryPS:\n"
@@ -397,8 +397,8 @@ MOS_ISR_SAFE u32 MOS_NAKED MosPollSignal(MosSem * sem) {
     );
 }
 
-MOS_ISR_SAFE void MOS_NAKED MosRaiseSignal(MosSem * sem, u32 flags) {
-    MOS_USED_PARAM(sem);
+MOS_ISR_SAFE void MOS_NAKED MosRaiseSignal(MosSem * pSem, u32 flags) {
+    MOS_USED_PARAM(pSem);
     MOS_USED_PARAM(flags);
     asm volatile (
         "push { lr }\n"
@@ -432,11 +432,11 @@ FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 exc_rtn) {
     bool in_isr = ((exc_rtn & 0x8) == 0x0);
     KPrintf("\n*** %s Fault %s", fault_type[fault_no], in_isr ? "IN ISR " : "");
 
-    if (RunningThread == NO_SUCH_THREAD) KPrintf("(Pre-Scheduler) ***\n");
-    else if (RunningThread->name && RunningThread->name[0] != '\0')
-        KPrintf("(Thread %s) ***\n", RunningThread->name);
+    if (pRunningThread == NO_SUCH_THREAD) KPrintf("(Pre-Scheduler) ***\n");
+    else if (pRunningThread->pName && pRunningThread->pName[0] != '\0')
+        KPrintf("(Thread %s) ***\n", pRunningThread->pName);
     else
-        KPrintf("(Thread @%08X) ***\n", RunningThread);
+        KPrintf("(Thread @%08X) ***\n", pRunningThread);
     if ((exc_rtn & 0x10) == 0x0) KPrintf("*** Lazy Floating Point Enabled ***\n");
 
     KPrintf("\n    R4: %08X   R5: %08X   R6: %08X   R7: %08X\n", msp[0], msp[1], msp[2], msp[3]);
@@ -457,13 +457,13 @@ FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 exc_rtn) {
         }
         KPrintf("\n");
     }
-    if (RunningThread != NO_SUCH_THREAD) {
+    if (pRunningThread != NO_SUCH_THREAD) {
         KPrintf("Thread Stack @%08X:\n", (u32)psp);
 
-        u8 * psp2 = RunningThread->stack_bottom;
+        u8 * psp2 = pRunningThread->pStackBottom;
         if (*((u32 *)psp2) != STACK_FILL_VALUE)
             KPrintf("!!! Thread Stack corruption (bottom) !!!\n");
-        psp2 = (u8 *) ((u32)(psp2 + RunningThread->stack_size - sizeof(u32)) & 0xfffffff8);
+        psp2 = (u8 *) ((u32)(psp2 + pRunningThread->stackSize - sizeof(u32)) & 0xfffffff8);
         if (*((u32 *)psp2) != STACK_FILL_VALUE)
             KPrintf("!!! Thread Stack corruption (top) !!!\n");
 
@@ -488,14 +488,14 @@ FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 exc_rtn) {
     if (MOS_HANG_ON_EXCEPTIONS) {
         while (1);
     } else {
-        if (RunningThread == NO_SUCH_THREAD || in_isr) {
+        if (pRunningThread == NO_SUCH_THREAD || in_isr) {
             // Hang if fault occurred anywhere but in thread context
             while (1);
         } else {
             // Clear CFSR bits
             MOS_REG(CFSR) = cfsr;
             // Stop thread if fault occurred in thread context
-            SetThreadState(RunningThread, THREAD_TIME_TO_STOP);
+            SetThreadState(pRunningThread, THREAD_TIME_TO_STOP);
             YieldThread();
         }
     }

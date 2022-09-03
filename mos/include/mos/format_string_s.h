@@ -10,7 +10,7 @@
 #include <stdarg.h>
 #include <mos/defs.h>
 
-s32 S_MosVSNPrintf(char * dest, mos_size size, const char * fmt, va_list arg);
-s32 S_MosSNPrintf(char * dest, mos_size size, const char * fmt, ...);
+s32 S_MosVSNPrintf(char * pDest, mos_size size, const char * pFmt, va_list arg);
+s32 S_MosSNPrintf(char * pDest, mos_size size, const char * pFmt, ...);
 
 #endif

@@ -32,7 +32,7 @@ int main() {
 
     // Init trace before calling any print functions
     MosInitTrace(TRACE_INFO | TRACE_ERROR | TRACE_FATAL, true);
-    MosPrintf("\nMaintainable OS (Version %s)\n", MosGetParams()->version);
+    MosPrintf("\nMaintainable OS (Version %s)\n", MosGetParams()->pVersion);
     MosPrint("Copyright 2019-2021, Matthew Needes  All Rights Reserved\n");
 
 #if 0

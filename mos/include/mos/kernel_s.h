@@ -11,28 +11,28 @@
 #ifndef _MOS_KERNEL_S_H_
 #define _MOS_KERNEL_S_H_
 
-MOS_ISR_SAFE MOS_INLINE bool S_MosTT(const void * address) {
+MOS_ISR_SAFE MOS_INLINE bool S_MosTT(const void * pAddress) {
     u32 tt;
     asm volatile (
         "tt %0, %1"
-            : "=r" (tt) : "r" (address) :
+            : "=r" (tt) : "r" (pAddress) :
     );
     return tt;
 }
 
 /// Determine if address is from a non-secure area.
 ///   All pointers passed in from the Non-Secure side should be validated as Non-Secure before use.
-MOS_ISR_SAFE MOS_INLINE bool S_MosIsAddressNonSecure(const void * address) {
-    u32 perms = S_MosTT(address);
+MOS_ISR_SAFE MOS_INLINE bool S_MosIsAddressNonSecure(const void * pAddress) {
+    u32 perms = S_MosTT(pAddress);
     return ((perms & (0x1 << 22)) == 0x0);
 }
 
 /// Determine if address range is non-secure by examining end-points.
 ///   All pointers passed in from the Non-Secure side should be validated as Non-Secure before use.
 ///   e.g.:  S_MosIsAddressRangeNonSecure(pStruct, sizeof(Struct))
-MOS_ISR_SAFE MOS_INLINE bool S_MosIsAddressRangeNonSecure(const void * address, mos_size size) {
-    u32 perms_b = S_MosTT(address);
-    u32 perms_e = S_MosTT((u8 *)address + size - 1);
+MOS_ISR_SAFE MOS_INLINE bool S_MosIsAddressRangeNonSecure(const void * pAddress, mos_size size) {
+    u32 perms_b = S_MosTT(pAddress);
+    u32 perms_e = S_MosTT((u8 *)pAddress + size - 1);
     return (perms_b == perms_e) && ((perms_b & (0x1 << 22)) == 0x0);
 }
 

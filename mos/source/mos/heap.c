@@ -90,7 +90,7 @@ void * MosAlloc(MosHeap * heap, u32 size) {
     {
         // First-fit search: max(min_size, size) + link_size needs to fit
         MosList * elm;
-        for (elm = heap->fl.next; elm != &heap->fl; elm = elm->next) {
+        for (elm = heap->fl.pNext; elm != &heap->fl; elm = elm->pNext) {
             block = container_of(elm, Block, fl_link);
             if (block->link.size >= size) {
                 MosAssert(block->link.canary == HEAP_CANARY_VALUE);

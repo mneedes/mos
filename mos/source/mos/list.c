@@ -6,46 +6,46 @@
 
 #include <mos/list.h>
 
-MOS_ISR_SAFE void MosInitList(MosList * list) {
-    list->prev = list;
-    list->next = list;
+MOS_ISR_SAFE void MosInitList(MosList * pList) {
+    pList->pPrev = pList;
+    pList->pNext = pList;
 }
 
-MOS_ISR_SAFE void MosInitLinkHet(MosLinkHet * link, u32 type) {
-    link->link.prev = &link->link;
-    link->link.next = &link->link;
-    link->type = type;
+MOS_ISR_SAFE void MosInitLinkHet(MosLinkHet * pLink, u32 type) {
+    pLink->link.pPrev = &pLink->link;
+    pLink->link.pNext = &pLink->link;
+    pLink->type = type;
 }
 
-MOS_ISR_SAFE void MosAddToList(MosList * list, MosList * elm_add) {
-    elm_add->prev = list->prev;
-    elm_add->next = list;
-    list->prev->next = elm_add;
-    list->prev = elm_add;
+MOS_ISR_SAFE void MosAddToList(MosList * pList, MosList * pElmAdd) {
+    pElmAdd->pPrev = pList->pPrev;
+    pElmAdd->pNext = pList;
+    pList->pPrev->pNext = pElmAdd;
+    pList->pPrev = pElmAdd;
 }
 
-MOS_ISR_SAFE void MosAddToListAfter(MosList * list, MosList * elm_add) {
-    elm_add->prev = list;
-    elm_add->next = list->next;
-    list->next->prev = elm_add;
-    list->next = elm_add;
+MOS_ISR_SAFE void MosAddToListAfter(MosList * pList, MosList * pElmAdd) {
+    pElmAdd->pPrev = pList;
+    pElmAdd->pNext = pList->pNext;
+    pList->pNext->pPrev = pElmAdd;
+    pList->pNext = pElmAdd;
 }
 
-MOS_ISR_SAFE void MosRemoveFromList(MosList * elm_rem) {
-    elm_rem->next->prev = elm_rem->prev;
-    elm_rem->prev->next = elm_rem->next;
+MOS_ISR_SAFE void MosRemoveFromList(MosList * pElmRem) {
+    pElmRem->pNext->pPrev = pElmRem->pPrev;
+    pElmRem->pPrev->pNext = pElmRem->pNext;
     // For MosIsElementOnList() and safety
-    elm_rem->prev = elm_rem;
-    elm_rem->next = elm_rem;
+    pElmRem->pPrev = pElmRem;
+    pElmRem->pNext = pElmRem;
 }
 
-MOS_ISR_SAFE void MosMoveToEndOfList(MosList * elm_exist, MosList * elm_move) {
+MOS_ISR_SAFE void MosMoveToEndOfList(MosList * pElmExist, MosList * pElmMove) {
     // Remove element
-    elm_move->next->prev = elm_move->prev;
-    elm_move->prev->next = elm_move->next;
-    // Add to end of list
-    elm_move->prev = elm_exist->prev;
-    elm_move->next = elm_exist;
-    elm_exist->prev->next = elm_move;
-    elm_exist->prev = elm_move;
+    pElmMove->pNext->pPrev = pElmMove->pPrev;
+    pElmMove->pPrev->pNext = pElmMove->pNext;
+    // Add to end of pList
+    pElmMove->pPrev = pElmExist->pPrev;
+    pElmMove->pNext = pElmExist;
+    pElmExist->pPrev->pNext = pElmMove;
+    pElmExist->pPrev = pElmMove;
 }

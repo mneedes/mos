@@ -11,22 +11,22 @@
 #include <mos/context.h>
 
 static s32 ContextRunner(s32 in) {
-    MosContext * context = (MosContext *) in;
+    MosContext * pContext = (MosContext *)in;
     bool running = true;
     while (running) {
         MosContextMessage msg;
-        MosReceiveFromQueue(&context->msg_q, &msg);
-        MosClient * client = msg.client;
-        if (client) {
+        MosReceiveFromQueue(&pContext->msgQ, &msg);
+        MosClient * pClient = msg.pClient;
+        if (pClient) {
             // Only send queued resume message if client still needs it.
-            if (msg.id != MosContextMessageID_ResumeClient || !client->completed) {
+            if (msg.id != MosContextMessageID_ResumeClient || !pClient->completed) {
                 // Unicast message (NOTE: client is allowed to modify msg)
-                client->completed = (*client->handler)(&msg);
-                if (client->completed) {
-                    if (MosIsOnList(&client->resume_link))
-                        MosRemoveFromList(&client->resume_link);
-                } else if (!MosIsOnList(&client->resume_link)) {
-                    MosAddToList(&context->resume_q, &client->resume_link);
+                pClient->completed = (*pClient->pHandler)(&msg);
+                if (pClient->completed) {
+                    if (MosIsOnList(&pClient->resumeLink))
+                        MosRemoveFromList(&pClient->resumeLink);
+                } else if (!MosIsOnList(&pClient->resumeLink)) {
+                    MosAddToList(&pContext->resumeQ, &pClient->resumeLink);
                 }
             }
         } else {
@@ -36,89 +36,89 @@ static s32 ContextRunner(s32 in) {
                 msg.id = MosContextMessageID_StopClient;
                 running = false;
             }
-            MosLink * elm;
-            MosLockMutex(&context->mtx);
-            for (elm = context->client_q.next; elm != &context->client_q; elm = elm->next) {
-                MosClient * client = container_of(elm, MosClient, client_link);
+            MosLink * pElm;
+            MosLockMutex(&pContext->mtx);
+            for (pElm = pContext->clientQ.pNext; pElm != &pContext->clientQ; pElm = pElm->pNext) {
+                MosClient * pClient = container_of(pElm, MosClient, clientLink);
                 // Copy the message since client is allowed to alter messages
-                MosContextMessage msg_copy = { .id = msg.id, .client = client, .data = msg.data };
-                client->completed = (*client->handler)(&msg_copy);
-                if (client->completed) {
-                    if (MosIsOnList(&client->resume_link))
-                        MosRemoveFromList(&client->resume_link);
-                } else if (!MosIsOnList(&client->resume_link)) {
-                    MosAddToList(&context->resume_q, &client->resume_link);
+                MosContextMessage msg_copy = { .id = msg.id, .pClient = pClient, .pData = msg.pData };
+                pClient->completed = (*pClient->pHandler)(&msg_copy);
+                if (pClient->completed) {
+                    if (MosIsOnList(&pClient->resumeLink))
+                        MosRemoveFromList(&pClient->resumeLink);
+                } else if (!MosIsOnList(&pClient->resumeLink)) {
+                    MosAddToList(&pContext->resumeQ, &pClient->resumeLink);
                 }
             }
-            MosUnlockMutex(&context->mtx);
+            MosUnlockMutex(&pContext->mtx);
         }
         // Attempt to resume clients
-        MosLink * elm_save;
-        for (MosLink * elm = context->resume_q.next; elm != &context->resume_q; elm = elm_save) {
-            elm_save = elm->next;
-            msg.client = container_of(elm, MosClient, resume_link);
+        MosLink * pElmSave;
+        for (MosLink * pElm = pContext->resumeQ.pNext; pElm != &pContext->resumeQ; pElm = pElmSave) {
+            pElmSave = pElm->pNext;
+            msg.pClient = container_of(pElm, MosClient, resumeLink);
             // Don't bother resuming if client already completed after processing a subsequent message
-            if (!msg.client->completed) {
+            if (!msg.pClient->completed) {
                 msg.id = MosContextMessageID_ResumeClient;
-                if (!MosTrySendToQueue(&context->msg_q, &msg)) break;
+                if (!MosTrySendToQueue(&pContext->msgQ, &msg)) break;
             }
-            MosRemoveFromList(&msg.client->resume_link);
+            MosRemoveFromList(&msg.pClient->resumeLink);
         }
     }
     return 0;
 }
 
-void MosInitContext(MosContext * context, MosThreadPriority prio, u8 * stack_bottom,
-                       u32 stack_size, MosContextMessage * msg_queue_buf, u32 msg_queue_depth) {
-    MosInitMutex(&context->mtx);
-    MosInitList(&context->client_q);
-    MosInitList(&context->resume_q);
-    MosInitQueue(&context->msg_q, msg_queue_buf, sizeof(MosContextMessage), msg_queue_depth);
-    MosInitThread(&context->thd, prio, ContextRunner, (s32) context, stack_bottom, stack_size);
+void MosInitContext(MosContext * pContext, MosThreadPriority prio, u8 * pStackbottom,
+                       u32 stackSize, MosContextMessage * pMsgQueueBuf, u32 msgQueueDepth) {
+    MosInitMutex(&pContext->mtx);
+    MosInitList(&pContext->clientQ);
+    MosInitList(&pContext->resumeQ);
+    MosInitQueue(&pContext->msgQ, pMsgQueueBuf, sizeof(MosContextMessage), msgQueueDepth);
+    MosInitThread(&pContext->thd, prio, ContextRunner, (s32)pContext, pStackbottom, stackSize);
 }
 
-void MosStartContext(MosContext * context) {
-    MosLockMutex(&context->mtx);
-    MosRunThread(&context->thd);
-    MosContextMessage msg = { .id = MosContextMessageID_StartClient, .client = NULL };
-    MosSendMessageToContext(context, &msg);
-    MosUnlockMutex(&context->mtx);
+void MosStartContext(MosContext * pContext) {
+    MosLockMutex(&pContext->mtx);
+    MosRunThread(&pContext->thd);
+    MosContextMessage msg = { .id = MosContextMessageID_StartClient, .pClient = NULL };
+    MosSendMessageToContext(pContext, &msg);
+    MosUnlockMutex(&pContext->mtx);
 }
 
-void MosStopContext(MosContext * context) {
-    MosContextMessage msg = { .id = MosContextMessageID_StopContext, .client = NULL };
-    MosSendMessageToContext(context, &msg);
+void MosStopContext(MosContext * pContext) {
+    MosContextMessage msg = { .id = MosContextMessageID_StopContext, .pClient = NULL };
+    MosSendMessageToContext(pContext, &msg);
 }
 
 void MosWaitForContextStop(MosContext * context) {
     MosWaitForThreadStop(&context->thd);
 }
 
-void MosStartClient(MosContext * context, MosClient * client, MosClientHandler * handler, void * priv_data) {
-    client->handler = handler;
-    client->priv_data = priv_data;
-    client->completed = true;
-    MosInitList(&client->resume_link);
-    MosLockMutex(&context->mtx);
-    MosAddToList(&context->client_q, &client->client_link);
-    if (MosGetThreadState(&context->thd, NULL) != MOS_THREAD_NOT_STARTED) {
-        MosContextMessage msg = { .id = MosContextMessageID_StartClient, .client = client };
-        MosSendMessageToContext(context, &msg);
+void MosStartClient(MosContext * pContext, MosClient * pClient, MosClientHandler * pHandler, void * pPrivData) {
+    pClient->pHandler = pHandler;
+    pClient->pPrivData = pPrivData;
+    pClient->completed = true;
+    MosInitList(&pClient->resumeLink);
+    MosLockMutex(&pContext->mtx);
+    MosAddToList(&pContext->clientQ, &pClient->clientLink);
+    if (MosGetThreadState(&pContext->thd, NULL) != MOS_THREAD_NOT_STARTED) {
+        MosContextMessage msg = { .id = MosContextMessageID_StartClient, .pClient = pClient };
+        MosSendMessageToContext(pContext, &msg);
     }
-    MosUnlockMutex(&context->mtx);
+    MosUnlockMutex(&pContext->mtx);
 }
 
-void MosStopClient(MosContext * context, MosClient * client) {
-    MosContextMessage msg = { .id = MosContextMessageID_StopClient, .client = client };
-    MosSendMessageToContext(context, &msg);
+void MosStopClient(MosContext * pContext, MosClient * pClient) {
+    MosContextMessage msg = { .id = MosContextMessageID_StopClient, .pClient = pClient };
+    MosSendMessageToContext(pContext, &msg);
 }
 
-MOS_ISR_SAFE static bool ContextTimerCallback(MosTimer * _tmr) {
-    MosContextTimer * tmr = container_of(_tmr, MosContextTimer, tmr);
-    return MosTrySendMessageToContext(tmr->context, &tmr->msg);
+MOS_ISR_SAFE static bool ContextTimerCallback(MosTimer * _pTmr) {
+    MosContextTimer * pTmr = container_of(_pTmr, MosContextTimer, tmr);
+    return MosTrySendMessageToContext(pTmr->pContext, &pTmr->msg);
 }
 
-void MosInitContextTimer(MosContextTimer * tmr, MosContext * context) {
-    tmr->context = context;
-    MosInitTimer(&tmr->tmr, ContextTimerCallback);
+void MosInitContextTimer(MosContextTimer * pTmr, MosContext * pContext) {
+    pTmr->pContext = pContext;
+    MosInitTimer(&pTmr->tmr, ContextTimerCallback);
 }

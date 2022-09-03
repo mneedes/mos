@@ -56,7 +56,7 @@ void MosRemoveCommand(MosShell * shell, MosShellCommand * cmd) {
 MosShellCommand * MosFindCommand(MosShell * shell, char * name) {
     MosLockMutex(&shell->mtx);
     MosList * list = &shell->cmd_list;
-    for (MosLink * elm = list->next; elm != list; elm = elm->next) {
+    for (MosLink * elm = list->pNext; elm != list; elm = elm->pNext) {
         MosShellCommand * cmd = container_of(elm, MosShellCommand, link);
         if (strcmp(name, cmd->name) == 0) {
             MosUnlockMutex(&shell->mtx);
@@ -71,7 +71,7 @@ void MosPrintCommandHelp(MosShell * shell) {
     MosList * list = &shell->cmd_list;
     MosLockMutex(&shell->mtx);
     MosLockTraceMutex();
-    for (MosLink * elm = list->next; elm != list; elm = elm->next) {
+    for (MosLink * elm = list->pNext; elm != list; elm = elm->pNext) {
         MosShellCommand * cmd = container_of(elm, MosShellCommand, link);
         MosPrintf("%s %s: %s\n", cmd->name, cmd->usage, cmd->desc);
     }
