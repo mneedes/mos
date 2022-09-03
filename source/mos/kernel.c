@@ -98,18 +98,6 @@ typedef union {
     };
 } Ticker;
 
-// Parameters
-static u8 IntPriMaskLow;
-static MosParams Params = {
-   .pVersion           = MOS_TO_STR(MOS_VERSION),
-   .threadPriHi        = 0,
-   .threadPriLow       = MOS_MAX_THREAD_PRIORITIES - 1,
-   .intPriHi           = 0,
-   .intPriLow          = 0,
-   .microSecPerTick    = MOS_MICRO_SEC_PER_TICK,
-   .fpSupportEn        = MOS_FP_LAZY_CONTEXT_SWITCHING
-};
-
 // Hooks
 static MosRawVPrintfHook * VPrintfHook = NULL;
 static MosSleepHook * pSleepHook = NULL;
@@ -137,6 +125,10 @@ static s32 MaxTickInterval;
 static u32 CyclesPerTick;
 static u32 MOS_USED CyclesPerMicroSec;
 
+// Interrupt low priority mask
+static u8 IntPriMaskLow;
+static u8 IntPriLow;
+
 // Idle thread stack and initial dummy PSP stack frame storage
 //  28 words is enough for a FP stack frame,
 //     add a stack frame for idle thread stack initialization.
@@ -144,10 +136,6 @@ static u8 MOS_STACK_ALIGNED IdleStack[112 + sizeof(StackFrame)];
 
 // Print buffer
 static char (*RawPrintBuffer)[MOS_PRINT_BUFFER_SIZE] = NULL;
-
-const MosParams * MosGetParams(void) {
-    return (const MosParams *) &Params;
-}
 
 void MosRegisterRawVPrintfHook(MosRawVPrintfHook * hook, char (*buffer)[MOS_PRINT_BUFFER_SIZE]) {
     VPrintfHook = hook;
@@ -725,27 +713,27 @@ void MosInit(void) {
     //   MOS requires that SysTick and PendSV share the same priority,
     MOS_REG(SHPR)(MOS_PENDSV_IRQ - 4) = 0xff;
     // Read back register to determine mask (and number of implemented priority bits)
-    u8 pri_mask = MOS_REG(SHPR)(MOS_PENDSV_IRQ - 4);
-    u8 nvic_pri_bits = 8 - __builtin_ctz(pri_mask);
+    u8 priMask = MOS_REG(SHPR)(MOS_PENDSV_IRQ - 4);
+    u8 nvicPriBits = 8 - __builtin_ctz(priMask);
     // If priority groups are enabled SysTick will be set to the
     //   2nd lowest priority group, and PendSV the lowest.
-    u32 pri_bits = 7 - MOS_GET_PRI_GROUP_NUM;
-    if (pri_bits > nvic_pri_bits) pri_bits = nvic_pri_bits;
-    u32 pri_low = (1 << pri_bits) - 1;
-    u8 pri_systick = pri_mask;
+    u32 priBits = 7 - MOS_GET_PRI_GROUP_NUM;
+    if (priBits > nvicPriBits) priBits = nvicPriBits;
+    IntPriLow = (1 << priBits) - 1;
+    u8 priSystick = priMask;
     // If there are sub-priority bits give SysTick higher sub-priority (one lower number).
-    if (pri_bits < nvic_pri_bits) {
+    if (priBits < nvicPriBits) {
         // Clear lowest set bit in mask
-        pri_systick = pri_mask - (1 << (8 - nvic_pri_bits));
+        priSystick = priMask - (1 << (8 - nvicPriBits));
     }
-    MOS_REG(SHPR)(MOS_SYSTICK_IRQ  - 4) = pri_systick;
-    IntPriMaskLow = pri_systick;
+    MOS_REG(SHPR)(MOS_SYSTICK_IRQ  - 4) = priSystick;
+    IntPriMaskLow = priSystick;
 #elif (MOS_ARCH_CAT == MOS_ARCH_ARM_CORTEX_M_BASE)
     // NOTE: BASEPRI isn't implemented on baseline architectures, hence IntPriMaskLow is not used
     // Set lowest preemption priority for SysTick and PendSV
     MOS_REG(SHPR3) = MOS_REG_VALUE(EXC_PRIORITY);
     // Only two implemented priority bits on baseline
-    u8 pri_low = 3;
+    IntPriLow = 3;
 #endif
 #if (MOS_ARM_AUTODETECT_EXC_RETURN == true)
     // Detect security mode and set Exception Return accordingly
@@ -762,8 +750,6 @@ void MosInit(void) {
     // Create idle thread
     MosInitAndRunThread((MosThread *) &IdleThread, MOS_MAX_THREAD_PRIORITIES,
                         IdleThreadEntry, 0, IdleStack, sizeof(IdleStack));
-    // Fill out remaining parameters
-    Params.intPriLow = pri_low;
 }
 
 //

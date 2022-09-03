@@ -16,6 +16,12 @@
 #include <mos/arch.h>
 #include <mos/list.h>
 
+enum {
+    MOS_THREAD_PRIORITY_HI = 0,
+    MOS_THREAD_PRIORITY_LO = MOS_MAX_THREAD_PRIORITIES - 1,
+    MOS_HW_FLOAT_SUPPORT   = MOS_FP_LAZY_CONTEXT_SWITCHING,
+};
+
 typedef enum {
     MOS_THREAD_NOT_STARTED,
     MOS_THREAD_RUNNING,
@@ -38,17 +44,6 @@ typedef void (MosRawVPrintfHook)(const char * pFmt, va_list args);
 typedef void (MosSleepHook)(void);
 typedef void (MosWakeHook)(void);
 typedef void (MosEventHook)(MosEvent evt, u32 val);
-
-// Microkernel Parameters
-typedef struct MosParams {
-    char              * pVersion;
-    MosThreadPriority   threadPriHi;
-    MosThreadPriority   threadPriLow;
-    u32                 intPriHi;
-    u32                 intPriLow;
-    u32                 microSecPerTick;
-    bool                fpSupportEn;
-} MosParams;
 
 // Mos Thread (opaque container)
 typedef struct MosThread {
@@ -99,10 +94,6 @@ void MosRegisterRawVPrintfHook(MosRawVPrintfHook * pHook, char (*buffer)[MOS_PRI
 void MosRegisterSleepHook(MosSleepHook * pHook);
 void MosRegisterWakeHook(MosWakeHook * pHook);
 void MosRegisterEventHook(MosEventHook * pHook);
-
-/// Obtain Microkernel parameters.
-/// This allows applications to have insight into the MOS microkernel configuration.
-const MosParams * MosGetParams(void);
 
 // Time and Timers
 
@@ -155,7 +146,7 @@ u8 * MosGetStackBottom(MosThread * pThd);
 u32 MosGetStackSize(MosThread * pThd);
 /// Set thread stack to the given stack with the given size.
 ///
-void MosSetStack(MosThread * _pThd, u8 * pStackBottom, u32 stackSize);
+void MosSetStack(MosThread * pThd, u8 * pStackBottom, u32 stackSize);
 /// Obtain current stack depth of currently running thread.
 ///
 static MOS_INLINE u32 MosGetStackDepth(u8 * pTop) {
@@ -227,8 +218,8 @@ bool MosWaitForSemOrTO(MosSem * pSem, u32 ticks);
 MOS_ISR_SAFE bool MosTrySem(MosSem * pSem);
 MOS_ISR_SAFE void MosIncrementSem(MosSem * pSem);
 
-// (2) A Signal is a ganged 32-bit binary semaphore
-//     Single-reader / multiple-writer
+// (2) A Signal is a set of 32 single-bit binary semaphores grouped in a u32 word
+//     Operation is single-reader / multiple-writer
 //     zero is returned for timeout or nothing polled
 //     Can be used for receiving data on multiple prioritized queues
 static MOS_INLINE void MosInitSignal(MosSignal * pSignal, u32 startValue) {
@@ -239,7 +230,7 @@ u32 MosWaitForSignalOrTO(MosSignal * pSignal, u32 ticks);
 MOS_ISR_SAFE u32 MosPollSignal(MosSignal * pSignal);
 MOS_ISR_SAFE void MosRaiseSignal(MosSignal * pSignal, u32 flags);
 
-/// Raise signal on a channel. A channel is one bit in the signal.
+/// Raise signal on a channel. A channel corresponds to one bit in a signal.
 ///
 MOS_ISR_SAFE static MOS_INLINE void MosRaiseSignalForChannel(MosSignal * pSignal, u16 channel) {
     MosRaiseSignal(pSignal, 1 << channel);

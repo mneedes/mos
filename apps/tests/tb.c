@@ -418,7 +418,7 @@ static bool ThreadTests(void) {
     //
     // Try some floating point
     //
-    if (MosGetParams()->fpSupportEn == true) {
+    if (MOS_HW_FLOAT_SUPPORT) {
         test_pass = true;
         MosPrint("FP Test\n");
         ClearHistogram();

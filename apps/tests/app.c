@@ -1,5 +1,5 @@
 
-// Copyright 2019-2021 Matthew C Needes
+// Copyright 2019-2022 Matthew C Needes
 // You may not use this source file except in compliance with the
 // terms and conditions contained within the LICENSE file (the
 // "License") included under this distribution.
@@ -32,8 +32,8 @@ int main() {
 
     // Init trace before calling any print functions
     MosInitTrace(TRACE_INFO | TRACE_ERROR | TRACE_FATAL, true);
-    MosPrintf("\nMaintainable OS (Version %s)\n", MosGetParams()->pVersion);
-    MosPrint("Copyright 2019-2021, Matthew Needes  All Rights Reserved\n");
+    MosPrintf("\nMaintainable OS (Version " MOS_VERSION_STRING ")\n");
+    MosPrint("Copyright 2019-2022, Matthew Needes  All Rights Reserved\n");
 
 #if 0
     if (CoreDebug->DHCSR & CoreDebug_DHCSR_C_DEBUGEN_Msk) {

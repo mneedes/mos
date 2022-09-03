@@ -1,5 +1,5 @@
 
-// Copyright 2020-2021 Matthew C Needes
+// Copyright 2020-2022 Matthew C Needes
 // You may not use this source file except in compliance with the
 // terms and conditions contained within the LICENSE file (the
 // "License") included under this distribution.
@@ -17,6 +17,7 @@
 #include <stdarg.h>
 
 #define MOS_VERSION            0.7
+#define MOS_VERSION_STRING     MOS_TO_STR(MOS_VERSION)
 
 #ifndef count_of
 #define count_of(x)            (sizeof(x) / sizeof(x[0]))
