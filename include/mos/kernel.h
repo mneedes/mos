@@ -45,13 +45,11 @@ typedef void (MosSleepHook)(void);
 typedef void (MosWakeHook)(void);
 typedef void (MosEventHook)(MosEvent evt, u32 val);
 
-// Mos Thread (opaque container)
+// Mos Thread
 typedef struct MosThread {
-    u32       rsvd[20];
-    u16       rsvd2;
-    u16       userData16;    /// 16-bit user data, sets to zero after thread initialization */
-    void    * pUserPtr;      /// User data pointer, set to NULL after thread initialization */
-    s32       refCnt;        /// Reference counter, used by thread_heap.c */
+    u32       rsvd[21];
+    void    * pUser;         /// User data pointer, set to NULL after thread initialization
+    s32       refCnt;        /// Reference counter, used by thread_heap.c
 } MosThread;
 
 // Blocking mutex supporting recursion

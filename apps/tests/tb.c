@@ -70,11 +70,11 @@ static u32 queue[4];
 static MosQueue TestQueue;
 
 bool IsStopRequested() {
-    return (bool)MosGetThreadPtr()->userData16;
+    return (bool)MosGetThreadPtr()->pUser;
 }
 
 void RequestThreadStop(MosThread * pThd) {
-    pThd->userData16 = 1;
+    pThd->pUser = (void *)1;
 }
 
 // Induces a crash

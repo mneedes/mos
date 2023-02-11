@@ -63,8 +63,8 @@ typedef enum {
 typedef struct Thread {
     u32                 sp;
     u32                 mtxCnt;
-    error_t             errNo;
     ThreadState         state;
+    error_t             errNo;
     MosLink             runLink;
     MosLinkHet          tmrLink;
     MosList             stopQ;
@@ -82,7 +82,7 @@ typedef struct Thread {
     const char        * pName;
     s8                  secureContext;
     s8                  secureContextNew;
-    u16                 userData16;
+    u16                 pad2;
     void              * pUser;
     u32                 refCnt;
 } Thread;
@@ -366,7 +366,6 @@ InitThread(Thread * pThd, MosThreadPriority pri, MosThreadEntry * pEntry, s32 ar
     pThd->pName = "";
     pThd->secureContext    = MOS_DEFAULT_SECURE_CONTEXT;
     pThd->secureContextNew = MOS_DEFAULT_SECURE_CONTEXT;
-    pThd->userData16 = 0;
     pThd->pUser = NULL;
     // ref_cnt is not initialized here, it is manipulated externally
 }
