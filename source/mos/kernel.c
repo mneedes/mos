@@ -14,6 +14,11 @@
 #include <mos/internal/security.h>
 #include <errno.h>
 
+// TODO: "Better Fit" Allocator improvement.
+// TODO: Thread-local storage
+// TODO: Consolidate "TO" APIs to single API function.
+// TODO: Logging
+
 // TODO: Hooks for other timers such as LPTIM ?
 // TODO: auto tick startup?
 // TODO: smaller init for term handlers
@@ -907,7 +912,7 @@ static u32 MOS_USED Scheduler(u32 sp) {
     }
     if (runThd) {
         // Round-robin
-        if (!mosIsLastElement(&RunQueues[runThd->pri], &runThd->runLink))
+        if (!mosIsAtEndOfList(&RunQueues[runThd->pri], &runThd->runLink))
             mosMoveToEndOfList(&RunQueues[runThd->pri], &runThd->runLink);
     } else runThd = &IdleThread;
     if (MOS_ENABLE_SPLIM_SUPPORT) {
@@ -970,7 +975,7 @@ void mosInitSem(MosSem * pSem, u32 startValue) {
 //   Scheduler must be locked out during reservation.
 //   Scheduler is invoked to change the context.
 void MosReserveSecureContext(void) {
-    MosWaitForSem(&SecureContextCounter);
+    mosWaitForSem(&SecureContextCounter);
     LockScheduler(IntPriMaskLow);
     u32 newContext = __builtin_ctz(SecureContextReservation);
     pRunningThread->secureContextNew = newContext;
@@ -981,7 +986,7 @@ void MosReserveSecureContext(void) {
 }
 
 bool MosTryReserveSecureContext(void) {
-    if (MosTrySem(&SecureContextCounter)) {
+    if (mosTrySem(&SecureContextCounter)) {
         LockScheduler(IntPriMaskLow);
         u32 newContext = __builtin_ctz(SecureContextReservation);
         pRunningThread->secureContextNew = newContext;
@@ -1004,7 +1009,7 @@ void MosReleaseSecureContext(void) {
     // Yield so that stack pointer is made available for next thread.
     YieldThread();
     UnlockScheduler();
-    MosIncrementSem(&SecureContextCounter);
+    mosIncrementSem(&SecureContextCounter);
 }
 
 #endif

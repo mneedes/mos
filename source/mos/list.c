@@ -17,21 +17,21 @@ MOS_ISR_SAFE void mosInitPmLink(MosPmLink * pLink, u32 type) {
     pLink->type = type;
 }
 
-MOS_ISR_SAFE void mosAddToEndOfList(MosList * pList, MosList * pElmAdd) {
+MOS_ISR_SAFE void mosAddToEndOfList(MosList * pList, MosLink * pElmAdd) {
     pElmAdd->pPrev = pList->pPrev;
     pElmAdd->pNext = pList;
     pList->pPrev->pNext = pElmAdd;
     pList->pPrev = pElmAdd;
 }
 
-MOS_ISR_SAFE void mosAddToListAfter(MosList * pList, MosList * pElmAdd) {
+MOS_ISR_SAFE void mosAddToListAfter(MosList * pList, MosLink * pElmAdd) {
     pElmAdd->pPrev = pList;
     pElmAdd->pNext = pList->pNext;
     pList->pNext->pPrev = pElmAdd;
     pList->pNext = pElmAdd;
 }
 
-MOS_ISR_SAFE void mosRemoveFromList(MosList * pElmRem) {
+MOS_ISR_SAFE void mosRemoveFromList(MosLink * pElmRem) {
     pElmRem->pNext->pPrev = pElmRem->pPrev;
     pElmRem->pPrev->pNext = pElmRem->pNext;
     // For mosIsElementOnList() and safety
@@ -39,7 +39,7 @@ MOS_ISR_SAFE void mosRemoveFromList(MosList * pElmRem) {
     pElmRem->pNext = pElmRem;
 }
 
-MOS_ISR_SAFE void mosMoveToEndOfList(MosList * pElmExist, MosList * pElmMove) {
+MOS_ISR_SAFE void mosMoveToEndOfList(MosList * pElmExist, MosLink * pElmMove) {
     // Remove element
     pElmMove->pNext->pPrev = pElmMove->pPrev;
     pElmMove->pPrev->pNext = pElmMove->pNext;
