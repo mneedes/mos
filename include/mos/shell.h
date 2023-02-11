@@ -1,5 +1,5 @@
 
-// Copyright 2019-2021 Matthew C Needes
+// Copyright 2019-2023 Matthew C Needes
 // You may not use this source file except in compliance with the
 // terms and conditions contained within the LICENSE file (the
 // "License") included under this distribution.
@@ -56,17 +56,17 @@ typedef enum {
 } MosCommandResult;
 
 // Command shell support
-void MosInitShell(MosShell * shell, u16 cmd_buffer_len, u16 max_cmd_line_size,
+void mosInitShell(MosShell * shell, u16 cmd_buffer_len, u16 max_cmd_line_size,
                   void * cmd_buffer, bool isSerialConsole);
-void MosAddCommand(MosShell * shell, MosShellCommand * cmd);
-void MosRemoveCommand(MosShell * shell, MosShellCommand * cmd);
-MosShellCommand * MosFindCommand(MosShell * shell, char * name);
-void MosPrintCommandHelp(MosShell * shell);
+void mosAddCommand(MosShell * shell, MosShellCommand * cmd);
+void mosRemoveCommand(MosShell * shell, MosShellCommand * cmd);
+MosShellCommand * mosFindCommand(MosShell * shell, char * name);
+void mosPrintCommandHelp(MosShell * shell);
 //  Parser support quotes and escape character '\'
-MosCommandResult MosGetNextCommand(char * prompt, char * cmd, u32 max_cmd_len);
+MosCommandResult mosGetNextCommand(char * prompt, char * cmd, u32 max_cmd_len);
 //  NOTE: MosParseCmd modifies args in place like strtok_r()
-u32 MosParseCommand(char * argv[], char * args, u32 max_argc);
-MosCommandStatus MosRunCommand(MosShell * shell, char * cmd_buf_in);
-void MosRunShell(MosShell * shell);
+u32 mosParseCommand(char * argv[], char * args, u32 max_argc);
+MosCommandStatus mosRunCommand(MosShell * shell, char * cmd_buf_in);
+void mosRunShell(MosShell * shell);
 
 #endif

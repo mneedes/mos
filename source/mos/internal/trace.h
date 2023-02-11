@@ -9,7 +9,7 @@
 #ifndef _MOS_INTERNAL_TRACE_H_
 #define _MOS_INTERNAL_TRACE_H_
 
-void _MosPrintCh(char ch);
-u32 _MosPrint(char * str);
+void _mosPrintCh(char ch);
+u32 _mosPrint(char * str);
 
 #endif

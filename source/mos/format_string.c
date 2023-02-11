@@ -1,5 +1,5 @@
 
-// Copyright 2021-2022 Matthew C Needes
+// Copyright 2021-2023 Matthew C Needes
 // You may not use this source file except in compliance with the
 // terms and conditions contained within the LICENSE file (the
 // "License") included under this distribution.
@@ -119,7 +119,7 @@ static u32 Itoa(char * restrict pOut, State * pState, s32 in) {
     return cnt;
 }
 
-u32 MosItoa(char * restrict pOut, s32 input, u16 base, bool isUpper,
+u32 mosItoa(char * restrict pOut, s32 input, u16 base, bool isUpper,
             u16 minWidth, char padChar, bool isSigned) {
     State format = {
         .base = base, .isUpper = isUpper, .minWidth = minWidth,
@@ -310,7 +310,7 @@ WriteBuf(char * restrict * pOut, const char * restrict pIn, s32 len, s32 * pRem)
 }
 
 s32
-MosVSNPrintf(char * restrict pDest, mos_size size, const char * restrict pFmt, va_list args) {
+mosVSNPrintf(char * restrict pDest, mos_size size, const char * restrict pFmt, va_list args) {
     const char * restrict pCh = pFmt;
     char * restrict pOut = pDest;
     s32 rem = (s32)--size;
@@ -452,10 +452,10 @@ MosVSNPrintf(char * restrict pDest, mos_size size, const char * restrict pFmt, v
 }
 
 s32
-MosSNPrintf(char * restrict pDest, mos_size size, const char * restrict pFmt, ...) {
+mosSNPrintf(char * restrict pDest, mos_size size, const char * restrict pFmt, ...) {
     va_list args;
     va_start(args, pFmt);
-    s32 cnt = MosVSNPrintf(pDest, size, pFmt, args);
+    s32 cnt = mosVSNPrintf(pDest, size, pFmt, args);
     va_end(args);
     return cnt;
 }

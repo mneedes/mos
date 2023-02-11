@@ -24,12 +24,12 @@ typedef struct {
     u16       alignMask;
 } MosPool;
 
-void MosInitPool(MosPool * pPool, MosHeap * pHeap, u32 blocksPerSlab,
+void mosInitPool(MosPool * pPool, MosHeap * pHeap, u32 blocksPerSlab,
                  u32 blockSize, u16 alignment);
-u32 MosAddSlabsToPool(MosPool * pPool, u32 maxToAdd);
-u32 MosFreeUnallocatedSlabs(MosPool * pPool, u32 maxToRemove);
+u32 mosAddSlabsToPool(MosPool * pPool, u32 maxToAdd);
+u32 mosFreeUnallocatedSlabs(MosPool * pPool, u32 maxToRemove);
 
-MOS_ISR_SAFE void * MosAllocFromSlab(MosPool * pPool);
-MOS_ISR_SAFE void MosFreeToSlab(MosPool * pPool, void * pBlock);
+MOS_ISR_SAFE void * mosAllocFromSlab(MosPool * pPool);
+MOS_ISR_SAFE void mosFreeToSlab(MosPool * pPool, void * pBlock);
 
 #endif

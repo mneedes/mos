@@ -1,5 +1,5 @@
 
-// Copyright 2019-2021 Matthew C Needes
+// Copyright 2019-2023 Matthew C Needes
 // You may not use this source file except in compliance with the
 // terms and conditions contained within the LICENSE file (the
 // "License") included under this distribution.
@@ -20,11 +20,11 @@ typedef struct {
 } MosFIFO32;
 
 // Non-blocking FIFO
-MOS_ISR_SAFE void MosInitFIFO32(MosFIFO32 * fifo, u32 * buf, u32 len);
-MOS_ISR_SAFE bool MosWriteToFIFO32(MosFIFO32 * fifo, u32 data);
-MOS_ISR_SAFE bool MosReadFromFIFO32(MosFIFO32 * fifo, u32 * data);
+MOS_ISR_SAFE void mosInitFIFO32(MosFIFO32 * fifo, u32 * buf, u32 len);
+MOS_ISR_SAFE bool mosWriteToFIFO32(MosFIFO32 * fifo, u32 data);
+MOS_ISR_SAFE bool mosReadFromFIFO32(MosFIFO32 * fifo, u32 * data);
 
 // Read head without removing entry
-MOS_ISR_SAFE bool MosSnoopFIFO32(MosFIFO32 * fifo, u32 * data);
+MOS_ISR_SAFE bool mosSnoopFIFO32(MosFIFO32 * fifo, u32 * data);
 
 #endif

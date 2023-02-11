@@ -1,5 +1,5 @@
 
-// Copyright 2020-2022 Matthew C Needes
+// Copyright 2020-2023 Matthew C Needes
 // You may not use this source file except in compliance with the
 // terms and conditions contained within the LICENSE file (the
 // "License") included under this distribution.
@@ -12,45 +12,43 @@
 
 #include <mos/defs.h>
 
-// List descriptor and link*
-//   (*for homogeneous pLists)
+// Link for homogeneous lists
+typedef struct MosLink {
+    struct MosLink * pPrev;
+    struct MosLink * pNext;
+} MosLink;
 
-typedef struct MosList {
-    struct MosList * pPrev;
-    struct MosList * pNext;
-} MosList;
+// List descriptor is a link
+typedef MosLink MosList;
 
-typedef MosList MosLink;
-
-// List link for heterogeneous pLists
+// Link for polymorphic lists
 typedef struct {
     MosLink link;
     u32     type;
-} MosLinkHet;
+} MosPmLink;
 
-MOS_ISR_SAFE void MosInitList(MosList * pList);
-MOS_ISR_SAFE void MosInitLinkHet(MosLinkHet * pElm, u32 type);
-MOS_ISR_SAFE void MosAddToList(MosList * pList, MosList * pElmAdd);
+MOS_ISR_SAFE void mosInitList(MosList * pList);
+MOS_ISR_SAFE void mosInitPmLink(MosPmLink * pElm, u32 type);
+MOS_ISR_SAFE void mosAddToEndOfList(MosList * pList, MosList * pElmAdd);
 MOS_ISR_SAFE static MOS_INLINE void
-MosAddToListBefore(MosList * pElmExist, MosList * pElmAdd) {
+mosAddToListBefore(MosList * pElmExist, MosList * pElmAdd) {
     // AddToList <=> AddToListBefore if used on element rather than pList
-    MosAddToList(pElmExist, pElmAdd);
+    mosAddToEndOfList(pElmExist, pElmAdd);
 }
-MOS_ISR_SAFE void MosAddToListAfter(MosList * pElmExist, MosList * pElmAdd);
-MOS_ISR_SAFE static MOS_INLINE void
-MosAddToFrontOfList(MosList * pList, MosList * pElmAdd) {
+MOS_ISR_SAFE void mosAddToListAfter(MosList * pElmExist, MosList * pElmAdd);
+MOS_ISR_SAFE static MOS_INLINE void mosAddToFrontOfList(MosList * pList, MosList * pElmAdd) {
     // AddToListAfter <=> AddToFrontOfList if used on pList rather than element
-    MosAddToListAfter(pList, pElmAdd);
+    mosAddToListAfter(pList, pElmAdd);
 }
-MOS_ISR_SAFE void MosRemoveFromList(MosList * pElmRem);
-MOS_ISR_SAFE void MosMoveToEndOfList(MosList * pElmExist, MosList * pElmMove);
-MOS_ISR_SAFE static MOS_INLINE bool MosIsLastElement(MosList * pList, MosList * pElm) {
+MOS_ISR_SAFE void mosRemoveFromList(MosList * pElmRem);
+MOS_ISR_SAFE void mosMoveToEndOfList(MosList * pElmExist, MosList * pElmMove);
+MOS_ISR_SAFE static MOS_INLINE bool mosIsLastElement(MosList * pList, MosList * pElm) {
     return (pList->pPrev == pElm);
 }
-MOS_ISR_SAFE static MOS_INLINE bool MosIsListEmpty(MosList * pList) {
+MOS_ISR_SAFE static MOS_INLINE bool mosIsListEmpty(MosList * pList) {
     return (pList->pPrev == pList);
 }
-MOS_ISR_SAFE static MOS_INLINE bool MosIsOnList(MosList * pElm) {
+MOS_ISR_SAFE static MOS_INLINE bool mosIsOnList(MosList * pElm) {
     return (pElm->pPrev != pElm);
 }
 

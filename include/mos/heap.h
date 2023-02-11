@@ -1,5 +1,5 @@
 
-// Copyright 2019-2022 Matthew C Needes
+// Copyright 2019-2023 Matthew C Needes
 // You may not use this source file except in compliance with the
 // terms and conditions contained within the LICENSE file (the
 // "License") included under this distribution.
@@ -31,23 +31,23 @@ typedef struct {
 
 /// Initialize heap with an optional memory pool.
 ///  Set pPool to NULL to defer adding initial pool.
-void MosInitHeap(MosHeap * pHeap, u16 alignment, u8 * pPool, u32 poolSize);
+void mosInitHeap(MosHeap * pHeap, u16 alignment, u8 * pPool, u32 poolSize);
 /// Add memory pool to initialized heap
 ///
-void MosAddHeapPool(MosHeap * pHeap, u8 * pPool, u32 poolSize);
+void mosAddHeapPool(MosHeap * pHeap, u8 * pPool, u32 poolSize);
 /// Allocate a block from the heap of a given size.
 /// Returns NULL on failure.
-void * MosAlloc(MosHeap * pHeap, u32 size);
+void * mosAlloc(MosHeap * pHeap, u32 size);
 /// Reallocate a block from the heap to the given new size, preserving existing
 //  data (truncation occurs only if size decreases). If call fails existing block will
 //  NOT be freed and NULL will be returned.
-void * MosReAlloc(MosHeap * pHeap, void * pBlock, u32 newSize);
+void * mosRealloc(MosHeap * pHeap, void * pBlock, u32 newSize);
 /// TODO: Reallocate a block from the heap to the given size, only guaranteeing data
-/// preservation if the block size is decreased. If call fails existing block will NOT
+/// preservation if the block size is the same or smaller. If call fails existing block will NOT
 /// be freed and NULL will be returned.
-void * MosExchangeBlock(MosHeap * pHeap, void * pBlock, u32 newSize);
+void * mosExchangeBlock(MosHeap * pHeap, void * pBlock, u32 newSize);
 /// Return block back to the heap.
 ///
-void MosFree(MosHeap * pHeap, void * pBlock);
+void mosFree(MosHeap * pHeap, void * pBlock);
 
 #endif

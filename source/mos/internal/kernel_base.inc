@@ -34,7 +34,7 @@ void MOS_NAKED PendSV_Handler(void) {
     );
 }
 
-void MosLockMutex(MosMutex * pMtx) {
+void mosLockMutex(MosMutex * pMtx) {
     LockScheduler(IntPriMaskLow);
     if (pMtx->pOwner == (MosThread *)pRunningThread) {
         pMtx->depth++;
@@ -68,7 +68,7 @@ void MosLockMutex(MosMutex * pMtx) {
     UnlockScheduler();
 }
 
-bool MosTryMutex(MosMutex * pMtx) {
+bool mosTryMutex(MosMutex * pMtx) {
     LockScheduler(IntPriMaskLow);
     asm volatile ( "dsb" );
     if (pMtx->pOwner == NO_SUCH_THREAD) {
@@ -85,7 +85,7 @@ bool MosTryMutex(MosMutex * pMtx) {
     return false;
 }
 
-void MosUnlockMutex(MosMutex * pMtx) {
+void mosUnlockMutex(MosMutex * pMtx) {
     LockScheduler(IntPriMaskLow);
     asm volatile ( "dmb" );
     if (--pMtx->depth == 0) {
@@ -112,7 +112,7 @@ void MosUnlockMutex(MosMutex * pMtx) {
     UnlockScheduler();
 }
 
-void MosWaitForSem(MosSem * pSem) {
+void mosWaitForSem(MosSem * pSem) {
     _MosDisableInterrupts();
     while (pSem->value == 0) {
         // Can directly manipulate run queues here since scheduler
@@ -130,7 +130,7 @@ void MosWaitForSem(MosSem * pSem) {
     _MosEnableInterrupts();
 }
 
-bool MosWaitForSemOrTO(MosSem * pSem, u32 ticks) {
+bool mosWaitForSemOrTO(MosSem * pSem, u32 ticks) {
     SetTimeout(ticks);
     _MosDisableInterrupts();
     while (pSem->value == 0) {
@@ -152,7 +152,7 @@ bool MosWaitForSemOrTO(MosSem * pSem, u32 ticks) {
     return true;
 }
 
-MOS_ISR_SAFE bool MosTrySem(MosSem * pSem) {
+MOS_ISR_SAFE bool mosTrySem(MosSem * pSem) {
     bool success = true;
     u32 mask = MosDisableInterrupts();
     if (pSem->value > 0) {
@@ -165,7 +165,7 @@ MOS_ISR_SAFE bool MosTrySem(MosSem * pSem) {
     return success;
 }
 
-MOS_ISR_SAFE void MosIncrementSem(MosSem * pSem) {
+MOS_ISR_SAFE void mosIncrementSem(MosSem * pSem) {
     u32 mask = MosDisableInterrupts();
     pSem->value++;
     asm volatile ( "dmb" );
@@ -182,7 +182,7 @@ MOS_ISR_SAFE void MosIncrementSem(MosSem * pSem) {
     MosEnableInterrupts(mask);
 }
 
-u32 MosWaitForSignal(MosSem * pSem) {
+u32 mosWaitForSignal(MosSem * pSem) {
     _MosDisableInterrupts();
     while (pSem->value == 0) {
         // Can directly manipulate run queues here since scheduler
@@ -202,7 +202,7 @@ u32 MosWaitForSignal(MosSem * pSem) {
     return mask;
 }
 
-u32 MosWaitForSignalOrTO(MosSem * pSem, u32 ticks) {
+u32 mosWaitForSignalOrTO(MosSem * pSem, u32 ticks) {
     SetTimeout(ticks);
     _MosDisableInterrupts();
     while (pSem->value == 0) {
@@ -225,7 +225,7 @@ u32 MosWaitForSignalOrTO(MosSem * pSem, u32 ticks) {
     return mask;
 }
 
-MOS_ISR_SAFE u32 MosPollSignal(MosSem * pSem) {
+MOS_ISR_SAFE u32 mosPollSignal(MosSem * pSem) {
     u32 mask = MosDisableInterrupts();
     u32 poll_mask = pSem->value;
     pSem->value = 0;
@@ -234,7 +234,7 @@ MOS_ISR_SAFE u32 MosPollSignal(MosSem * pSem) {
     return poll_mask;
 }
 
-MOS_ISR_SAFE void MosRaiseSignal(MosSem * pSem, u32 flags) {
+MOS_ISR_SAFE void mosRaiseSignal(MosSem * pSem, u32 flags) {
     u32 mask = MosDisableInterrupts();
     pSem->value |= flags;
     asm volatile ( "dmb" );

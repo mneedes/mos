@@ -1,5 +1,5 @@
 
-// Copyright 2021-2022 Matthew C Needes
+// Copyright 2021-2023 Matthew C Needes
 // You may not use this source file except in compliance with the
 // terms and conditions contained within the LICENSE file (the
 // "License") included under this distribution.
@@ -101,84 +101,84 @@ typedef struct {
 
 /// Initialize context thread and data structures.
 /// Queue depth should be ample enough to allow the contexts to initialize.
-MOS_CLIENT_UNSAFE void MosInitContext(MosContext * pContext, MosThreadPriority prio, u8 * pStackBottom,
+MOS_CLIENT_UNSAFE void mosInitContext(MosContext * pContext, MosThreadPriority prio, u8 * pStackBottom,
                                           u32 stackSize, MosContextMessage * pMsgQueueBuf,
                                           u32 msgQueueDepth);
 /// Start context thread and client message processing.
 ///
-MOS_CLIENT_UNSAFE void MosStartContext(MosContext * pContext);
+MOS_CLIENT_UNSAFE void mosStartContext(MosContext * pContext);
 /// Broadcast stop message to all clients to stop context and terminate context thread.
 /// \note Must not be called by a client.
-MOS_CLIENT_UNSAFE void MosStopContext(MosContext * pContext);
+MOS_CLIENT_UNSAFE void mosStopContext(MosContext * pContext);
 /// Wait until a context thread is finished.
 /// \note Must not be called by a client.
-MOS_CLIENT_UNSAFE void MosWaitForContextStop(MosContext * pContext);
+MOS_CLIENT_UNSAFE void mosWaitForContextStop(MosContext * pContext);
 /// Start an individual client and attach it to the context.
 ///  \note Message processing won't start until MosStartContext() is invoked. If clients are
 ///  started after MosStartContext() they will be sent start messages individually.
 ///  \note Must not be called by a client.
-MOS_CLIENT_UNSAFE void MosStartClient(MosContext * pContext, MosClient * pClient,
+MOS_CLIENT_UNSAFE void mosStartClient(MosContext * pContext, MosClient * pClient,
                                          MosClientHandler * pHandler, void * pPrivData);
 /// Send a stop client message.
 /// \note A context will not terminate until a _broadcast_ stop message is sent
 /// to the context. The Client will remain attached to the context until the _broadcast_
 /// stop message is sent.
 /// \note Must not be called by a client.
-MOS_CLIENT_UNSAFE void MosStopClient(MosContext * pContext, MosClient * pClient);
+MOS_CLIENT_UNSAFE void mosStopClient(MosContext * pContext, MosClient * pClient);
 /// Set a context message intended for a given client with a given message ID.
 ///
 MOS_ISR_SAFE MOS_INLINE void
-MosSetContextMessage(MosContextMessage * pMsg, MosClient * pClient, MosContextMessageID id) {
+mosSetContextMessage(MosContextMessage * pMsg, MosClient * pClient, MosContextMessageID id) {
     pMsg->pClient = pClient;
     pMsg->id = id;
 }
 /// Set a context message intended for all clients with a given message ID.
 ///
 MOS_ISR_SAFE MOS_INLINE void
-MosSetContextBroadcastMessage(MosContextMessage * pMsg, MosContextMessageID id) {
+mosSetContextBroadcastMessage(MosContextMessage * pMsg, MosContextMessageID id) {
     pMsg->pClient = NULL;
     pMsg->id = id;
 }
 /// Set pointer to message private data.
 ///
 MOS_ISR_SAFE MOS_INLINE void
-MosSetContextMessageData(MosContextMessage * pMsg, void * pData) {
+mosSetContextMessageData(MosContextMessage * pMsg, void * pData) {
     pMsg->pData = pData;
 }
 /// Send a message to a context if space in queue is available.
 /// \note May safely be used in any context, recommended for inter-client messaging within
 /// the same context.
 MOS_ISR_SAFE MOS_INLINE bool
-MosTrySendMessageToContext(MosContext * pContext, MosContextMessage * pMsg) {
-    return MosTrySendToQueue(&pContext->msgQ, pMsg);
+mosTrySendMessageToContext(MosContext * pContext, MosContextMessage * pMsg) {
+    return mosTrySendToQueue(&pContext->msgQ, pMsg);
 }
 /// Send a inter-context message (external).
 /// \note May safely be used only between different contexts, or from the outside world to a context.
-MOS_INLINE void MosSendMessageToContext(MosContext * pContext, MosContextMessage * pMsg) {
-    MosAssert(MosGetThreadPtr() != &pContext->thd);
-    MosSendToQueue(&pContext->msgQ, pMsg);
+MOS_INLINE void mosSendMessageToContext(MosContext * pContext, MosContextMessage * pMsg) {
+    mosAssert(MosGetThreadPtr() != &pContext->thd);
+    mosSendToQueue(&pContext->msgQ, pMsg);
 }
 
 /* Context timer messages */
 
 /// Initialize a mosTimer for use by a context.
 ///
-void MosInitContextTimer(MosContextTimer * pTmr, MosContext * pContext);
+void mosInitContextTimer(MosContextTimer * pTmr, MosContext * pContext);
 /// Set a context timer.
 ///
-MOS_INLINE void MosSetContextTimer(MosContextTimer * pTmr, u32 ticks, MosContextMessage * pMsg) {
+MOS_INLINE void mosSetContextTimer(MosContextTimer * pTmr, u32 ticks, MosContextMessage * pMsg) {
     pTmr->msg = *pMsg;
-    MosSetTimer(&pTmr->tmr, ticks, NULL);
+    mosSetTimer(&pTmr->tmr, ticks, NULL);
 }
 /// Cancel a context timer.
 ///
-MOS_INLINE void MosCancelContextTimer(MosContextTimer * pTmr) {
-    MosCancelTimer(&pTmr->tmr);
+MOS_INLINE void mosCancelContextTimer(MosContextTimer * pTmr) {
+    mosCancelTimer(&pTmr->tmr);
 }
 /// Restart a context timer.
 ///
-MOS_INLINE void MosResetContextTimer(MosContextTimer * pTmr) {
-    MosResetTimer(&pTmr->tmr);
+MOS_INLINE void mosResetContextTimer(MosContextTimer * pTmr) {
+    mosResetTimer(&pTmr->tmr);
 }
 
 #endif

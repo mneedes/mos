@@ -55,8 +55,8 @@ static void MOS_USED BlockOnMutex(MosMutex * pMtx) {
         if (pRunningThread->pri < pThd->pri) {
             pThd->pri = pRunningThread->pri;
             if (pThd->state == THREAD_RUNNABLE) {
-                MosRemoveFromList(&pThd->runLink);
-                MosAddToFrontOfList(&RunQueues[pThd->pri], &pThd->runLink);
+                mosRemoveFromList(&pThd->runLink);
+                mosAddToFrontOfList(&RunQueues[pThd->pri], &pThd->runLink);
             }
         }
         pRunningThread->pBlockedOn = pMtx;
@@ -66,7 +66,7 @@ static void MOS_USED BlockOnMutex(MosMutex * pMtx) {
     UnlockScheduler();
 }
 
-void MOS_NAKED MosLockMutex(MosMutex * pMtx) {
+void MOS_NAKED mosLockMutex(MosMutex * pMtx) {
     MOS_USED_PARAM(pMtx);
     asm volatile (
         "ldr r1, _ThreadID\n"
@@ -106,7 +106,7 @@ void MOS_NAKED MosLockMutex(MosMutex * pMtx) {
     );
 }
 
-bool MOS_NAKED MosTryMutex(MosMutex * pMtx) {
+bool MOS_NAKED mosTryMutex(MosMutex * pMtx) {
     MOS_USED_PARAM(pMtx);
     asm volatile (
         "ldr r1, _ThreadID2\n"
@@ -147,24 +147,24 @@ static void MOS_USED ReleaseMutex(MosMutex * pMtx) {
             pRunningThread->pri != pRunningThread->nomPri) {
         // Reset priority inheritance
         pRunningThread->pri = pRunningThread->nomPri;
-        MosRemoveFromList(&pRunningThread->runLink);
-        MosAddToFrontOfList(&RunQueues[pRunningThread->pri],
+        mosRemoveFromList(&pRunningThread->runLink);
+        mosAddToFrontOfList(&RunQueues[pRunningThread->pri],
                                 &pRunningThread->runLink);
     }
-    if (!MosIsListEmpty(&pMtx->pendQ)) {
+    if (!mosIsListEmpty(&pMtx->pendQ)) {
         MosLink * pElm = pMtx->pendQ.pNext;
         Thread * pThd = container_of(pElm, Thread, runLink);
-        MosRemoveFromList(pElm);
-        MosAddToFrontOfList(&RunQueues[pThd->pri], pElm);
-        if (MosIsOnList(&pThd->tmrLink.link))
-            MosRemoveFromList(&pThd->tmrLink.link);
+        mosRemoveFromList(pElm);
+        mosAddToFrontOfList(&RunQueues[pThd->pri], pElm);
+        if (mosIsOnList(&pThd->tmrLink.link))
+            mosRemoveFromList(&pThd->tmrLink.link);
         SetThreadState(pThd, THREAD_RUNNABLE);
         if (pThd->pri < pRunningThread->pri) YieldThread();
     }
     UnlockScheduler();
 }
 
-void MOS_NAKED MosUnlockMutex(MosMutex * pMtx) {
+void MOS_NAKED mosUnlockMutex(MosMutex * pMtx) {
     MOS_USED_PARAM(pMtx);
     asm volatile (
         "dmb\n"
@@ -187,7 +187,7 @@ void MOS_NAKED MosUnlockMutex(MosMutex * pMtx) {
 
 static void MOS_USED BlockOnSem(MosSem * pSem) {
     // Lock in case pSemaphore is about to be given by another context.
-    _MosDisableInterrupts();
+    _mosDisableInterrupts();
     // Retry (don't block) if count has since incremented
     if (pSem->value == 0) {
         // Can directly manipulate run queues here since scheduler
@@ -197,10 +197,10 @@ static void MOS_USED BlockOnSem(MosSem * pSem) {
         pRunningThread->state = THREAD_WAIT_FOR_SEM;
         YieldThread();
     }
-    _MosEnableInterrupts();
+    _mosEnableInterrupts();
 }
 
-void MOS_NAKED MosWaitForSem(MosSem * pSem) {
+void MOS_NAKED mosWaitForSem(MosSem * pSem) {
     MOS_USED_PARAM(pSem);
     asm volatile (
       "RetryTS:\n"
@@ -224,7 +224,7 @@ void MOS_NAKED MosWaitForSem(MosSem * pSem) {
 static bool MOS_USED BlockOnSemOrTO(MosSem * pSem) {
     bool timeout = false;
     // Lock in case pSemaphore is about to be given by another context.
-    _MosDisableInterrupts();
+    _mosDisableInterrupts();
     // Immediately retry (don't block) if count has since incremented
     if (pSem->value == 0) {
         // Can directly manipulate run queues here since scheduler
@@ -236,13 +236,13 @@ static bool MOS_USED BlockOnSemOrTO(MosSem * pSem) {
         YieldThread();
         // Must enable interrupts before checking timeout to allow pend
         // Barrier ensures that pend occurs before checking timeout.
-        _MosEnableInterruptsWithBarrier();
+        _mosEnableInterruptsWithBarrier();
         if (pRunningThread->timedOut) timeout = true;
-    } else _MosEnableInterrupts();
+    } else _mosEnableInterrupts();
     return timeout;
 }
 
-bool MOS_NAKED MosWaitForSemOrTO(MosSem * pSem, u32 ticks) {
+bool MOS_NAKED mosWaitForSemOrTO(MosSem * pSem, u32 ticks) {
     MOS_USED_PARAM(pSem);
     MOS_USED_PARAM(ticks);
     asm volatile (
@@ -272,7 +272,7 @@ bool MOS_NAKED MosWaitForSemOrTO(MosSem * pSem, u32 ticks) {
     );
 }
 
-MOS_ISR_SAFE bool MOS_NAKED MosTrySem(MosSem * pSem) {
+MOS_ISR_SAFE bool MOS_NAKED mosTrySem(MosSem * pSem) {
     MOS_USED_PARAM(pSem);
     asm volatile (
       "RetryTRS:\n"
@@ -297,18 +297,18 @@ MOS_ISR_SAFE static void MOS_USED ReleaseOnSem(MosSem * pSem) {
     // This places the pSemaphore on event queue to be processed by
     // scheduler to avoid direct manipulation of run queues.  If run
     // queues were manipulated here critical sections would be larger.
-    u32 mask = MosDisableInterrupts();
+    u32 mask = mosDisableInterrupts();
     // Only add event if pendQ is not empty and event not already queued
-    if (!MosIsListEmpty(&pSem->pendQ) && !MosIsOnList(&pSem->evtLink)) {
-        MosAddToList(&ISREventQueue, &pSem->evtLink);
+    if (!mosIsListEmpty(&pSem->pendQ) && !mosIsOnList(&pSem->evtLink)) {
+        mosAddToEndOfList(&ISREventQueue, &pSem->evtLink);
         Thread * pThd = container_of(pSem->pendQ.pNext, Thread, runLink);
         // Yield if released thread has higher priority than running thread
         if (pRunningThread && pThd->pri < pRunningThread->pri) YieldThread();
     }
-    MosEnableInterrupts(mask);
+    mosEnableInterrupts(mask);
 }
 
-MOS_ISR_SAFE void MOS_NAKED MosIncrementSem(MosSem * pSem) {
+MOS_ISR_SAFE void MOS_NAKED mosIncrementSem(MosSem * pSem) {
     MOS_USED_PARAM(pSem);
     asm volatile (
         "push { lr }\n"
@@ -325,7 +325,7 @@ MOS_ISR_SAFE void MOS_NAKED MosIncrementSem(MosSem * pSem) {
     );
 }
 
-u32 MOS_NAKED MosWaitForSignal(MosSem * pSem) {
+u32 MOS_NAKED mosWaitForSignal(MosSem * pSem) {
     MOS_USED_PARAM(pSem);
     asm volatile (
         "mov r3, #0\n"
@@ -347,7 +347,7 @@ u32 MOS_NAKED MosWaitForSignal(MosSem * pSem) {
     );
 }
 
-u32 MOS_NAKED MosWaitForSignalOrTO(MosSem * pSem, u32 ticks) {
+u32 MOS_NAKED mosWaitForSignalOrTO(MosSem * pSem, u32 ticks) {
     MOS_USED_PARAM(pSem);
     MOS_USED_PARAM(ticks);
     asm volatile (
@@ -377,7 +377,7 @@ u32 MOS_NAKED MosWaitForSignalOrTO(MosSem * pSem, u32 ticks) {
     );
 }
 
-MOS_ISR_SAFE u32 MOS_NAKED MosPollSignal(MosSem * pSem) {
+MOS_ISR_SAFE u32 MOS_NAKED mosPollSignal(MosSem * pSem) {
     MOS_USED_PARAM(pSem);
     asm volatile (
         "mov r3, #0\n"
@@ -397,7 +397,7 @@ MOS_ISR_SAFE u32 MOS_NAKED MosPollSignal(MosSem * pSem) {
     );
 }
 
-MOS_ISR_SAFE void MOS_NAKED MosRaiseSignal(MosSem * pSem, u32 flags) {
+MOS_ISR_SAFE void MOS_NAKED mosRaiseSignal(MosSem * pSem, u32 flags) {
     MOS_USED_PARAM(pSem);
     MOS_USED_PARAM(flags);
     asm volatile (

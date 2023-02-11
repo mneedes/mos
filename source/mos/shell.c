@@ -1,5 +1,5 @@
 
-// Copyright 2019-2021 Matthew C Needes
+// Copyright 2019-2023 Matthew C Needes
 // You may not use this source file except in compliance with the
 // terms and conditions contained within the LICENSE file (the
 // "License") included under this distribution.
@@ -21,11 +21,11 @@
 static MosQueue RxQueue;
 static u32 RxQueueBuf[16];
 
-MOS_ISR_SAFE static void MosRxCallback(char ch) {
-    MosTrySendToQueue32(&RxQueue, (u32) ch);
+MOS_ISR_SAFE static void mosRxCallback(char ch) {
+    mosTrySendToQueue32(&RxQueue, (u32) ch);
 }
 
-void MosInitShell(MosShell * shell, u16 cmd_buffer_len, u16 max_cmd_line_size,
+void mosInitShell(MosShell * shell, u16 cmd_buffer_len, u16 max_cmd_line_size,
                   void * cmd_buffer, bool isSerialConsole) {
     shell->cmd_buffer_len = cmd_buffer_len;
     shell->max_cmd_line_size = max_cmd_line_size;
@@ -33,53 +33,53 @@ void MosInitShell(MosShell * shell, u16 cmd_buffer_len, u16 max_cmd_line_size,
     shell->cmd_ix = 0;
     shell->cmd_max_ix = 0;
     shell->cmd_history_ix = 0;
-    MosInitMutex(&shell->mtx);
-    MosInitList(&shell->cmd_list);
+    mosInitMutex(&shell->mtx);
+    mosInitList(&shell->cmd_list);
     if (isSerialConsole) {
-        MosInitQueue32(&RxQueue, RxQueueBuf, count_of(RxQueueBuf));
-        HalRegisterRxUARTCallback(MosRxCallback);
+        mosInitQueue32(&RxQueue, RxQueueBuf, count_of(RxQueueBuf));
+        HalRegisterRxUARTCallback(mosRxCallback);
     }
 }
 
-void MosAddCommand(MosShell * shell, MosShellCommand * cmd) {
-    MosLockMutex(&shell->mtx);
-    MosAddToList(&shell->cmd_list, &cmd->link);
-    MosUnlockMutex(&shell->mtx);
+void mosAddCommand(MosShell * shell, MosShellCommand * cmd) {
+    mosLockMutex(&shell->mtx);
+    mosAddToEndOfList(&shell->cmd_list, &cmd->link);
+    mosUnlockMutex(&shell->mtx);
 }
 
-void MosRemoveCommand(MosShell * shell, MosShellCommand * cmd) {
-    MosLockMutex(&shell->mtx);
-    MosRemoveFromList(&cmd->link);
-    MosUnlockMutex(&shell->mtx);
+void mosRemoveCommand(MosShell * shell, MosShellCommand * cmd) {
+    mosLockMutex(&shell->mtx);
+    mosRemoveFromList(&cmd->link);
+    mosUnlockMutex(&shell->mtx);
 }
 
-MosShellCommand * MosFindCommand(MosShell * shell, char * name) {
-    MosLockMutex(&shell->mtx);
+MosShellCommand * mosFindCommand(MosShell * shell, char * name) {
+    mosLockMutex(&shell->mtx);
     MosList * list = &shell->cmd_list;
     for (MosLink * elm = list->pNext; elm != list; elm = elm->pNext) {
         MosShellCommand * cmd = container_of(elm, MosShellCommand, link);
         if (strcmp(name, cmd->name) == 0) {
-            MosUnlockMutex(&shell->mtx);
+            mosUnlockMutex(&shell->mtx);
             return cmd;
         }
     }
-    MosUnlockMutex(&shell->mtx);
+    mosUnlockMutex(&shell->mtx);
     return NULL;
 }
 
-void MosPrintCommandHelp(MosShell * shell) {
+void mosPrintCommandHelp(MosShell * shell) {
     MosList * list = &shell->cmd_list;
-    MosLockMutex(&shell->mtx);
-    MosLockTraceMutex();
+    mosLockMutex(&shell->mtx);
+    mosLockTraceMutex();
     for (MosLink * elm = list->pNext; elm != list; elm = elm->pNext) {
         MosShellCommand * cmd = container_of(elm, MosShellCommand, link);
-        MosPrintf("%s %s: %s\n", cmd->name, cmd->usage, cmd->desc);
+        mosPrintf("%s %s: %s\n", cmd->name, cmd->usage, cmd->desc);
     }
-    MosUnlockTraceMutex();
-    MosUnlockMutex(&shell->mtx);
+    mosUnlockTraceMutex();
+    mosUnlockMutex(&shell->mtx);
 }
 
-MosCommandResult MosGetNextCommand(char * prompt, char * cmd, u32 max_cmd_len) {
+MosCommandResult mosGetNextCommand(char * prompt, char * cmd, u32 max_cmd_len) {
     enum {
         KEY_NORMAL,
         KEY_ESCAPE,
@@ -87,25 +87,25 @@ MosCommandResult MosGetNextCommand(char * prompt, char * cmd, u32 max_cmd_len) {
     };
     static u32 buf_ix = 0;
     static bool last_ch_was_arrow = false;
-    MosLockTraceMutex();
+    mosLockTraceMutex();
     if (buf_ix) {
-        for (u32 ix = 0; ix < buf_ix; ix++) _MosPrint("\b \b");
+        for (u32 ix = 0; ix < buf_ix; ix++) _mosPrint("\b \b");
     } else if (prompt && !last_ch_was_arrow) {
-        _MosPrint(prompt);
+        _mosPrint(prompt);
     }
-    buf_ix = _MosPrint(cmd);
-    MosUnlockTraceMutex();
+    buf_ix = _mosPrint(cmd);
+    mosUnlockTraceMutex();
     last_ch_was_arrow = false;
     u32 state = KEY_NORMAL;
     while (1) {
-        char ch = (char) MosReceiveFromQueue32(&RxQueue);
+        char ch = (char) mosReceiveFromQueue32(&RxQueue);
         switch (state) {
         default:
         case KEY_NORMAL:
             switch (ch) {
             default:
                 if (buf_ix < max_cmd_len && ch > 31) {
-                    _MosPrintCh(ch);
+                    _mosPrintCh(ch);
                     cmd[buf_ix++] = ch;
                 }
                 break;
@@ -115,12 +115,12 @@ MosCommandResult MosGetNextCommand(char * prompt, char * cmd, u32 max_cmd_len) {
             case '\b':
             case 127:
                 if (buf_ix) {
-                    MosPrint("\b \b");
+                    mosPrint("\b \b");
                     buf_ix--;
                 }
                 break;
             case '\r':
-                MosPrint("\n");
+                mosPrint("\n");
                 cmd[buf_ix] = '\0';
                 buf_ix = 0;
                 return MOS_CMD_RECEIVED;
@@ -147,7 +147,7 @@ MosCommandResult MosGetNextCommand(char * prompt, char * cmd, u32 max_cmd_len) {
     }
 }
 
-u32 MosParseCommand(char * argv[], char * args, u32 max_argc) {
+u32 mosParseCommand(char * argv[], char * args, u32 max_argc) {
     if (args == NULL || args[0] == '\0') return 0;
     char * ch_in = args, * ch_out = args;
     bool in_arg = false, in_quote = false;
@@ -193,16 +193,16 @@ static u32 CalcOffsetCommandIx(s32 ix, s32 max_ix, s32 offset) {
 }
 
 // NOTE: this function is one-level recursive when running commands out of history.
-MosCommandStatus MosRunCommand(MosShell * shell, char * cmd_buf_in) {
+MosCommandStatus mosRunCommand(MosShell * shell, char * cmd_buf_in) {
     const u32 max_cmd_args = 10;
     u32 argc;
     char * argv[max_cmd_args];
     char cmd_buf[shell->max_cmd_line_size];
     char (* CmdBuffer)[shell->cmd_buffer_len][shell->max_cmd_line_size] = shell->cmd_buffer;
     strncpy(cmd_buf, cmd_buf_in, sizeof(cmd_buf));
-    argc = MosParseCommand(argv, cmd_buf, max_cmd_args);
+    argc = mosParseCommand(argv, cmd_buf, max_cmd_args);
     if (argc == 0) return CMD_OK_NO_HISTORY;
-    MosShellCommand * cmd = MosFindCommand(shell, argv[0]);
+    MosShellCommand * cmd = mosFindCommand(shell, argv[0]);
     if (cmd) {
         return cmd->func(argc, argv);
     } else if (argv[0][0] == '!') {
@@ -210,7 +210,7 @@ MosCommandStatus MosRunCommand(MosShell * shell, char * cmd_buf_in) {
             if (shell->cmd_max_ix > 0) {
                 u32 run_cmd_ix = CalcOffsetCommandIx(shell->cmd_ix, shell->cmd_max_ix, -1);
                 strcpy((*CmdBuffer)[shell->cmd_ix], (*CmdBuffer)[run_cmd_ix]);
-                return MosRunCommand(shell, (*CmdBuffer)[shell->cmd_ix]);
+                return mosRunCommand(shell, (*CmdBuffer)[shell->cmd_ix]);
             } else return CMD_ERR_OUT_OF_RANGE;
         } else if (argv[0][1] == '-') {
             if (argv[0][2] >= '1' && argv[0][2] <= '9') {
@@ -219,25 +219,25 @@ MosCommandStatus MosRunCommand(MosShell * shell, char * cmd_buf_in) {
                     u32 run_cmd_ix = CalcOffsetCommandIx(shell->cmd_ix,
                                                          shell->cmd_max_ix, -offset);
                     strcpy((*CmdBuffer)[shell->cmd_ix], (*CmdBuffer)[run_cmd_ix]);
-                    return MosRunCommand(shell, (*CmdBuffer)[shell->cmd_ix]);
+                    return mosRunCommand(shell, (*CmdBuffer)[shell->cmd_ix]);
                 } else return CMD_ERR_OUT_OF_RANGE;
             }
         }
     } else if (strcmp(argv[0], "?") == 0 || strcmp(argv[0], "help") == 0) {
-        MosPrintCommandHelp(shell);
-        MosPrint("!!: Repeat prior command\n");
-        MosPrint("!-#: Repeat #th prior command\n");
-        MosPrint("h -or- history: Display command history\n");
-        MosPrint("? -or- help: Display command help\n");\
+        mosPrintCommandHelp(shell);
+        mosPrint("!!: Repeat prior command\n");
+        mosPrint("!-#: Repeat #th prior command\n");
+        mosPrint("h -or- history: Display command history\n");
+        mosPrint("? -or- help: Display command help\n");\
         return CMD_OK_NO_HISTORY;
     } else if (strcmp(argv[0], "h") == 0 || strcmp(argv[0], "history") == 0) {
         for (s32 ix = shell->cmd_max_ix; ix > 0; ix--) {
             u32 hist_cmd_ix = CalcOffsetCommandIx(shell->cmd_ix, shell->cmd_max_ix, -ix);
-            MosLockTraceMutex();
-            MosPrintf("%2d: ", -ix);
-            MosPrint((*CmdBuffer)[hist_cmd_ix]);
-            MosPrint("\n");
-            MosUnlockTraceMutex();
+            mosLockTraceMutex();
+            mosPrintf("%2d: ", -ix);
+            mosPrint((*CmdBuffer)[hist_cmd_ix]);
+            mosPrint("\n");
+            mosUnlockTraceMutex();
         }
         return CMD_OK_NO_HISTORY;
     } else if (argv[0][0] == '\0') {
@@ -246,32 +246,32 @@ MosCommandStatus MosRunCommand(MosShell * shell, char * cmd_buf_in) {
     return CMD_ERR_NOT_FOUND;
 }
 
-void MosRunShell(MosShell * shell) {
+void mosRunShell(MosShell * shell) {
     char (* CmdBuffer)[shell->cmd_buffer_len][shell->max_cmd_line_size] = shell->cmd_buffer;
     while (1) {
         MosCommandResult result;
         MosCommandStatus status;
-        result = MosGetNextCommand("# ", (*CmdBuffer)[shell->cmd_ix], shell->max_cmd_line_size);
+        result = mosGetNextCommand("# ", (*CmdBuffer)[shell->cmd_ix], shell->max_cmd_line_size);
         switch (result) {
         case MOS_CMD_RECEIVED:
-            status = MosRunCommand(shell, (*CmdBuffer)[shell->cmd_ix]);
+            status = mosRunCommand(shell, (*CmdBuffer)[shell->cmd_ix]);
             switch (status) {
             case CMD_OK_NO_HISTORY:
                 break;
             case CMD_ERR_NOT_FOUND:
-                MosPrint("[ERR] Command not found...\n");
+                mosPrint("[ERR] Command not found...\n");
                 break;
             case CMD_ERR_OUT_OF_RANGE:
-                MosPrint("[ERR] Index out of range...\n");
+                mosPrint("[ERR] Index out of range...\n");
                 break;
             case CMD_OK:
-                MosPrint("[OK]\n");
+                mosPrint("[OK]\n");
                 if (++shell->cmd_ix == shell->cmd_buffer_len) shell->cmd_ix = 0;
                 if (shell->cmd_ix > shell->cmd_max_ix) shell->cmd_max_ix = shell->cmd_ix;
                 break;
             default:
             case CMD_ERR:
-                MosPrint("[ERR]\n");
+                mosPrint("[ERR]\n");
                 if (++shell->cmd_ix == shell->cmd_buffer_len) shell->cmd_ix = 0;
                 if (shell->cmd_ix > shell->cmd_max_ix) shell->cmd_max_ix = shell->cmd_ix;
                 break;

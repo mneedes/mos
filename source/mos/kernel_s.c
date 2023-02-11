@@ -1,5 +1,5 @@
 
-// Copyright 2021 Matthew C Needes
+// Copyright 2021-2023 Matthew C Needes
 // You may not use this source file except in compliance with the
 // terms and conditions contained within the LICENSE file (the
 // "License") included under this distribution.
@@ -95,7 +95,7 @@ static MOS_INLINE void S_CauseCrash(void) {
 // NOTE: This should be run in handler mode since it is
 //       manipulating stack pointers and the CONTROL register.
 void MOS_NSC_ENTRY
-_NSC_MosInitSecureContexts(MosSecKPrintHook * hook, char (*buffer)[MOS_PRINT_BUFFER_SIZE]) {
+_NSC_mosInitSecureContexts(MosSecKPrintHook * hook, char (*buffer)[MOS_PRINT_BUFFER_SIZE]) {
     KPrintHook = (NS_SecKPrintHook *)hook;
     RawPrintBuffer = buffer;
     // Prioritize secure exceptions and enable all secure mode faults
@@ -121,13 +121,13 @@ _NSC_MosInitSecureContexts(MosSecKPrintHook * hook, char (*buffer)[MOS_PRINT_BUF
 
 // NOTE: This can be run in thread mode as long as the scheduler is locked
 //       during this call as it is not manipulating stack pointers directly.
-void MOS_NSC_ENTRY _NSC_MosResetSecureContext(s32 context) {
+void MOS_NSC_ENTRY _NSC_mosResetSecureContext(s32 context) {
     Contexts[context].sp = Stacks[context] + MOS_SECURE_CONTEXT_STACK_SIZE - 8;
     //S_CauseCrash();
 }
 
 // NOTE: This must be run in handler mode since it is manipulating stack pointers.
-void MOS_NSC_ENTRY _NSC_MosSwitchSecureContext(s32 save_context, s32 restore_context) {
+void MOS_NSC_ENTRY _NSC_mosSwitchSecureContext(s32 save_context, s32 restore_context) {
     if (save_context >= 0) Contexts[save_context].sp = GetPSP();
     SetPSPLIM(Contexts[restore_context].splim);
     SetPSP(Contexts[restore_context].sp);

@@ -1,5 +1,5 @@
 
-// Copyright 2019-2021 Matthew C Needes
+// Copyright 2019-2023 Matthew C Needes
 // You may not use this source file except in compliance with the
 // terms and conditions contained within the LICENSE file (the
 // "License") included under this distribution.
@@ -15,19 +15,19 @@
 #include <mos/internal/trace.h>
 #include <mos/trace.h>
 
-u32 MosTraceMask = 0;
+u32 mosTraceMask = 0;
 static MosMutex TraceMutex;
 
 static char PrintBuffer[MOS_PRINT_BUFFER_SIZE + 1];
 static char RawPrintBuffer[MOS_PRINT_BUFFER_SIZE + 1];
 
-void _MosPrintCh(char ch) {
-    MosLockMutex(&TraceMutex);
+void _mosPrintCh(char ch) {
+    mosLockMutex(&TraceMutex);
     HalSendToTxUART(ch);
-    MosUnlockMutex(&TraceMutex);
+    mosUnlockMutex(&TraceMutex);
 }
 
-u32 _MosPrint(char * str) {
+u32 _mosPrint(char * str) {
     u32 cnt = 0;
     for (char * ch = str; *ch != '\0'; ch++, cnt++) {
         if (*ch == '\n') HalSendToTxUART('\r');
@@ -36,60 +36,60 @@ u32 _MosPrint(char * str) {
     return cnt;
 }
 
-static void MosRawVPrintfCallback(const char * fmt, va_list args) {
-    u32 mask = MosDisableInterrupts();
-    MosVSNPrintf(RawPrintBuffer, MOS_PRINT_BUFFER_SIZE, fmt, args);
-    _MosPrint(RawPrintBuffer);
-    MosEnableInterrupts(mask);
+static void mosRawVPrintfCallback(const char * fmt, va_list args) {
+    u32 mask = mosDisableInterrupts();
+    mosVSNPrintf(RawPrintBuffer, MOS_PRINT_BUFFER_SIZE, fmt, args);
+    _mosPrint(RawPrintBuffer);
+    mosEnableInterrupts(mask);
 }
 
-void MosInitTrace(u32 mask, bool enable_raw_vprintf_hook) {
-    MosTraceMask = mask;
-    MosInitMutex(&TraceMutex);
+void mosInitTrace(u32 mask, bool enable_raw_vprintf_hook) {
+    mosTraceMask = mask;
+    mosInitMutex(&TraceMutex);
     PrintBuffer[MOS_PRINT_BUFFER_SIZE] = '\0';
     RawPrintBuffer[MOS_PRINT_BUFFER_SIZE] = '\0';
     if (enable_raw_vprintf_hook)
-        MosRegisterRawVPrintfHook(MosRawVPrintfCallback,
+        mosRegisterRawVPrintfHook(mosRawVPrintfCallback,
                                   (char (*)[MOS_PRINT_BUFFER_SIZE])&RawPrintBuffer);
 }
 
-s32 MosPrint(char * str) {
-    MosLockMutex(&TraceMutex);
-    s32 cnt = _MosPrint(str);
-    MosUnlockMutex(&TraceMutex);
+s32 mosPrint(char * str) {
+    mosLockMutex(&TraceMutex);
+    s32 cnt = _mosPrint(str);
+    mosUnlockMutex(&TraceMutex);
     return cnt;
 }
 
-s32 MosPrintf(const char * fmt, ...) {
+s32 mosPrintf(const char * fmt, ...) {
     va_list args;
     va_start(args, fmt);
-    MosLockMutex(&TraceMutex);
-    s32 cnt = MosVSNPrintf(PrintBuffer, MOS_PRINT_BUFFER_SIZE, fmt, args);
-    _MosPrint(PrintBuffer);
-    MosUnlockMutex(&TraceMutex);
+    mosLockMutex(&TraceMutex);
+    s32 cnt = mosVSNPrintf(PrintBuffer, MOS_PRINT_BUFFER_SIZE, fmt, args);
+    _mosPrint(PrintBuffer);
+    mosUnlockMutex(&TraceMutex);
     va_end(args);
     if (cnt > MOS_PRINT_BUFFER_SIZE) cnt = MOS_PRINT_BUFFER_SIZE;
     return cnt;
 }
 
-void MosLogTraceMessage(char * id, const char * fmt, ...) {
+void mosLogTraceMessage(char * id, const char * fmt, ...) {
     va_list args;
     va_start(args, fmt);
-    MosLockMutex(&TraceMutex);
-    _MosPrint(id);
-    MosVSNPrintf(PrintBuffer, MOS_PRINT_BUFFER_SIZE, fmt, args);
-    _MosPrint(PrintBuffer);
-    MosUnlockMutex(&TraceMutex);
+    mosLockMutex(&TraceMutex);
+    _mosPrint(id);
+    mosVSNPrintf(PrintBuffer, MOS_PRINT_BUFFER_SIZE, fmt, args);
+    _mosPrint(PrintBuffer);
+    mosUnlockMutex(&TraceMutex);
     va_end(args);
 }
 
-void MosLogHexDumpMessage(char * id, char * name,
+void mosLogHexDumpMessage(char * id, char * name,
                           const void * addr, mos_size size) {
     const u8 * restrict data = (const u8 *) addr;
-    MosLockMutex(&TraceMutex);
-    _MosPrint(id);
-    _MosPrint(name);
-    _MosPrint("\n");
+    mosLockMutex(&TraceMutex);
+    _mosPrint(id);
+    _mosPrint(name);
+    _mosPrint("\n");
     // 16 bytes per line
     for (u32 lines = (size >> 4) + 1; lines > 0; lines--) {
         char * buf = PrintBuffer;
@@ -99,29 +99,29 @@ void MosLogHexDumpMessage(char * id, char * name,
             if (bytes == 0) break;
         }
         // Address
-        buf += MosItoa(buf, (s32) data, 16, true, 8, '0', false);
+        buf += mosItoa(buf, (s32) data, 16, true, 8, '0', false);
         *buf++ = ' ';
         *buf++ = ' ';
         for (; bytes > 0; bytes--) {
-            buf += MosItoa(buf, *data, 16, true, 2, '0', false);
+            buf += mosItoa(buf, *data, 16, true, 2, '0', false);
             *buf++ = ' ';
             data++;
         }
         *buf++ = '\n';
         *buf++ = '\0';
-        _MosPrint(PrintBuffer);
+        _mosPrint(PrintBuffer);
     }
-    MosUnlockMutex(&TraceMutex);
+    mosUnlockMutex(&TraceMutex);
 }
 
-void MosLockTraceMutex(void) {
-    MosLockMutex(&TraceMutex);
+void mosLockTraceMutex(void) {
+    mosLockMutex(&TraceMutex);
 }
 
-bool MosTryTraceMutex(void) {
-    return MosTryMutex(&TraceMutex);
+bool mosTryTraceMutex(void) {
+    return mosTryMutex(&TraceMutex);
 }
 
-void MosUnlockTraceMutex(void) {
-    MosUnlockMutex(&TraceMutex);
+void mosUnlockTraceMutex(void) {
+    mosUnlockMutex(&TraceMutex);
 }

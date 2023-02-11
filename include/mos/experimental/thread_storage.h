@@ -17,10 +17,10 @@ typedef void (MosThreadStorageReleaseFunc)(void * pStorage);
 ///   (Re)allocating if the size is different from before.
 ///   Calls the optional callback function in idle context if thread
 ///   dies before MosThreadStorageReturn is called.
-void * MosThreadStorageObtain(u32 unique_id, mos_size size, MosThreadStorageReleaseFunc * pRelease);
+void * MosThreadStorageObtain(u32 uniqueID, mos_size size, MosThreadStorageReleaseFunc * pRelease);
 
 /// Return thread local storage
 ///   This should be called before the library exits
-void * MosThreadStorageReturn(u32 unique_id, void * pStorage);
+void * MosThreadStorageReturn(u32 uniqueID, void * pStorage);
 
 #endif

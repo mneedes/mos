@@ -1,5 +1,5 @@
 
-// Copyright 2021 Matthew C Needes
+// Copyright 2021-2023 Matthew C Needes
 // You may not use this source file except in compliance with the
 // terms and conditions contained within the LICENSE file (the
 // "License") included under this distribution.
@@ -92,27 +92,27 @@
 
 /// Disable Interrupts (Not nestable, assumes interrupts are enabled prior to call).
 ///
-MOS_ISR_SAFE static MOS_INLINE void _MosDisableInterrupts(void) {
+MOS_ISR_SAFE static MOS_INLINE void _mosDisableInterrupts(void) {
     asm volatile ( "cpsid i" );
 }
 
 /// Enable Interrupts (Not nestable, assumes interrupts are disabled prior to call).
 ///
-MOS_ISR_SAFE static MOS_INLINE void _MosEnableInterrupts(void) {
+MOS_ISR_SAFE static MOS_INLINE void _mosEnableInterrupts(void) {
     asm volatile ( "cpsie i" );
 }
 
 /// Enable Interrupts (Not nestable, assumes interrupts are disabled prior to call).
 /// Provides barrier to ensure pending interrupt executes before
 ///   subsequent instructions.  Can be combined with _MosEnableInterrupts().
-MOS_ISR_SAFE static MOS_INLINE void _MosEnableInterruptsWithBarrier(void) {
+MOS_ISR_SAFE static MOS_INLINE void _mosEnableInterruptsWithBarrier(void) {
     asm volatile ( "cpsie i\n"
                    "isb" );
 }
 
 /// Disable interrupts (Nestable, recommended for ISRs).
 ///   Saves mask to remember if interrupts were already disabled prior to this.
-MOS_ISR_SAFE static MOS_INLINE u32 MosDisableInterrupts(void) {
+MOS_ISR_SAFE static MOS_INLINE u32 mosDisableInterrupts(void) {
     u32 mask;
     asm volatile (
         "mrs %0, primask\n"
@@ -124,7 +124,7 @@ MOS_ISR_SAFE static MOS_INLINE u32 MosDisableInterrupts(void) {
 
 /// Enable Interrupts (Nestable, recommended for ISRs).
 ///   Only enables if mask indicates interrupts had been enabled in prior call to MosDisableInterrupts().
-MOS_ISR_SAFE static MOS_INLINE void MosEnableInterrupts(u32 mask) {
+MOS_ISR_SAFE static MOS_INLINE void mosEnableInterrupts(u32 mask) {
     asm volatile (
         "msr primask, %0"
             : : "r" (mask) :
@@ -133,7 +133,7 @@ MOS_ISR_SAFE static MOS_INLINE void MosEnableInterrupts(u32 mask) {
 
 /// Used to determine if in interrupt context.
 /// \return '0' if not in an interrupt, otherwise returns vector number
-MOS_ISR_SAFE static MOS_INLINE u32 MosGetIRQNumber(void) {
+MOS_ISR_SAFE static MOS_INLINE u32 mosGetIRQNumber(void) {
     u32 irq;
     asm volatile (
         "mrs %0, ipsr"

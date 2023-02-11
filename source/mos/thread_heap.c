@@ -1,5 +1,5 @@
 
-// Copyright 2020-2022 Matthew C Needes
+// Copyright 2020-2023 Matthew C Needes
 // You may not use this source file except in compliance with the
 // terms and conditions contained within the LICENSE file (the
 // "License") included under this distribution.
@@ -11,70 +11,70 @@ static MosMutex ThreadMutex;
 
 static void FreeThread(MosThread * pThd) {
     if (pThreadHeap) {
-        MosFree(pThreadHeap, MosGetStackBottom(pThd));
-        MosFree(pThreadHeap, pThd);
+        mosFree(pThreadHeap, mosGetStackBottom(pThd));
+        mosFree(pThreadHeap, pThd);
     }
 }
 
-void MosSetThreadHeap(MosHeap * pHeap) {
+void mosSetThreadHeap(MosHeap * pHeap) {
     pThreadHeap = pHeap;
-    MosInitMutex(&ThreadMutex);
+    mosInitMutex(&ThreadMutex);
 }
 
-bool MosAllocThread(MosThread ** ppThd, u32 stackSize) {
+bool mosAllocThread(MosThread ** ppThd, u32 stackSize) {
     if (!pThreadHeap) return false;
     bool rtn = false;
-    u8 * pStackBottom = (u8 *)MosAlloc(pThreadHeap, stackSize);
+    u8 * pStackBottom = (u8 *)mosAlloc(pThreadHeap, stackSize);
     if (pStackBottom == NULL) return false;
-    MosThread * pThd = (MosThread *)MosAlloc(pThreadHeap, sizeof(MosThread));
+    MosThread * pThd = (MosThread *)mosAlloc(pThreadHeap, sizeof(MosThread));
     if (pThd == NULL) {
-        MosFree(pThreadHeap, pStackBottom);
+        mosFree(pThreadHeap, pStackBottom);
         return false;
     }
-    MosSetStack(pThd, pStackBottom, stackSize);
-    MosLockMutex(&ThreadMutex);
+    mosSetStack(pThd, pStackBottom, stackSize);
+    mosLockMutex(&ThreadMutex);
     if (*ppThd == NULL) {
         pThd->refCnt = 1;
         *ppThd = pThd;
         rtn = true;
     } else FreeThread(pThd);
-    MosUnlockMutex(&ThreadMutex);
+    mosUnlockMutex(&ThreadMutex);
     return rtn;
 }
 
 bool
-MosAllocAndRunThread(MosThread ** ppThd, MosThreadPriority pri,
+mosAllocAndRunThread(MosThread ** ppThd, MosThreadPriority pri,
                      MosThreadEntry * pEntry, s32 arg, u32 stackSize) {
-    if (!MosAllocThread(ppThd, stackSize)) return false;
-    if (!MosInitAndRunThread(*ppThd, pri, pEntry, arg, MosGetStackBottom(*ppThd),
+    if (!mosAllocThread(ppThd, stackSize)) return false;
+    if (!mosInitAndRunThread(*ppThd, pri, pEntry, arg, mosGetStackBottom(*ppThd),
                              stackSize)) {
-        MosDecThreadRefCount(ppThd);
+        mosDecThreadRefCount(ppThd);
         return false;
     }
     return true;
 }
 
-bool MosIncThreadRefCount(MosThread ** ppThd) {
+bool mosIncThreadRefCount(MosThread ** ppThd) {
     bool rtn = false;
-    MosLockMutex(&ThreadMutex);
+    mosLockMutex(&ThreadMutex);
     MosThread * pThd = *ppThd;
     if (pThd != NULL) {
         pThd->refCnt++;
         rtn = true;
     }
-    MosUnlockMutex(&ThreadMutex);
+    mosUnlockMutex(&ThreadMutex);
     return rtn;
 }
 
-bool MosDecThreadRefCount(MosThread ** ppThd) {
+bool mosDecThreadRefCount(MosThread ** ppThd) {
     bool rtn = false;
-    MosLockMutex(&ThreadMutex);
+    mosLockMutex(&ThreadMutex);
     MosThread * pThd = *ppThd;
     if (pThd != NULL && --pThd->refCnt <= 0) {
         *ppThd = NULL;
         FreeThread(pThd);
         rtn = true;
     }
-    MosUnlockMutex(&ThreadMutex);
+    mosUnlockMutex(&ThreadMutex);
     return rtn;
 }

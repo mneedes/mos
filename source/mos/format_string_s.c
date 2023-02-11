@@ -1,5 +1,5 @@
 
-// Copyright 2021 Matthew C Needes
+// Copyright 2021-2023 Matthew C Needes
 // You may not use this source file except in compliance with the
 // terms and conditions contained within the LICENSE file (the
 // "License") included under this distribution.
@@ -78,7 +78,7 @@ S_WriteBuf(char * restrict * out, const char * restrict in, s32 len, s32 * rem) 
 }
 
 s32
-S_MosVSNPrintf(char * restrict buffer, mos_size sz, const char * restrict fmt, va_list args) {
+S_mosVSNPrintf(char * restrict buffer, mos_size sz, const char * restrict fmt, va_list args) {
     const char * restrict ch = fmt;
     char * restrict out = buffer;
     s32 rem = (s32)sz;
@@ -169,7 +169,7 @@ S_MosVSNPrintf(char * restrict buffer, mos_size sz, const char * restrict fmt, v
 }
 
 s32
-S_MosSNPrintf(char * restrict dest, mos_size size, const char * restrict fmt, ...) {
+S_mosSNPrintf(char * restrict dest, mos_size size, const char * restrict fmt, ...) {
     va_list args;
     va_start(args, fmt);
     s32 cnt = S_MosVSNPrintf(dest, size, fmt, args);

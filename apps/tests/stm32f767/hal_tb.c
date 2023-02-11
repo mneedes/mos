@@ -23,27 +23,27 @@ static bool stop_thread;
 
 void EXTI15_10_IRQHandler(void) {
     __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_13);
-    MosIncrementSem(&pulse_sem);
+    mosIncrementSem(&pulse_sem);
 }
 
 static s32 HalPulseReceiverTermHandler(s32 arg) {
-    MosPrintf("Total Received Pulses: %08x\n", pulse_counter);
+    mosPrintf("Total Received Pulses: %08x\n", pulse_counter);
     return arg;
 }
 
 static s32 HalPulseReceiverThread(s32 arg) {
     MOS_UNUSED(arg);
     pulse_counter = 0;
-    MosInitSem(&pulse_sem, 0);
-    MosSetTermHandler(MosGetThreadPtr(), HalPulseReceiverTermHandler, TEST_PASS);
+    mosInitSem(&pulse_sem, 0);
+    mosSetTermHandler(mosGetThreadPtr(), HalPulseReceiverTermHandler, TEST_PASS);
     // Set interrupt to high priority (higher than scheduler at least)
     NVIC_SetPriority(EXTI15_10_IRQn, 0);
     NVIC_EnableIRQ(EXTI15_10_IRQn);
     for (;;) {
-        MosWaitForSem(&pulse_sem);
+        mosWaitForSem(&pulse_sem);
         pulse_counter++;
         if ((pulse_counter % (1 << 12)) == 0) {
-            MosPrintf("Pulses: %08x\n", pulse_counter);
+            mosPrintf("Pulses: %08x\n", pulse_counter);
             if (stop_thread) break;
         }
     }
@@ -54,19 +54,19 @@ static s32 HalRandomPulseThread(s32 arg) {
     pulse_counter = 0;
     for (u32 ix = 0; ix < arg; ix++) {
         u32 rn = HalGetRandomU32();
-        u32 mask = MosDisableInterrupts();
+        u32 mask = mosDisableInterrupts();
         HalSetGpio(0, true);
-        MosDelayMicroSec(8 + (rn & 0x1F));
+        mosDelayMicroseconds(8 + (rn & 0x1F));
         HalSetGpio(0, false);
-        MosEnableInterrupts(mask);
+        mosEnableInterrupts(mask);
         pulse_counter++;
         if ((pulse_counter % (1 << 12)) == 0) {
-            MosPrintf("Pulses: %08x\n", pulse_counter);
+            mosPrintf("Pulses: %08x\n", pulse_counter);
         }
-        MosDelayMicroSec(800 + (rn >> 23));
+        mosDelayMicroseconds(800 + (rn >> 23));
         if (stop_thread) break;
     }
-    MosPrintf("Total Pulses: %08x\n", pulse_counter);
+    mosPrintf("Total Pulses: %08x\n", pulse_counter);
     return TEST_PASS;
 }
 
@@ -100,20 +100,20 @@ void HalTestsTriggerInterrupt(u32 num) {
 
 bool HalTests(int argc, char * argv[]) {
     if (argc == 0) {
-        MosPrint("Not enough arguments\n");
+        mosPrint("Not enough arguments\n");
         return false;
     }
     bool success = true;
     if (strcmp(argv[0], "rxstart") == 0) {
         stop_thread = false;
-        if (MosAllocAndRunThread(&pThread, 0, HalPulseReceiverThread, 0, 512)) {
-            MosPrint("Hal Pulse Receiver Test START\n");
+        if (mosAllocAndRunThread(&pThread, 0, HalPulseReceiverThread, 0, 512)) {
+            mosPrint("Hal Pulse Receiver Test START\n");
         }
         if (!pThread) success = false;
     } else if (strcmp(argv[0], "txstart") == 0) {
         stop_thread = false;
-        if (MosAllocAndRunThread(&pThread, 0, HalRandomPulseThread, 0x1000000, 512)) {
-            MosPrint("Hal Pulse Transmitter Test START\n");
+        if (mosAllocAndRunThread(&pThread, 0, HalRandomPulseThread, 0x1000000, 512)) {
+            mosPrint("Hal Pulse Transmitter Test START\n");
         }
         if (!pThread) success = false;
     } else if (strcmp(argv[0], "stop") == 0) {
@@ -121,9 +121,9 @@ bool HalTests(int argc, char * argv[]) {
             success = false;
         } else {
             stop_thread = true;
-            if (MosWaitForThreadStop(pThread) != TEST_PASS) success = false;
-            MosDecThreadRefCount(&pThread);
-            MosPrint("Hal Pulse Test STOP\n");
+            if (mosWaitForThreadStop(pThread) != TEST_PASS) success = false;
+            mosDecThreadRefCount(&pThread);
+            mosPrint("Hal Pulse Test STOP\n");
         }
     }
     return success;

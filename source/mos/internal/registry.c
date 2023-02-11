@@ -118,7 +118,7 @@ static Entry * AllocAndFillEntry(const char ** _path, const u8 * data, u32 blob_
     *_path = path + name_size;
     u32 entry_size = sizeof(Entry) + name_size + 1;
     if (data && **_path == '\0') entry_size += blob_size;
-    Entry * entry = (Entry *)MosAlloc(reg.heap, entry_size);
+    Entry * entry = (Entry *)mosAlloc(reg.heap, entry_size);
     if (entry) {
         u8 * buf = (u8 *)(entry + 1);
         memcpy(buf, (u8 *)path, name_size);
@@ -184,52 +184,52 @@ FindNext: {
     while (1) {
         new_entry = AllocAndFillEntry(&path, data, blob_size);
         if (new_entry) {
-            MosAddToList(&entry->entries, &new_entry->link);
+            mosAddToEndOfList(&entry->entries, &new_entry->link);
             if (*path++ == '\0') break;
             new_entry->type = MosEntryTypeInternal;
-            MosInitList(&new_entry->entries);
+            mosInitList(&new_entry->entries);
             entry = new_entry;
         } else break;
     }
     return new_entry;
 }
 
-MosEntry MosRegistryInit(MosHeap * heap, char delimiter) {
-    MosInitMutex(&reg.mutex);
+MosEntry mosRegistryInit(MosHeap * heap, char delimiter) {
+    mosInitMutex(&reg.mutex);
     reg.heap      = heap;
     reg.delimiter = delimiter;
-    reg.root      = (Entry *)MosAlloc(reg.heap, sizeof(Entry));
+    reg.root      = (Entry *)mosAlloc(reg.heap, sizeof(Entry));
     if (reg.root) {
         reg.root->type = MosEntryTypeInternal;
-        MosInitList(&reg.root->entries);
+        mosInitList(&reg.root->entries);
     }
     return (MosEntry)reg.root;
 }
 
-MosEntry MosFindEntry(MosEntry root, const char * path) {
-    MosLockMutex(&reg.mutex);
+MosEntry mosFindEntry(MosEntry root, const char * path) {
+    mosLockMutex(&reg.mutex);
     MosEntry entry = FindEntry((Entry *)root, path);
-    MosUnlockMutex(&reg.mutex);
+    mosUnlockMutex(&reg.mutex);
     return entry;
 }
 
 // TODO: replace a value at a entry...
 
-bool MosSetStringEntry(MosEntry root, const char * path, const char * str) {
+bool mosSetStringEntry(MosEntry root, const char * path, const char * str) {
     bool success = false;
-    MosLockMutex(&reg.mutex);
+    mosLockMutex(&reg.mutex);
     Entry * entry = (Entry *)CreateEntry((Entry *)root, path, (const u8 *)str, strlen(str) + 1);
     if (entry) {
         entry->type = MosEntryTypeString;
         success = true;
     }
-    MosUnlockMutex(&reg.mutex);
+    mosUnlockMutex(&reg.mutex);
     return success;
 }
 
-bool MosGetStringEntry(MosEntry root, const char * path, char * data, u32 * size) {
+bool mosGetStringEntry(MosEntry root, const char * path, char * data, u32 * size) {
     bool success = false;
-    MosLockMutex(&reg.mutex);
+    mosLockMutex(&reg.mutex);
     Entry * entry = FindEntry((Entry *)root, path);
     if (entry && entry->type == MosEntryTypeString) {
         if (*size >= entry->blob.size) {
@@ -238,46 +238,46 @@ bool MosGetStringEntry(MosEntry root, const char * path, char * data, u32 * size
         }
         *size = entry->blob.size;
     }
-    MosUnlockMutex(&reg.mutex);
+    mosUnlockMutex(&reg.mutex);
     return success;
 }
 
 #if 0
-bool MosSetIntegerEntry(MosEntry root, const char * path, const s64 data) {
+bool mosSetIntegerEntry(MosEntry root, const char * path, const s64 data) {
     bool success = false;
-    MosLockMutex(&reg.mutex);
+    mosLockMutex(&reg.mutex);
     Entry * entry = FindEntry((Entry *)root, path);
     if (entry && entry->type == MosEntryTypeInteger) {
         *data = entry->int_value;
         success = true;
     }
-    MosUnlockMutex(&reg.mutex);
+    mosUnlockMutex(&reg.mutex);
     return success;
 }
 #endif
 
-bool MosGetIntegerEntry(MosEntry root, const char * path, s64 * data) {
+bool mosGetIntegerEntry(MosEntry root, const char * path, s64 * data) {
     bool success = false;
-    MosLockMutex(&reg.mutex);
+    mosLockMutex(&reg.mutex);
     Entry * entry = FindEntry((Entry *)root, path);
     if (entry && entry->type == MosEntryTypeInteger) {
         *data = entry->int_value;
         success = true;
     }
-    MosUnlockMutex(&reg.mutex);
+    mosUnlockMutex(&reg.mutex);
     return success;
 }
 
 #if 0
 
-bool MosPrintEntryAsString(MosEntry entry, (*PrintfFunc)(const char *, ...)) {
-    MosLockMutex(&reg.mutex);
-    MosUnlockMutex(&reg.mutex);
+bool mosPrintEntryAsString(MosEntry entry, (*PrintfFunc)(const char *, ...)) {
+    mosLockMutex(&reg.mutex);
+    mosUnlockMutex(&reg.mutex);
 }
 
-bool MosSetEntryWithString(MosEntry entry, const char * value) {
-    MosLockMutex(&reg.mutex);
-    MosUnlockMutex(&reg.mutex);
+bool mosSetEntryWithString(MosEntry entry, const char * value) {
+    mosLockMutex(&reg.mutex);
+    mosUnlockMutex(&reg.mutex);
 }
 
 #endif
