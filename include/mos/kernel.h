@@ -124,7 +124,7 @@ void mosResetTimer(MosTimer * pTmr);
 
 /// Obtain pointer to currently running thread.
 ///
-MosThread * mosGetThreadPtr(void);
+MosThread * mosGetRunningThread(void);
 /// Delay thread a number of ticks, zero input yields thread (see mosYieldThread).
 ///
 void mosDelayThread(u32 ticks);

@@ -70,7 +70,7 @@ static u32 queue[4];
 static MosQueue TestQueue;
 
 bool IsStopRequested() {
-    return (bool)mosGetThreadPtr()->pUser;
+    return (bool)mosGetRunningThread()->pUser;
 }
 
 void RequestThreadStop(MosThread * pThd) {
@@ -156,11 +156,11 @@ static s32 KillTestHandler(s32 arg) {
 
 static s32 KillTestThread(s32 arg) {
     if (arg) {
-        mosSetTermHandler(mosGetThreadPtr(), KillTestHandler, TEST_PASS_HANDLER);
+        mosSetTermHandler(mosGetRunningThread(), KillTestHandler, TEST_PASS_HANDLER);
         // Lock mutex a couple times... need to release it in handler
         mosLockMutex(&TestMutex);
         mosLockMutex(&TestMutex);
-    } else mosSetTermArg(mosGetThreadPtr(), TEST_PASS_HANDLER);
+    } else mosSetTermArg(mosGetRunningThread(), TEST_PASS_HANDLER);
     mosLogTrace(TRACE_INFO, "KillTestThread: Blocking\n");
     mosWaitForSem(&TestSem);
     return TEST_FAIL;
@@ -168,20 +168,20 @@ static s32 KillTestThread(s32 arg) {
 
 static s32 KillSelfTestThread(s32 arg) {
     if (arg) {
-        mosSetTermHandler(mosGetThreadPtr(), KillTestHandler, TEST_PASS_HANDLER);
+        mosSetTermHandler(mosGetRunningThread(), KillTestHandler, TEST_PASS_HANDLER);
         // Lock mutex a couple times... need to release it in handler
         mosLockMutex(&TestMutex);
         mosLockMutex(&TestMutex);
-    } else mosSetTermArg(mosGetThreadPtr(), TEST_PASS_HANDLER);
+    } else mosSetTermArg(mosGetRunningThread(), TEST_PASS_HANDLER);
     mosLogTrace(TRACE_INFO, "KillSelfTestThread: Killing Self\n");
-    mosKillThread(mosGetThreadPtr());
+    mosKillThread(mosGetRunningThread());
     return TEST_FAIL;
 }
 
 static s32 ExcTestThread(s32 arg) {
     MOS_UNUSED(arg);
     mosPrintf("Running Exception Thread %X\n", arg);
-    mosSetTermArg(mosGetThreadPtr(), TEST_PASS_HANDLER + 1);
+    mosSetTermArg(mosGetRunningThread(), TEST_PASS_HANDLER + 1);
     mosDelayThread(50);
     CauseCrash();
     return TEST_FAIL;
@@ -189,7 +189,7 @@ static s32 ExcTestThread(s32 arg) {
 
 #ifdef DEBUG
 static s32 AssertTestThread(s32 arg) {
-    mosSetTermArg(mosGetThreadPtr(), TEST_PASS_HANDLER);
+    mosSetTermArg(mosGetRunningThread(), TEST_PASS_HANDLER);
     mosAssert(arg == 0x1234);
     return TEST_FAIL;
 }
@@ -202,7 +202,7 @@ static s32 FPTestThread(s32 arg) {
         x = x + 1.0;
         if (arg > 1 && (TestHisto[arg] == 1000)) {
             // Create an integer div-by-0 exception in FP thread
-            mosSetTermArg(mosGetThreadPtr(), TEST_PASS_HANDLER + 1);
+            mosSetTermArg(mosGetRunningThread(), TEST_PASS_HANDLER + 1);
             volatile u32 y = (20 / (arg - 2));
             (void)y;
             return TEST_FAIL;
@@ -1874,7 +1874,7 @@ static s32 StackPrintThread(s32 arg) {
 #if (MOS_ENABLE_SPLIM_SUPPORT == true)
 
 static s32 MOS_OPT(0) StackOverflowThread(s32 arg) {
-    mosSetTermArg(mosGetThreadPtr(), TEST_PASS_HANDLER + 1);
+    mosSetTermArg(mosGetRunningThread(), TEST_PASS_HANDLER + 1);
     return StackOverflowThread(arg);
 }
 
@@ -1904,9 +1904,9 @@ static bool MiscTests(void) {
     mosPrint("Misc Test: Stack stats\n");
     {
         u32 size = 0, usage = 0, max_usage = 0;
-        mosGetStackStats(mosGetThreadPtr(), &size, &usage, &max_usage);
+        mosGetStackStats(mosGetRunningThread(), &size, &usage, &max_usage);
         mosPrintf("Stack: size: %u usage: %u max_usage: %u\n", size, usage, max_usage);
-        if (size != mosGetStackSize(mosGetThreadPtr())) test_pass = false;
+        if (size != mosGetStackSize(mosGetRunningThread())) test_pass = false;
     }
     if (test_pass) mosPrint(" Passed\n");
     else {

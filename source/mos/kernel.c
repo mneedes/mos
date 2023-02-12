@@ -14,9 +14,11 @@
 #include <mos/internal/security.h>
 #include <errno.h>
 
-// TODO: "Better Fit" Allocator improvement.
+// TODO: "Better Fit" Allocator improvement. ASSERT on errors.
+// TODO: Assert failure should hang/crash
 // TODO: Thread-local storage
 // TODO: Consolidate "TO" APIs to single API function.
+// TODO: Atomic handle pool
 // TODO: Logging
 
 // TODO: Hooks for other timers such as LPTIM ?
@@ -435,7 +437,7 @@ static s32 IdleThreadEntry(s32 arg) {
     return 0;
 }
 
-MosThread * mosGetThreadPtr(void) {
+MosThread * mosGetRunningThread(void) {
     return (MosThread *)pRunningThread;
 }
 
@@ -839,7 +841,7 @@ static u32 MOS_USED Scheduler(u32 sp) {
     } else {
         pRunningThread = &IdleThread;
 #if (MOS_ARM_RTOS_ON_NON_SECURE_SIDE == true)
-        _NSC_MosInitSecureContexts(KPrint, RawPrintBuffer);
+        _NSC_mosInitSecureContexts(KPrint, RawPrintBuffer);
 #endif
     }
     // Update Running Thread state
@@ -922,10 +924,10 @@ static u32 MOS_USED Scheduler(u32 sp) {
     // If there is a new secure context, only load the next context, don't save it.
     // otherwise only save/load the context if it is different.
     if (pRunningThread->secure_context_new != pRunningThread->secure_context) {
-        _NSC_MosSwitchSecureContext(-1, runThd->secure_context);
+        _NSC_mosSwitchSecureContext(-1, runThd->secure_context);
         pRunningThread->secure_context = pRunningThread->secure_context_new;
     } else if (pRunningThread->secure_context != runThd->secure_context)
-        _NSC_MosSwitchSecureContext(pRunningThread->secure_context, runThd->secure_context);
+        _NSC_mosSwitchSecureContext(pRunningThread->secure_context, runThd->secure_context);
 #endif
     // Set next thread ID and errno and return its stack pointer
     pRunningThread = runThd;

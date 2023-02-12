@@ -35,7 +35,7 @@ static s32 HalPulseReceiverThread(s32 arg) {
     MOS_UNUSED(arg);
     pulse_counter = 0;
     mosInitSem(&pulse_sem, 0);
-    mosSetTermHandler(mosGetThreadPtr(), HalPulseReceiverTermHandler, TEST_PASS);
+    mosSetTermHandler(mosGetRunningThread(), HalPulseReceiverTermHandler, TEST_PASS);
     // Set interrupt to high priority (higher than scheduler at least)
     NVIC_SetPriority(EXTI15_10_IRQn, 0);
     NVIC_EnableIRQ(EXTI15_10_IRQn);
