@@ -15,7 +15,6 @@
 #include <errno.h>
 
 // TODO: "Better Fit" Allocator improvement.
-// TODO: Thread-local storage.
 // TODO: Consolidate "TO" APIs to single API function.
 // TODO: Atomic handle pool
 // TODO: Logging
@@ -90,7 +89,6 @@ typedef struct Thread {
     s8                  secureContextNew;
     u16                 pad2;
     void              * pUser;
-    u32                 refCnt;
 } Thread;
 
 // Ensure opaque thread structure has same size as internal structure

@@ -49,7 +49,6 @@ typedef void (MosEventHook)(MosEvent evt, u32 val);
 typedef struct MosThread {
     u32       rsvd[21];
     void    * pUser;         /// User data pointer, set to NULL after thread initialization
-    s32       refCnt;        /// Reference counter
 } MosThread;
 
 // Blocking mutex supporting recursion

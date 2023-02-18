@@ -17,9 +17,14 @@
 #include <mos/kernel.h>
 #include <mos/allocator.h>
 
+typedef void (MosThreadStorageReleaseFunc)(void * pData);
+
 /// Set heap threads are to be allocated from.
 ///
 void mosSetThreadHeap(MosHeap * pHeap);
+
+// Dynamic Threads
+
 /// Allocate a thread and increments its reference count to 1.
 /// Use MosInitAndRunThread() to run the thread.
 /// TODO: FIX THIS API
@@ -35,5 +40,20 @@ bool mosIncThreadRefCount(MosThread ** ppThd);
 /// Decrement reference count (frees thread when reference count is zero).
 ///
 bool mosDecThreadRefCount(MosThread ** ppThd);
+
+/// Obtain a unique ID (for thread storage and TODO: other purposes)
+///
+MOS_ISR_SAFE u32 mosGetUniqueID(void);
+
+// Thread Storage
+
+/// Set local storage for the current thread.
+///   Callback is invoked when thread resources are released.
+///   Returns true on success.
+bool mosSetThreadStorage(MosThread * pThread, u32 uniqueID, void * pData, MosThreadStorageReleaseFunc * pReleaseFunc);
+
+/// Return pointer to thread local storage, NULL on failure.
+///
+void * mosGetThreadStorage(MosThread * pThread, u32 uniqueID);
 
 #endif

@@ -192,6 +192,51 @@ static s32 FPTestThread(s32 arg) {
     else return TEST_PASS;
 }
 
+static u32 storageID;
+
+static void LibraryInit() {
+    static bool bInit = false;
+    if (!bInit) {
+        storageID = mosGetUniqueID();
+        bInit = true;
+    }
+}
+
+static void LibraryFreeCallback(void * pData) {
+    mosFree(&TestThreadHeapDesc, pData);
+    mosPrintf("  Free %p\n", pData);
+}
+
+static s32 LibraryRun(s32 arg) {
+    s32 val = 0;
+    void * pData = mosGetThreadStorage(mosGetRunningThread(), storageID);
+    if (!pData) {
+        pData = mosAlloc(&TestThreadHeapDesc, 100);
+        mosPrintf("  Alloc %p\n", pData);
+        *((s32 *)pData) = arg;
+        if (pData) {
+            if (!mosSetThreadStorage(mosGetRunningThread(), storageID, pData, LibraryFreeCallback)) {
+                mosFree(&TestThreadHeapDesc, pData);
+                pData = NULL;
+            }
+        }
+    }
+    if (pData) {
+        val = *((s32 *)pData);
+    }
+    return val;
+}
+
+static s32 StorageThread(s32 arg) {
+    s32 retVal = TEST_PASS;
+    LibraryInit();
+    for (;;) {
+        if (LibraryRun(arg) != arg) retVal = TEST_FAIL;
+        if (IsStopRequested()) break;
+    }
+    return retVal;
+}
+
 static bool ThreadTests(void) {
     const u32 test_time = 5000;
     u32 exp_iter = test_time / pri_test_delay;
@@ -276,7 +321,6 @@ static bool ThreadTests(void) {
     //
     // InitThread / RunThread
     //
-
     //
     // Set and Restore errno
     //
@@ -302,8 +346,34 @@ static bool ThreadTests(void) {
             test_pass = false;
         if (TestHisto[1] < exp_iter || TestHisto[1] > exp_iter + 1)
             test_pass = false;
+    } else {
+        mosPrint("Cannot create threads!\n");
+        test_pass = false;
     }
+    if (test_pass) mosPrint(" Passed\n");
     else {
+        mosPrint(" Failed\n");
+        tests_all_pass = false;
+    }
+    //
+    // Thread Storage
+    //
+    test_pass = true;
+    mosPrint("Thread Storage\n");
+    ClearHistogram();
+    thd[0] = NULL;
+    thd[1] = NULL;
+    mosAllocAndRunThread(&thd[0], 1, StorageThread, 0, DFT_STACK_SIZE);
+    mosAllocAndRunThread(&thd[1], 1, StorageThread, 1, DFT_STACK_SIZE);
+    if (thd[0] && thd[1]) {
+        mosDelayThread(2 * test_time);
+        RequestThreadStop(thd[0]);
+        RequestThreadStop(thd[1]);
+        if (mosWaitForThreadStop(thd[0]) != TEST_PASS) test_pass = false;
+        if (mosWaitForThreadStop(thd[1]) != TEST_PASS) test_pass = false;
+        mosDecThreadRefCount(&thd[0]);
+        mosDecThreadRefCount(&thd[1]);
+    } else {
         mosPrint("Cannot create threads!\n");
         test_pass = false;
     }
@@ -377,10 +447,10 @@ static bool ThreadTests(void) {
         mosPrint(" Failed\n");
         tests_all_pass = false;
     }
+#if 0
     //
     // Assertion test
     //
-#if defined(DEBUG)
     test_pass = true;
     mosPrint("Assertion Test\n");
     ClearHistogram();
