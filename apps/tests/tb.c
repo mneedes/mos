@@ -166,13 +166,11 @@ static s32 ExcTestThread(s32 arg) {
     return TEST_FAIL;
 }
 
-#ifdef DEBUG
 static s32 AssertTestThread(s32 arg) {
     mosSetTermArg(mosGetRunningThread(), TEST_PASS_HANDLER);
     mosAssert(arg == 0x1234);
     return TEST_FAIL;
 }
-#endif
 
 static s32 FPTestThread(s32 arg) {
     float x = 0.0;
@@ -447,7 +445,6 @@ static bool ThreadTests(void) {
         mosPrint(" Failed\n");
         tests_all_pass = false;
     }
-#if 0
     //
     // Assertion test
     //
@@ -463,41 +460,38 @@ static bool ThreadTests(void) {
         mosPrint(" Failed\n");
         tests_all_pass = false;
     }
-#endif
     //
     // Try some floating point
     //
-    if (MOS_HW_FLOAT_SUPPORT) {
-        test_pass = true;
-        mosPrint("FP Test\n");
-        ClearHistogram();
-        mosInitAndRunThread(Threads[1], 1, FPTestThread, 0, Stacks[1], DFT_STACK_SIZE);
-        mosInitAndRunThread(Threads[2], 1, FPTestThread, 1, Stacks[2], DFT_STACK_SIZE);
-        mosInitAndRunThread(Threads[3], 1, PriTestThread, 2, Stacks[3], DFT_STACK_SIZE);
-        mosDelayThread(test_time / 2);
-        RequestThreadStop(Threads[1]);
-        RequestThreadStop(Threads[2]);
-        RequestThreadStop(Threads[3]);
-        if (mosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
-        if (mosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
-        if (mosWaitForThreadStop(Threads[3]) != TEST_PASS) test_pass = false;
-        DisplayHistogram(3);
-        if (test_pass) mosPrint(" Passed\n");
-        else {
-            mosPrint(" Failed\n");
-            tests_all_pass = false;
-        }
-        test_pass = true;
-        mosPrint("Exception in FP thread\n");
-        ClearHistogram();
-        mosInitAndRunThread(Threads[1], 1, FPTestThread, 2, Stacks[1], DFT_STACK_SIZE);
-        mosSetThreadName(Threads[1], "fp_thread");
-        if (mosWaitForThreadStop(Threads[1]) != TEST_PASS_HANDLER + 1) test_pass = false;
-        if (test_pass) mosPrint(" Passed\n");
-        else {
-            mosPrint(" Failed\n");
-            tests_all_pass = false;
-        }
+    test_pass = true;
+    mosPrint("FP Test\n");
+    ClearHistogram();
+    mosInitAndRunThread(Threads[1], 1, FPTestThread, 0, Stacks[1], DFT_STACK_SIZE);
+    mosInitAndRunThread(Threads[2], 1, FPTestThread, 1, Stacks[2], DFT_STACK_SIZE);
+    mosInitAndRunThread(Threads[3], 1, PriTestThread, 2, Stacks[3], DFT_STACK_SIZE);
+    mosDelayThread(test_time / 2);
+    RequestThreadStop(Threads[1]);
+    RequestThreadStop(Threads[2]);
+    RequestThreadStop(Threads[3]);
+    if (mosWaitForThreadStop(Threads[1]) != TEST_PASS) test_pass = false;
+    if (mosWaitForThreadStop(Threads[2]) != TEST_PASS) test_pass = false;
+    if (mosWaitForThreadStop(Threads[3]) != TEST_PASS) test_pass = false;
+    DisplayHistogram(3);
+    if (test_pass) mosPrint(" Passed\n");
+    else {
+        mosPrint(" Failed\n");
+        tests_all_pass = false;
+    }
+    test_pass = true;
+    mosPrint("Exception in FP thread\n");
+    ClearHistogram();
+    mosInitAndRunThread(Threads[1], 1, FPTestThread, 2, Stacks[1], DFT_STACK_SIZE);
+    mosSetThreadName(Threads[1], "fp_thread");
+    if (mosWaitForThreadStop(Threads[1]) != TEST_PASS_HANDLER + 1) test_pass = false;
+    if (test_pass) mosPrint(" Passed\n");
+    else {
+        mosPrint(" Failed\n");
+        tests_all_pass = false;
     }
     return tests_all_pass;
 }

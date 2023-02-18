@@ -11,7 +11,19 @@
 #ifndef _MOS_INTERNAL_ARCH_H_
 #define _MOS_INTERNAL_ARCH_H_
 
-#include <mos/defs.h>
+// Auto detect correct EXC Return setting value
+#if ((MOS_ARCH == MOS_ARCH_ARM_CORTEX_V8M_MAIN) || (MOS_ARCH == MOS_ARCH_ARM_CORTEX_V8M_BASE))
+  #define MOS_ARM_AUTODETECT_EXC_RETURN    true
+#else
+  #define MOS_ARM_AUTODETECT_EXC_RETURN    false
+#endif
+
+// Lazy floating point context switch
+#if (defined(__VFP_FP__) && !defined(__SOFTFP__))
+  #define MOS_FP_LAZY_CONTEXT_SWITCHING  true
+#else
+  #define MOS_FP_LAZY_CONTEXT_SWITCHING  false
+#endif
 
 // Exception return values (for LR register)
 #define MOS_EXC_RETURN_DEFAULT    0xfffffffd

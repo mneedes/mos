@@ -41,32 +41,23 @@
   #error "Architecture not recognized"
 #endif
 
-// Auto detect correct EXC Return setting value
-#if ((MOS_ARCH == MOS_ARCH_ARM_CORTEX_V8M_MAIN) || (MOS_ARCH == MOS_ARCH_ARM_CORTEX_V8M_BASE))
-  #define MOS_ARM_AUTODETECT_EXC_RETURN    true
-#else
-  #define MOS_ARM_AUTODETECT_EXC_RETURN    false
-#endif
-
 #if defined(MOS_NUM_SECURE_CONTEXTS) && (MOS_NUM_SECURE_CONTEXTS > 0)
-  #define SECURE_CONTEXTS      true
+  #define MOS_SECURE_CONTEXTS      true
 #else
-  #define SECURE_CONTEXTS      false
+  #define MOS_SECURE_CONTEXTS      false
 #endif
 
-#if (defined(__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE == 1) && SECURE_CONTEXTS)
+#if (defined(__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE == 1) && MOS_SECURE_CONTEXTS)
   #define MOS_ARM_RTOS_ON_NON_SECURE_SIDE    true
 #else
   #define MOS_ARM_RTOS_ON_NON_SECURE_SIDE    false
 #endif
 
-#if (defined(__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE == 3) && SECURE_CONTEXTS)
+#if (defined(__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE == 3) && MOS_SECURE_CONTEXTS)
   #define MOS_ARM_RTOS_ON_SECURE_SIDE        true
 #else
   #define MOS_ARM_RTOS_ON_SECURE_SIDE        false
 #endif
-
-#undef SECURE_CONTEXTS
 
 // Stack pointer overflow detection support
 //   (1) Only v8-mainline supports splim_ns and additionally splim_s (with security extensions).
@@ -77,13 +68,6 @@
   #define MOS_ENABLE_SPLIM_SUPPORT       true
 #else
   #define MOS_ENABLE_SPLIM_SUPPORT       false
-#endif
-
-// Lazy floating point context switch
-#if (defined(__VFP_FP__) && !defined(__SOFTFP__))
-  #define MOS_FP_LAZY_CONTEXT_SWITCHING  true
-#else
-  #define MOS_FP_LAZY_CONTEXT_SWITCHING  false
 #endif
 
 //
