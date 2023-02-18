@@ -921,11 +921,11 @@ static u32 MOS_USED Scheduler(u32 sp) {
 #if (MOS_ARM_RTOS_ON_NON_SECURE_SIDE == true)
     // If there is a new secure context, only load the next context, don't save it.
     // otherwise only save/load the context if it is different.
-    if (pRunningThread->secure_context_new != pRunningThread->secure_context) {
-        _NSC_mosSwitchSecureContext(-1, runThd->secure_context);
-        pRunningThread->secure_context = pRunningThread->secure_context_new;
-    } else if (pRunningThread->secure_context != runThd->secure_context)
-        _NSC_mosSwitchSecureContext(pRunningThread->secure_context, runThd->secure_context);
+    if (pRunningThread->secureContextNew != pRunningThread->secureContext) {
+        _NSC_mosSwitchSecureContext(-1, runThd->secureContext);
+        pRunningThread->secureContext = pRunningThread->secureContextNew;
+    } else if (pRunningThread->secureContext != runThd->secureContext)
+        _NSC_mosSwitchSecureContext(pRunningThread->secureContext, runThd->secureContext);
 #endif
     // Set next thread ID and errno and return its stack pointer
     pRunningThread = runThd;
@@ -974,7 +974,7 @@ void mosInitSem(MosSem * pSem, u32 startValue) {
 // Reserve secure contexts for threads.
 //   Scheduler must be locked out during reservation.
 //   Scheduler is invoked to change the context.
-void MosReserveSecureContext(void) {
+void mosReserveSecureContext(void) {
     mosWaitForSem(&SecureContextCounter);
     LockScheduler(IntPriMaskLow);
     u32 newContext = __builtin_ctz(SecureContextReservation);
@@ -985,7 +985,7 @@ void MosReserveSecureContext(void) {
     UnlockScheduler();
 }
 
-bool MosTryReserveSecureContext(void) {
+bool mosTryReserveSecureContext(void) {
     if (mosTrySem(&SecureContextCounter)) {
         LockScheduler(IntPriMaskLow);
         u32 newContext = __builtin_ctz(SecureContextReservation);
@@ -999,11 +999,11 @@ bool MosTryReserveSecureContext(void) {
 }
 
 // Revert all threads to default secure context
-void MosReleaseSecureContext(void) {
+void mosReleaseSecureContext(void) {
     LockScheduler(IntPriMaskLow);
     u32 oldContext = pRunningThread->secureContext;
     // Reset pointer value for next thread (using current thread context)
-    _NSC_MosResetSecureContext(oldContext);
+    _NSC_mosResetSecureContext(oldContext);
     pRunningThread->secureContextNew = MOS_DEFAULT_SECURE_CONTEXT;
     SecureContextReservation |= (1 << oldContext);
     // Yield so that stack pointer is made available for next thread.

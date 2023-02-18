@@ -172,7 +172,7 @@ s32
 S_mosSNPrintf(char * restrict dest, mos_size size, const char * restrict fmt, ...) {
     va_list args;
     va_start(args, fmt);
-    s32 cnt = S_MosVSNPrintf(dest, size, fmt, args);
+    s32 cnt = S_mosVSNPrintf(dest, size, fmt, args);
     va_end(args);
     return cnt;
 }

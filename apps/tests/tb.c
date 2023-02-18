@@ -1838,11 +1838,11 @@ static bool HeapTests(void) {
 
 static s32 SecurityThread(s32 arg) {
     while (1) {
-        MosDelayMicroSec(100000);
-        MosReserveSecureContext();
-        MosDelayMicroSec(100000);
+        mosDelayMicroseconds(100000);
+        mosReserveSecureContext();
+        mosDelayMicroseconds(100000);
         SECURE_TakeSomeTime();
-        MosReleaseSecureContext();
+        mosReleaseSecureContext();
         TestHisto[arg]++;
         if (IsStopRequested()) break;
     }

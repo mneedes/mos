@@ -44,9 +44,9 @@ static void S_KPrintf(const char * fmt, ...) {
     if (KPrintHook) {
         va_list args;
         va_start(args, fmt);
-        _MosDisableInterrupts();
-        S_MosVSNPrintf(*RawPrintBuffer, MOS_PRINT_BUFFER_SIZE, fmt, args);
-        _MosEnableInterrupts();
+        _mosDisableInterrupts();
+        S_mosVSNPrintf(*RawPrintBuffer, MOS_PRINT_BUFFER_SIZE, fmt, args);
+        _mosEnableInterrupts();
         va_end(args);
         (*KPrintHook)();
     }
@@ -188,7 +188,7 @@ FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 exc_rtn) {
         // IS a security fault (originated from NS side) ... dump stacks after validating pointers
         if (in_isr || psp_ns == NULL) {
             S_KPrintf("NS Main Stack @%08X:\n", (u32)msp_ns);
-            if (S_MosIsAddressRangeNonSecure(msp_ns, 64)) {
+            if (S_mosIsAddressRangeNonSecure(msp_ns, 64)) {
                 S_KPrintf(" %08X %08X %08X %08X  (R0 R1 R2 R3)\n",  msp_ns[0], msp_ns[1], msp_ns[2], msp_ns[3]);
                 S_KPrintf(" %08X %08X %08X %08X (R12 LR PC PSR)\n", msp_ns[4], msp_ns[5], msp_ns[6], msp_ns[7]);
                 msp_ns += 8;
@@ -200,7 +200,7 @@ FaultHandler(u32 * msp, u32 * psp, u32 psr, u32 exc_rtn) {
             }
         }
         S_KPrintf("NS Thread Stack @%08X:\n", (u32)psp_ns);
-        if (S_MosIsAddressRangeNonSecure(psp_ns, 64)) {
+        if (S_mosIsAddressRangeNonSecure(psp_ns, 64)) {
             S_KPrintf(" %08X %08X %08X %08X  (R0 R1 R2 R3)\n",  psp_ns[0], psp_ns[1], psp_ns[2], psp_ns[3]);
             S_KPrintf(" %08X %08X %08X %08X (R12 LR PC PSR)\n", psp_ns[4], psp_ns[5], psp_ns[6], psp_ns[7]);
             psp_ns += 8;
