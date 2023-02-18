@@ -157,15 +157,6 @@ static s32 KillSelfTestThread(s32 arg) {
     return TEST_FAIL;
 }
 
-static s32 ExcTestThread(s32 arg) {
-    MOS_UNUSED(arg);
-    mosPrintf("Running Exception Thread %X\n", arg);
-    mosSetTermArg(mosGetRunningThread(), TEST_PASS_HANDLER + 1);
-    mosDelayThread(50);
-    mosAssert(0);
-    return TEST_FAIL;
-}
-
 static s32 AssertTestThread(s32 arg) {
     mosSetTermArg(mosGetRunningThread(), TEST_PASS_HANDLER);
     mosAssert(arg == 0x1234);
@@ -180,8 +171,7 @@ static s32 FPTestThread(s32 arg) {
         if (arg > 1 && (TestHisto[arg] == 1000)) {
             // Create an integer div-by-0 exception in FP thread
             mosSetTermArg(mosGetRunningThread(), TEST_PASS_HANDLER + 1);
-            volatile u32 y = (20 / (arg - 2));
-            (void)y;
+            mosAssert(0);
             return TEST_FAIL;
         }
         if (IsStopRequested()) break;
@@ -433,23 +423,10 @@ static bool ThreadTests(void) {
         tests_all_pass = false;
     }
     //
-    // Thread exception handler
+    // Assertion/Exception test
     //
     test_pass = true;
-    mosPrint("Exception Test\n");
-    ClearHistogram();
-    mosInitAndRunThread(Threads[1], 1, ExcTestThread, 0, Stacks[1], DFT_STACK_SIZE);
-    if (mosWaitForThreadStop(Threads[1]) != TEST_PASS_HANDLER + 1) test_pass = false;
-    if (test_pass) mosPrint(" Passed\n");
-    else {
-        mosPrint(" Failed\n");
-        tests_all_pass = false;
-    }
-    //
-    // Assertion test
-    //
-    test_pass = true;
-    mosPrint("Assertion Test\n");
+    mosPrint("Assertion/Exception Test\n");
     ClearHistogram();
     mosInitAndRunThread(Threads[1], 1, AssertTestThread, 0, Stacks[1], DFT_STACK_SIZE);
     if (mosWaitForThreadStop(Threads[1]) != TEST_PASS_HANDLER) test_pass = false;
