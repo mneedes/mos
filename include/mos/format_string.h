@@ -15,9 +15,9 @@
 u32 mosItoa(char * restrict pOut, s32 input, u16 base, bool isUpper,
             u16 minWidth, char padChar, bool isSigned);
 
-/// Write up to size-1 bytes to destination buffer and terminates with nul character
+/// Write up to size-1 bytes to destination buffer and terminates with null character
 ///   Returns number of characters written had pDest been sufficiently large,
-///      not counting the nul.
+///      not counting the null.
 s32 mosVSNPrintf(char * pDest, mos_size size, const char * pFmt, va_list arg);
 s32 mosSNPrintf(char * pDest, mos_size size, const char * pFmt, ...);
 

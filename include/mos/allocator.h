@@ -10,9 +10,9 @@
 ///
 /// It may be configured for power-of-2 block alignment and supports
 /// allocation from multiple non-contiguous memory pools. It provides
-/// rudimentary error detection for block over/underrun and multiple
-/// frees (via MosAssert()). This implementation has been extensively
-/// tested using randomly generated test vectors.
+/// rudimentary detection of block overrun and multiple frees.
+//  This implementation has been extensively tested using random
+//  test vectors.
 
 #ifndef _MOS_HEAP_H_
 #define _MOS_HEAP_H_

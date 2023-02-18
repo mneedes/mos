@@ -142,4 +142,52 @@ MOS_ISR_SAFE static MOS_INLINE u32 mosGetIRQNumber(void) {
     return irq;
 }
 
+//
+// Atomic Operations
+//
+
+#if (MOS_ARCH_CAT == MOS_ARCH_ARM_CORTEX_M_BASE)
+
+// GCC does not implement atomic builtins for Base.
+
+/// Atomic fetch and add
+///
+MOS_ISR_SAFE static MOS_INLINE s32
+mosAtomicFetchAndAdd32(s32 * pValue, s32 addVal) {
+    u32 mask = mosDisableInterrupts();
+    s32 val = *pValue;
+    *pValue = val + addVal;
+    mosEnableInterrupts(mask);
+    return val;
+}
+
+/// Atomic compare and swap
+///
+MOS_ISR_SAFE static MOS_INLINE u32
+mosAtomicCompareAndSwap32(u32 * pValue, u32 compareVal, u32 exchangeVal) {
+    u32 mask = mosDisableInterrupts();
+    u32 val = *pValue;
+    if (*pValue == nCompareVal) *pValue = exchangeVal;
+    mosEnableInterrupts(mask);
+    return val;
+}
+
+#elif (MOS_ARCH_CAT == MOS_ARCH_ARM_CORTEX_M_MAIN)
+
+/// Atomic fetch and add
+///
+MOS_ISR_SAFE static MOS_INLINE s32
+mosAtomicFetchAndAdd32(s32 * pValue, s32 addVal) {
+    return __sync_fetch_and_add_4(pValue, addVal);
+}
+
+/// Atomic compare and swap
+///
+MOS_ISR_SAFE static MOS_INLINE u32
+mosAtomicCompareAndSwap32(u32 * pValue, u32 compareVal, u32 exchangeVal) {
+    return __sync_val_compare_and_swap_4(pValue, compareVal, exchangeVal);
+}
+
+#endif
+
 #endif

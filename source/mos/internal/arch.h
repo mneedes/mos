@@ -18,7 +18,7 @@
 #define MOS_EXC_RETURN_UNSECURE   0xffffffbc
 
 //
-// Scheduler locking
+// Scheduler locking and assert support
 //
 
 #if (MOS_ARCH_CAT == MOS_ARCH_ARM_CORTEX_M_BASE)
@@ -32,6 +32,13 @@ static MOS_INLINE void UnlockScheduler(void) {
     asm volatile ( "cpsie if\n"
                    "isb" );
 }
+
+// Unaligned access
+#define MOS_INDUCE_CRASH()  \
+    asm volatile (         \
+        "mov r0, #3\n"     \
+        "ldr r1, [r0]"     \
+            : : : "r0", "r1" )
 
 #elif (MOS_ARCH_CAT == MOS_ARCH_ARM_CORTEX_M_MAIN)
 
@@ -50,6 +57,13 @@ static MOS_INLINE void UnlockScheduler(void) {
             : : "r" (0) : "memory"
     );
 }
+
+// Divide-by-zero
+#define MOS_INDUCE_CRASH()  \
+    asm volatile (         \
+        "mov r0, #0\n"     \
+        "udiv r1, r1, r0"  \
+            : : : "r0", "r1" )
 
 #endif
 

@@ -7,7 +7,7 @@
 #ifndef _MOS_SLAB_H
 #define _MOS_SLAB_H
 
-#include <mos/heap.h>
+#include <mos/allocator.h>
 
 // Application is responsible for maintaining enough free slabs for
 //   anticipated ISR usage.

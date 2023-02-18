@@ -14,19 +14,18 @@
 #include <mos/internal/security.h>
 #include <errno.h>
 
-// TODO: "Better Fit" Allocator improvement. ASSERT on errors.
-// TODO: Assert failure should hang/crash
-// TODO: Thread-local storage
+// TODO: "Better Fit" Allocator improvement.
+// TODO: Thread-local storage.
 // TODO: Consolidate "TO" APIs to single API function.
 // TODO: Atomic handle pool
 // TODO: Logging
 
-// TODO: Hooks for other timers such as LPTIM ?
+// TODO: Hooks for other timers such as LPTIM?
 // TODO: auto tick startup?
 // TODO: smaller init for term handlers
 
 #define NO_SUCH_THREAD       NULL
-#define STACK_FILL_VALUE     0xca5eca11
+#define STACK_FILL_VALUE     0xca110411
 
 /* The parameter is really used, but tell compiler it is unused to reject warnings */
 #define MOS_USED_PARAM(x)    MOS_UNUSED(x)
@@ -34,7 +33,7 @@
 #define EVENT(e, v) \
     { if (MOS_ENABLE_EVENTS) (*pEventHook)((MOS_EVENT_ ## e), (v)); }
 
-// Element types for heterogeneous lists
+// Element types for polymorphic lists
 enum {
     ELM_THREAD,
     ELM_TIMER
@@ -188,6 +187,7 @@ static void KPrint(void) {
 
 void mosAssertAt(char * pFile, u32 line) {
     KPrintf("Assertion failed in %s on line %u\n", pFile, line);
+    MOS_INDUCE_CRASH();
     if (pRunningThread != NO_SUCH_THREAD)
         SetRunningThreadStateAndYield(THREAD_TIME_TO_STOP);
     // not always reachable

@@ -10,7 +10,7 @@
 #define _MOS_REGISTRY_H_
 
 #include <mos/kernel.h>
-#include <mos/heap.h>
+#include <mos/allocator.h>
 
 typedef u8 MosEntryType;
 enum MosEntryType {

@@ -12,11 +12,9 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include <mos/kernel.h>
-#include <mos/heap.h>
+#include <mos/dynamic_kernel.h>
 #include <mos/queue.h>
 
-#include <mos/thread_heap.h>
 #include <mos/format_string.h>
 #include <mos/trace.h>
 #include <mos/shell.h>
@@ -75,25 +73,6 @@ bool IsStopRequested() {
 
 void RequestThreadStop(MosThread * pThd) {
     pThd->pUser = (void *)1;
-}
-
-// Induces a crash
-static MOS_INLINE void CauseCrash(void) {
-#if (MOS_ARCH_CAT == MOS_ARCH_ARM_CORTEX_M_BASE)
-    // Unaligned access
-    asm volatile (
-        "mov r0, #3\n"
-        "ldr r1, [r0]"
-            : : : "r0", "r1"
-    );
-#elif (MOS_ARCH_CAT == MOS_ARCH_ARM_CORTEX_M_MAIN)
-    // Divide-by-zero
-    asm volatile (
-        "mov r0, #0\n"
-        "udiv r1, r1, r0"
-            : : : "r0", "r1"
-    );
-#endif
 }
 
 static void ClearHistogram(void) {
@@ -183,7 +162,7 @@ static s32 ExcTestThread(s32 arg) {
     mosPrintf("Running Exception Thread %X\n", arg);
     mosSetTermArg(mosGetRunningThread(), TEST_PASS_HANDLER + 1);
     mosDelayThread(50);
-    CauseCrash();
+    mosAssert(0);
     return TEST_FAIL;
 }
 

@@ -27,27 +27,49 @@ typedef struct {
     u32     type;
 } MosPmLink;
 
+/// Initialize an empty list
+///
 MOS_ISR_SAFE void mosInitList(MosList * pList);
+/// Set a polymorphic link with element type
+///
 MOS_ISR_SAFE void mosInitPmLink(MosPmLink * pElm, u32 type);
+/// Link element to end of list
+///
 MOS_ISR_SAFE void mosAddToEndOfList(MosList * pList, MosLink * pElmAdd);
+/// Add element before another element in list
+///
 MOS_ISR_SAFE static MOS_INLINE void
 mosAddToListBefore(MosLink * pElmExist, MosLink * pElmAdd) {
     // AddToList <=> AddToListBefore if used on element rather than pList
     mosAddToEndOfList(pElmExist, pElmAdd);
 }
+/// Add element after another element in list
+///
 MOS_ISR_SAFE void mosAddToListAfter(MosLink * pElmExist, MosLink * pElmAdd);
+/// Add element to front of list
+///
 MOS_ISR_SAFE static MOS_INLINE void mosAddToFrontOfList(MosList * pList, MosLink * pElmAdd) {
     // AddToListAfter <=> AddToFrontOfList if used on pList rather than element
     mosAddToListAfter(pList, pElmAdd);
 }
+/// Remove element from list
+///
 MOS_ISR_SAFE void mosRemoveFromList(MosLink * pElmRem);
+/// Move element to end of list
+///
 MOS_ISR_SAFE void mosMoveToEndOfList(MosList * pList, MosLink * pElmMove);
+/// Is element at end of list?
+///
 MOS_ISR_SAFE static MOS_INLINE bool mosIsAtEndOfList(MosList * pList, MosLink * pElm) {
     return (pList->pPrev == pElm);
 }
+/// Is this list empty?
+///
 MOS_ISR_SAFE static MOS_INLINE bool mosIsListEmpty(MosList * pList) {
     return (pList->pPrev == pList);
 }
+/// Is this element currently on a list?
+///
 MOS_ISR_SAFE static MOS_INLINE bool mosIsOnList(MosLink * pElm) {
     return (pElm->pPrev != pElm);
 }

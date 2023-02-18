@@ -49,7 +49,7 @@ typedef void (MosEventHook)(MosEvent evt, u32 val);
 typedef struct MosThread {
     u32       rsvd[21];
     void    * pUser;         /// User data pointer, set to NULL after thread initialization
-    s32       refCnt;        /// Reference counter, used by thread_heap.c
+    s32       refCnt;        /// Reference counter
 } MosThread;
 
 // Blocking mutex supporting recursion
@@ -261,11 +261,9 @@ MOS_ISR_SAFE static MOS_INLINE void mosRaiseBinarySem(MosSem * pSem) {
     mosRaiseSignal(pSem, 1);
 }
 
+/// Asserts induce crash if given condition is not satisfied.
+///
 void mosAssertAt(char * pFile, u32 line);
-#ifdef DEBUG
-  #define mosAssert(c) { if (!(c)) mosAssertAt(__FILE__, __LINE__); }
-#else
-  #define mosAssert(c)
-#endif
+#define mosAssert(c) { if (!(c)) mosAssertAt(__FILE__, __LINE__); }
 
 #endif

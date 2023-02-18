@@ -4,10 +4,14 @@
 // terms and conditions contained within the LICENSE file (the
 // "License") included under this distribution.
 
-#include <mos/thread_heap.h>
+#include <mos/dynamic_kernel.h>
 
 static MosHeap * pThreadHeap = NULL;
 static MosMutex ThreadMutex;
+
+// TODO:
+// 1. Refactor files
+// 2. When allocating, append new fields to end of MosThread (refCnt / etc).
 
 static void FreeThread(MosThread * pThd) {
     if (pThreadHeap) {

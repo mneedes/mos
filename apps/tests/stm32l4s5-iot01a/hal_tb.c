@@ -12,7 +12,6 @@
 #include <string.h>
 
 #include <mos/trace.h>
-
 #include <hal_tb.h>
 
 //static MosSem pulse_sem;

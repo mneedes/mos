@@ -155,7 +155,7 @@ mosTrySendMessageToContext(MosContext * pContext, MosContextMessage * pMsg) {
 /// Send a inter-context message (external).
 /// \note May safely be used only between different contexts, or from the outside world to a context.
 MOS_INLINE void mosSendMessageToContext(MosContext * pContext, MosContextMessage * pMsg) {
-    mosAssert(MosGetThreadPtr() != &pContext->thd);
+    mosAssert(mosGetRunningThread() != &pContext->thd);
     mosSendToQueue(&pContext->msgQ, pMsg);
 }
 

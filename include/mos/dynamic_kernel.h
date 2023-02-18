@@ -4,15 +4,18 @@
 // terms and conditions contained within the LICENSE file (the
 // "License") included under this distribution.
 
-/// \file  thread_heap.h
-/// \brief Dynamically allocated thread interface.
+/// \file  dynamic_kernel.h
+/// \brief Implemented as a layer above the static kernel, the dynamic kernel extension
+///        provides dynamic allocation of kernel resources. Including the dynamic kernel
+///        will automatically include the static kernel.
 /// \note This is a work in progress...
 
-#ifndef _MOS_THREAD_HEAP_H_
-#define _MOS_THREAD_HEAP_H_
+#ifndef _MOS_DYNAMIC_KERNEL_H_
+#define _MOS_DYNAMIC_KERNEL_H_
 
+// Include the static kernel and the allocator
 #include <mos/kernel.h>
-#include <mos/heap.h>
+#include <mos/allocator.h>
 
 /// Set heap threads are to be allocated from.
 ///
