@@ -151,7 +151,7 @@ MOS_ISR_SAFE static MOS_INLINE u32
 mosAtomicCompareAndSwap32(u32 * pValue, u32 compareVal, u32 exchangeVal) {
     u32 mask = mosDisableInterrupts();
     u32 val = *pValue;
-    if (*pValue == nCompareVal) *pValue = exchangeVal;
+    if (*pValue == compareVal) *pValue = exchangeVal;
     mosEnableInterrupts(mask);
     return val;
 }
