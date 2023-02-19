@@ -10,38 +10,33 @@ MOS was originally developed on a STMicroelectronics STM32F4 Discovery and has b
 * STM32G071RB Nucleo (ARM Cortex M0+)
 
 Design Goals:
-* RTOS: Hard priorities and bounded execution.
-* Short critical sections.
+* RTOS: Hard priorities, bounded execution and short critical sections.
 * Simple configuration with low use of conditional compilation.
-* Tick reduction (_i.e.:_ the so-called "tickless" operation).
-* Small code size (_e.g.:_ mos/kernel*.c compiled size is ~5KB).
-* Static kernel and (optionally) static application.
+* Small code size (_e.g.:_ minimal compiled size is ~5KB).
+* Baseline kernel is static with optional dynamic kernel extension.
 * Easily customizable.
 * Provide example BSPs and example applications.
 
 Included Primitives:
-* Recursive mutex with priority inheritance
-* Semaphores (counting / multi-bit binary)
-* Message queues (multi-priority)
-* SysTick-based timers
+* Recursive mutex with priority inheritance.
+* Semaphores (counting / multi-bit binary).
+* Message queues (multi-priority).
+* SysTick-based timers.
+* Atomic operations.
 
-Included Optional Modules:
-* Heap
-* Shared context (cooperative multitasking where clients share same thread and message queue, intended for small memory footprints)
-* Logging
-* Command shell
-* Test bench
+Optional Modules:
+* Allocator with multi-region support.
+* Dynamic kernel extension with thread-local storage.
+* TrustZone security.
+* Shared context (cooperative multitasking where clients share same thread and message queue--for tiny footprints).
+* Command shell.
 
 Supported toolchains / architectures:
 * GCC
 * ARM M0/M1/M0+ (Arch v6-M)
 * ARM M3/M4/M7 (Arch v7-M)
 * ARM M4F/M7F (Arch v7-M with hardware floating point using lazy stacking)
-* ARM M23/M33/M55 (Arch v8-M) - TrustZone context switches
-
-Future
-* Better documentation...
-* C++ bindings
+* ARM M23/M33/M55 (Arch v8-M) - TrustZone context switches.
 
 Features it probably WILL NEVER have:
 * Full MPU support
