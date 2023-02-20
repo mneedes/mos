@@ -4,13 +4,13 @@
 // terms and conditions contained within the LICENSE file (the
 // "License") included under this distribution.
 
-#include <mos/dynamic_kernel.h>
+#include <mos/kernel.h>
 
 static MosHeap * pSystemHeap = NULL;
 static MosMutex  ThreadMutex;
 
 // TODO:
-// 1. Refactor files
+// 1. Polymorphic thread extension byte in MosThread?;
 
 // Local storage data
 typedef struct {
@@ -26,9 +26,11 @@ typedef struct {
     u32         refCnt;
 } DynamicThread;
 
-void mosSetThreadHeap(MosHeap * pHeap) {
-    pSystemHeap = pHeap;
-    mosInitMutex(&ThreadMutex);
+void mosInitDynamicKernel(MosHeap * pHeap) {
+    if (!pSystemHeap) {
+        pSystemHeap = pHeap;
+        mosInitMutex(&ThreadMutex);
+    }
 }
 
 static void FreeDynamicThread(DynamicThread * pThd) {

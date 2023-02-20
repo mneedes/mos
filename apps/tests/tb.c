@@ -12,7 +12,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include <mos/dynamic_kernel.h>
+#include <mos/kernel.h>
 #include <mos/queue.h>
 
 #include <mos/format_string.h>
@@ -354,7 +354,7 @@ static bool ThreadTests(void) {
     mosAllocAndRunThread(&thd[0], 1, StorageThread, 0, DFT_STACK_SIZE);
     mosAllocAndRunThread(&thd[1], 1, StorageThread, 1, DFT_STACK_SIZE);
     if (thd[0] && thd[1]) {
-        mosDelayThread(2 * test_time);
+        mosDelayThread(test_time);
         RequestThreadStop(thd[0]);
         RequestThreadStop(thd[1]);
         if (mosWaitForThreadStop(thd[0]) != TEST_PASS) test_pass = false;
@@ -2232,7 +2232,7 @@ int InitTestBench() {
     mosRegisterEventHook(EventCallback);
 
     mosInitHeap(&TestThreadHeapDesc, MOS_STACK_ALIGNMENT, TestThreadHeap, sizeof(TestThreadHeap));
-    mosSetThreadHeap(&TestThreadHeapDesc);
+    mosInitDynamicKernel(&TestThreadHeapDesc);
     mosRegistryInit(&TestThreadHeapDesc, '.');
 
     if (!mosAllocAndRunThread(&Threads[TEST_SHELL_THREAD_ID], 0, TestShell,

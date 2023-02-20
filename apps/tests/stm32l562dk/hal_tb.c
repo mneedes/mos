@@ -1,5 +1,5 @@
 
-//  Copyright 2021 Matthew C Needes
+//  Copyright 2021-2023 Matthew C Needes
 //  You may not use this source file except in compliance with the
 //  terms and conditions contained within the LICENSE file (the
 //  "License") included under this distribution.
@@ -11,7 +11,7 @@
 
 #include <string.h>
 
-#include <mos/dynamic_kernel.h>
+#include <mos/kernel.h>
 #include <mos/trace.h>
 #include <hal_tb.h>
 

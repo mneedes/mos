@@ -4,7 +4,7 @@
 // terms and conditions contained within the LICENSE file (the
 // "License") included under this distribution.
 
-/// \file  mos/heap.h
+/// \file  mos/allocator.h
 /// \brief
 /// The MOS allocator is an efficient first-fit memory allocator.
 ///
@@ -14,10 +14,10 @@
 //  This implementation has been extensively tested using random
 //  test vectors.
 
-#ifndef _MOS_HEAP_H_
-#define _MOS_HEAP_H_
+#ifndef _MOS_ALLOCATOR_H_
+#define _MOS_ALLOCATOR_H_
 
-#include <mos/kernel.h>
+#include <mos/static_kernel.h>
 
 typedef struct {
     MosMutex mtx;

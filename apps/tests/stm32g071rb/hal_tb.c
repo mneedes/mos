@@ -11,7 +11,7 @@
 
 #include <string.h>
 
-#include <mos/dynamic_kernel.h>
+#include <mos/kernel.h>
 #include <mos/trace.h>
 #include <hal_tb.h>
 
