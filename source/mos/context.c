@@ -85,16 +85,16 @@ void mosStartContext(MosContext * pContext) {
     mosUnlockMutex(&pContext->mtx);
 }
 
-void MosStopContext(MosContext * pContext) {
+void mosStopContext(MosContext * pContext) {
     MosContextMessage msg = { .id = MosContextMessageID_StopContext, .pClient = NULL };
     mosSendMessageToContext(pContext, &msg);
 }
 
-void MosWaitForContextStop(MosContext * pContext) {
+void mosWaitForContextStop(MosContext * pContext) {
     mosWaitForThreadStop(&pContext->thd);
 }
 
-void MosStartClient(MosContext * pContext, MosClient * pClient, MosClientHandler * pHandler, void * pPrivData) {
+void mosStartClient(MosContext * pContext, MosClient * pClient, MosClientHandler * pHandler, void * pPrivData) {
     pClient->pHandler = pHandler;
     pClient->pPrivData = pPrivData;
     pClient->completed = true;
@@ -108,7 +108,7 @@ void MosStartClient(MosContext * pContext, MosClient * pClient, MosClientHandler
     mosUnlockMutex(&pContext->mtx);
 }
 
-void MosStopClient(MosContext * pContext, MosClient * pClient) {
+void mosStopClient(MosContext * pContext, MosClient * pClient) {
     MosContextMessage msg = { .id = MosContextMessageID_StopClient, .pClient = pClient };
     mosSendMessageToContext(pContext, &msg);
 }
@@ -118,7 +118,7 @@ MOS_ISR_SAFE static bool ContextTimerCallback(MosTimer * _pTmr) {
     return mosTrySendMessageToContext(pTmr->pContext, &pTmr->msg);
 }
 
-void MosInitContextTimer(MosContextTimer * pTmr, MosContext * pContext) {
+void mosInitContextTimer(MosContextTimer * pTmr, MosContext * pContext) {
     pTmr->pContext = pContext;
     mosInitTimer(&pTmr->tmr, ContextTimerCallback);
 }

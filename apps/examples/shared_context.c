@@ -1,5 +1,5 @@
 
-// Copyright 2019-2022 Matthew C Needes
+// Copyright 2019-2023 Matthew C Needes
 // You may not use this source file except in compliance with the
 // terms and conditions contained within the LICENSE file (the
 // "License") included under this distribution.
@@ -9,12 +9,10 @@
 //
 
 #include <mos/hal.h>
-#include <mos/kernel.h>
+#include <mos/static_kernel.h>
 #include <mos/trace.h>
 #include <mos/context.h>
 #include <bsp_hal.h>
-
-#include "tb.h"
 
 static MosContext AppContext;
 static u8         AppStack[1024];
@@ -53,30 +51,30 @@ static bool ClientHandler(MosContextMessage * pMsg) {
     static u32 burstCount = 0;
     switch (pMsg->id) {
     case MosContextMessageID_StartClient:
-        MosPrintf("Start %d\n", (u32)pClient->pPrivData);
+        mosPrintf("Client start %d\n", (u32)pClient->pPrivData);
         count = 0;
         burstCount = 0;
         if (pClient == &AppClient1) {
-            MosInitContextTimer(&AppTimer, &AppContext);
-            MosSetContextMessage(pMsg, &AppClient1, AppClientMessageID_SendBurst);
-            MosSetContextTimer(&AppTimer, 500, pMsg);
+            mosInitContextTimer(&AppTimer, &AppContext);
+            mosSetContextMessage(pMsg, &AppClient1, AppClientMessageID_SendBurst);
+            mosSetContextTimer(&AppTimer, 500, pMsg);
         }
         break;
     case AppClientMessageID_Ping:
-        MosPrintf("Ping %d: %d\n", (u32)pClient->pPrivData, (u32)pMsg->pData);
+        mosPrintf("Ping %d: %d\n", (u32)pClient->pPrivData, (u32)pMsg->pData);
         break;
     case AppClientMessageID_SendBurst:
     case MosContextMessageID_ResumeClient: {
         while (1) {
             // After pings are sent, context shuts itself down via broadcast
-            if (count < maxCount) MosSetContextMessage(pMsg, &AppClient2, AppClientMessageID_Ping);
-            else MosSetContextBroadcastMessage(pMsg, MosContextMessageID_StopContext);
-            MosSetContextMessageData(pMsg, (void *)count);
-            if (MosTrySendMessageToContext(&AppContext, pMsg)) {
+            if (count < maxCount) mosSetContextMessage(pMsg, &AppClient2, AppClientMessageID_Ping);
+            else mosSetContextBroadcastMessage(pMsg, MosContextMessageID_StopContext);
+            mosSetContextMessageData(pMsg, (void *)count);
+            if (mosTrySendMessageToContext(&AppContext, pMsg)) {
                 if (count++ == maxCount) return true;
                 if (++burstCount == 5) {
                     burstCount = 0;
-                    MosResetContextTimer(&AppTimer);
+                    mosResetContextTimer(&AppTimer);
                     // Done for now
                     return true;
                 }
@@ -85,8 +83,8 @@ static bool ClientHandler(MosContextMessage * pMsg) {
         break;
     }
     case MosContextMessageID_StopClient:
-        MosCancelContextTimer(&AppTimer);
-        MosPrintf("Stop %d\n", (u32)pClient->pPrivData);
+        mosCancelContextTimer(&AppTimer);
+        mosPrintf("Client stop %d\n", (u32)pClient->pPrivData);
         break;
     default:
         break;
@@ -96,14 +94,16 @@ static bool ClientHandler(MosContextMessage * pMsg) {
 
 static s32 RunApp(s32 arg) {
     MOS_UNUSED(arg);
-    // In this case, context stops itself
-    MosWaitForContextStop(&AppContext);
-    MosPrintf("Application exit\n");
-    MosInitContext(&AppContext, 2, AppStack, sizeof(AppStack), AppQueue, count_of(AppQueue));
-    MosStartClient(&AppContext, &AppClient1, ClientHandler, (void *)AppClientID_1);
-    MosStartClient(&AppContext, &AppClient2, ClientHandler, (void *)AppClientID_2);
-    MosStartContext(&AppContext);
-    MosPrintf("Application exit 2\n");
+    // Wait for the initially created context to stop
+    mosWaitForContextStop(&AppContext);
+    mosPrintf("Context stopped...\n");
+    // Start clients again from this thread
+    mosInitContext(&AppContext, 2, AppStack, sizeof(AppStack), AppQueue, count_of(AppQueue));
+    mosStartClient(&AppContext, &AppClient1, ClientHandler, (void *)AppClientID_1);
+    mosStartClient(&AppContext, &AppClient2, ClientHandler, (void *)AppClientID_2);
+    mosStartContext(&AppContext);
+    mosWaitForContextStop(&AppContext);
+    mosPrintf("Context stopped again...done\n");
     return 0;
 }
 
@@ -112,21 +112,21 @@ int main() {
     HalInit();
 
     // Run init before calling any MOS functions
-    MosInit();
+    mosInit();
 
     // Init trace before calling any print functions
-    MosInitTrace(TRACE_INFO | TRACE_ERROR | TRACE_FATAL, true);
-    MosPrintf("\nMaintainable OS (Version " MOS_VERSION_STRING ")\n");
-    MosPrint("Copyright 2019-2022, Matthew Needes  All Rights Reserved\n");
+    mosInitTrace(0, true);
+    mosPrintf("\nMaintainable OS (Version " MOS_VERSION_STRING ")\n");
+    mosPrint("Copyright 2019-2023, Matthew Needes  All Rights Reserved\n");
 
     // Start a background app with a few clients
-    MosInitContext(&AppContext, 2, AppStack, sizeof(AppStack), AppQueue, count_of(AppQueue));
-    MosStartClient(&AppContext, &AppClient1, ClientHandler, (void *)AppClientID_1);
-    MosStartClient(&AppContext, &AppClient2, ClientHandler, (void *)AppClientID_2);
-    MosStartContext(&AppContext);
+    mosInitContext(&AppContext, 2, AppStack, sizeof(AppStack), AppQueue, count_of(AppQueue));
+    mosStartClient(&AppContext, &AppClient1, ClientHandler, (void *)AppClientID_1);
+    mosStartClient(&AppContext, &AppClient2, ClientHandler, (void *)AppClientID_2);
+    mosStartContext(&AppContext);
 
     /* Start application to monitor context */
-    MosInitAndRunThread(&RunAppThread, 1, RunApp, 3, RunAppStack, sizeof(RunAppStack));
-    MosRunScheduler();
+    mosInitAndRunThread(&RunAppThread, 1, RunApp, 3, RunAppStack, sizeof(RunAppStack));
+    mosRunScheduler();
     return -1;
 }
