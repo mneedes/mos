@@ -94,7 +94,7 @@ void mosWaitForContextStop(MosContext * pContext) {
     mosWaitForThreadStop(&pContext->thd);
 }
 
-void mosStartClient(MosContext * pContext, MosClient * pClient, MosClientHandler * pHandler, void * pPrivData) {
+void mosAddClientToContext(MosContext * pContext, MosClient * pClient, MosClientHandler * pHandler, void * pPrivData) {
     pClient->pHandler = pHandler;
     pClient->pPrivData = pPrivData;
     pClient->completed = true;

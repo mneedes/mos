@@ -8,7 +8,7 @@
 // MOS tracing facility and command shell support
 //
 
-#include <mos/kernel.h>
+#include <mos/static_kernel.h>
 #include <mos/hal.h>
 
 #include <mos/format_string.h>

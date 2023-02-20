@@ -44,7 +44,7 @@
 #ifndef _MOS_CONTEXT_H_
 #define _MOS_CONTEXT_H_
 
-#include <mos/kernel.h>
+#include <mos/static_kernel.h>
 #include <mos/queue.h>
 #include <mos/trace.h>
 
@@ -104,6 +104,18 @@ typedef struct {
 MOS_CLIENT_UNSAFE void mosInitContext(MosContext * pContext, MosThreadPriority prio, u8 * pStackBottom,
                                           u32 stackSize, MosContextMessage * pMsgQueueBuf,
                                           u32 msgQueueDepth);
+/// Add a client and attach it to the context.
+///  \note Message processing won't start until MosStartContext() is invoked. If clients are
+///  started after MosStartContext() they will be sent start messages individually.
+///  \note Must not be called by a client.
+MOS_CLIENT_UNSAFE void mosAddClientToContext(MosContext * pContext, MosClient * pClient,
+                                                 MosClientHandler * pHandler, void * pPrivData);
+/// Send a stop client message.
+/// \note A context will not terminate until a _broadcast_ stop message is sent
+/// to the context. The Client will remain attached to the context until the _broadcast_
+/// stop message is sent.
+/// \note Must not be called by a client.
+MOS_CLIENT_UNSAFE void mosStopClient(MosContext * pContext, MosClient * pClient);
 /// Start context thread and client message processing.
 ///
 MOS_CLIENT_UNSAFE void mosStartContext(MosContext * pContext);
@@ -113,18 +125,6 @@ MOS_CLIENT_UNSAFE void mosStopContext(MosContext * pContext);
 /// Wait until a context thread is finished.
 /// \note Must not be called by a client.
 MOS_CLIENT_UNSAFE void mosWaitForContextStop(MosContext * pContext);
-/// Start an individual client and attach it to the context.
-///  \note Message processing won't start until MosStartContext() is invoked. If clients are
-///  started after MosStartContext() they will be sent start messages individually.
-///  \note Must not be called by a client.
-MOS_CLIENT_UNSAFE void mosStartClient(MosContext * pContext, MosClient * pClient,
-                                         MosClientHandler * pHandler, void * pPrivData);
-/// Send a stop client message.
-/// \note A context will not terminate until a _broadcast_ stop message is sent
-/// to the context. The Client will remain attached to the context until the _broadcast_
-/// stop message is sent.
-/// \note Must not be called by a client.
-MOS_CLIENT_UNSAFE void mosStopClient(MosContext * pContext, MosClient * pClient);
 /// Set a context message intended for a given client with a given message ID.
 ///
 MOS_ISR_SAFE MOS_INLINE void

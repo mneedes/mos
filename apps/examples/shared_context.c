@@ -99,8 +99,8 @@ static s32 RunApp(s32 arg) {
     mosPrintf("Context stopped...\n");
     // Start clients again from this thread
     mosInitContext(&AppContext, 2, AppStack, sizeof(AppStack), AppQueue, count_of(AppQueue));
-    mosStartClient(&AppContext, &AppClient1, ClientHandler, (void *)AppClientID_1);
-    mosStartClient(&AppContext, &AppClient2, ClientHandler, (void *)AppClientID_2);
+    mosAddClientToContext(&AppContext, &AppClient1, ClientHandler, (void *)AppClientID_1);
+    mosAddClientToContext(&AppContext, &AppClient2, ClientHandler, (void *)AppClientID_2);
     mosStartContext(&AppContext);
     mosWaitForContextStop(&AppContext);
     mosPrintf("Context stopped again...done\n");
@@ -121,8 +121,8 @@ int main() {
 
     // Start a background app with a few clients
     mosInitContext(&AppContext, 2, AppStack, sizeof(AppStack), AppQueue, count_of(AppQueue));
-    mosStartClient(&AppContext, &AppClient1, ClientHandler, (void *)AppClientID_1);
-    mosStartClient(&AppContext, &AppClient2, ClientHandler, (void *)AppClientID_2);
+    mosAddClientToContext(&AppContext, &AppClient1, ClientHandler, (void *)AppClientID_1);
+    mosAddClientToContext(&AppContext, &AppClient2, ClientHandler, (void *)AppClientID_2);
     mosStartContext(&AppContext);
 
     /* Start application to monitor context */

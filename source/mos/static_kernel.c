@@ -9,7 +9,7 @@
 //
 
 #include <bsp_hal.h>
-#include <mos/kernel.h>
+#include <mos/static_kernel.h>
 #include <mos/internal/arch.h>
 #include <mos/internal/security.h>
 #include <errno.h>

@@ -4,7 +4,7 @@
 // terms and conditions contained within the LICENSE file (the
 // "License") included under this distribution.
 
-#include <mos/kernel.h>
+#include <mos/static_kernel.h>
 #include <mos/internal/arch.h>
 #include <mos/format_string_s.h>
 

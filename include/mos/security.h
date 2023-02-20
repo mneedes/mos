@@ -12,7 +12,7 @@
 #ifndef _MOS_SECURITY_H_
 #define _MOS_SECURITY_H_
 
-#include <mos/kernel.h>
+#include <mos/static_kernel.h>
 
 /// Reserve a security context for thread (blocking)
 /// Invoke this before calling into security APIs layers such as TrustZone.

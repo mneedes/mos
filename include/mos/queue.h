@@ -14,7 +14,7 @@
 #ifndef _MOS_QUEUE_H_
 #define _MOS_QUEUE_H_
 
-#include <mos/kernel.h>
+#include <mos/static_kernel.h>
 
 // Multi-writer / multi-reader blocking FIFO
 typedef struct MosQueue {
