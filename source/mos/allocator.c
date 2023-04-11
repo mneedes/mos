@@ -26,14 +26,31 @@
  *                   alignment     |                  +- next block
  *                                 |
  *   Payload of freed block contains explicit link
+ *
+ * Deterministic best-effort allocation using bins:
+ *
+ *   Free blocks are stored in power-of-2 bins. N attempts are made to
+ *   find a block that can accomodate the allocation from its bin size,
+ *   otherwise the next block size up is split.
+ *
+ *   Allocation sizes are a minimum of 2^4 = 16.  Therefore we omit the
+ *   first 4 bins.  A bin is for block sizes in the interval:
+ *        2^(bin + 4) <= size < 2^(bin + 5)
+ *
+ *     Bin  size
+ *      0 - 16-31
+ *      1 - 32-63
+ *      2 - 64-127
+ *         ...
+ *     13 - 131072-262143
  */
-
-// TODO: place frags in power of 2 bins
-// TODO: Deterministic allocations using power of 2 bins.
 
 enum {
     HEAP_CANARY_VALUE = 0xe711dead,
-    MIN_PAYLOAD_SIZE  = sizeof(MosList)
+    MIN_PAYLOAD_SIZE  = sizeof(MosList),
+    MIN_BIN_SHIFT     = 4,
+    NUM_BINS          = 14,
+    MAX_ALLOC_TRIES   = 8,
 };
 
 typedef struct {
@@ -50,6 +67,9 @@ typedef struct {
     };
 } Block;
 
+#define BIN_NUM_FOR_SIZE(size)  (31 - __builtin_clz(size) - MIN_BIN_SHIFT)
+#define BIN_MASK_FOR_SIZE(size) (1 << BIN_NUM_FOR_SIZE(size))
+
 MOS_STATIC_ASSERT(Link, sizeof(Link) == 12);
 MOS_STATIC_ASSERT(Block, sizeof(Block) == 20);
 
@@ -61,18 +81,37 @@ void mosInitHeap(MosHeap * pHeap, u16 alignment, u8 * pBot_, u32 poolSize) {
     pHeap->alignMask = alignment - 1;
     mosAssert((alignment & pHeap->alignMask) == 0);
     pHeap->minBlockSize = MOS_ALIGN32(MIN_PAYLOAD_SIZE + sizeof(Link), pHeap->alignMask);
+    /* Init free-list bins */
+    pHeap->pBins = (MosList *)MOS_ALIGN_PTR(pBot_, sizeof(void *) - 1);
+    mosAssert((u8 *)(&pHeap->pBins[NUM_BINS]) - pBot_ < poolSize);
+    for (u32 ix = 0; ix < NUM_BINS; ix++) {
+        mosInitList(&pHeap->pBins[ix]);
+    }
+    poolSize -= ((u8 *)&pHeap->pBins[NUM_BINS] - pBot_);
+    pBot_ = (u8 *)&pHeap->pBins[NUM_BINS];
+    pHeap->binMask = 0;
     /* Free counters */
     pHeap->bytesFree    = 0;
     pHeap->minBytesFree = 0;
-    /* Initialize free-list (explicit links) */ 
-    pHeap->flBlockCount = 0;
-    mosInitList(&pHeap->fl);
     mosInitMutex(&pHeap->mtx);
     mosAddHeapPool(pHeap, pBot_, poolSize);
 }
 
+static void RemoveFromFreeList(MosHeap * pHeap, Block * pBlock) {
+    /* Clear mask bit if removing last item on list */
+    if (pBlock->flLink.pNext == pBlock->flLink.pPrev)
+        pHeap->binMask -= BIN_MASK_FOR_SIZE(pBlock->link.size);
+    mosRemoveFromList(&pBlock->flLink);
+}
+
+static void AddToFreeList(MosHeap * pHeap, Block * pBlock) {
+    u32 bin = BIN_NUM_FOR_SIZE(pBlock->link.size);
+    mosAddToFrontOfList(&pHeap->pBins[bin], &pBlock->flLink);
+    pHeap->binMask |= (1 << bin);
+}
+
 void mosAddHeapPool(MosHeap * pHeap, u8 * pBot_, u32 poolSize) {
-    if (!pBot_) return;
+    mosAssert(poolSize >= 128);
     Link * pLink = (Link *)MOS_ALIGN_PTR(pBot_ + sizeof(Link), pHeap->alignMask);
     Block * pBot = (Block *)(pLink - 1);
     pLink        = (Link *)MOS_ALIGN_PTR_DOWN(pBot_ + poolSize, pHeap->alignMask);
@@ -84,13 +123,13 @@ void mosAddHeapPool(MosHeap * pHeap, u8 * pBot_, u32 poolSize) {
     pTop->link.canary = HEAP_CANARY_VALUE;
     pTop->link.size_p = pBot->link.size;
     pTop->link.size   = 0x1;
+    mosAssert(BIN_NUM_FOR_SIZE(pBot->link.size) < NUM_BINS);
     mosLockMutex(&pHeap->mtx);
     /* Add to size */
     pHeap->bytesFree    += pBot->link.size;
     pHeap->minBytesFree += pBot->link.size;
-    /* Initialize free-list (explicit links) */ 
-    pHeap->flBlockCount++;
-    mosAddToEndOfList(&pHeap->fl, &pBot->flLink);
+    /* Add to free list bin */
+    AddToFreeList(pHeap, pBot);
     mosUnlockMutex(&pHeap->mtx);
 }
 
@@ -100,21 +139,32 @@ void * mosAlloc(MosHeap * pHeap, u32 size) {
     mosLockMutex(&pHeap->mtx);
     Block * pBlock;
     {
-        /* First-fit search: max(min_size, size) + link_size needs to fit */
-        MosList * pElm;
-        for (pElm = pHeap->fl.pNext; pElm != &pHeap->fl; pElm = pElm->pNext) {
-            pBlock = container_of(pElm, Block, flLink);
-            if (pBlock->link.size >= size) {
+        /* Deterministic best-effort search */
+        u32 searchMask = pHeap->binMask & ~(BIN_MASK_FOR_SIZE(size) - 1);
+        if (searchMask) {
+            u32 bin = __builtin_ctz(searchMask);
+            mosAssert(searchMask);
+            MosList * pLink = pHeap->pBins[bin].pNext;
+            /* First try best-fit list */
+            for (u32 try = 0; try < MAX_ALLOC_TRIES; try++, pLink = pLink->pNext) {
+                if (pLink == &pHeap->pBins[bin]) break;
+                pBlock = container_of(pLink, Block, flLink);
                 mosAssert(pBlock->link.canary == HEAP_CANARY_VALUE);
-                break;
+                if (pBlock->link.size >= size) goto FOUND;
+            }
+            /* Otherwise split next available bin */
+            searchMask -= (1 << bin);
+            if (searchMask) {
+                bin = __builtin_ctz(searchMask);
+                pBlock = container_of(pHeap->pBins[bin].pNext, Block, flLink);
+                mosAssert(pBlock->link.canary == HEAP_CANARY_VALUE);
+                goto FOUND;
             }
         }
-        if (pElm == &pHeap->fl) {
-            mosUnlockMutex(&pHeap->mtx);
-            return NULL;
-        }
-        /* Remove chosen block from free-list */
-        mosRemoveFromList(pElm);
+        mosUnlockMutex(&pHeap->mtx);
+        return NULL;
+FOUND:
+        RemoveFromFreeList(pHeap, pBlock);
     }
     Block * pNextBlock = (Block *)((u8 *)pBlock + pBlock->link.size);
     /* Split the block if there is enough room left for a block of minimum size */
@@ -129,11 +179,10 @@ void * mosAlloc(MosHeap * pHeap, u32 size) {
         pNextBlock->link.size_p = size + 1;
         pBlock->link.size = pNextBlock->link.size_p;
         /* Add new block to free-list */
-        mosAddToEndOfList(&pHeap->fl, &pNextBlock->flLink);
+        AddToFreeList(pHeap, pNextBlock);
         pHeap->bytesFree -= size;
     } else {
         /* Use existing block */
-        pHeap->flBlockCount -= 1;
         pHeap->bytesFree -= pNextBlock->link.size_p;
         /* Mark allocation bit */
         pNextBlock->link.size_p += 1;
@@ -161,8 +210,7 @@ void * mosRealloc(MosHeap * pHeap, void * pBlock_, u32 newSize_) {
         if (avail + pNextBlock->link.size >= newSize) {
             avail += pNextBlock->link.size;
             /* Merge with next */
-            mosRemoveFromList(&pNextBlock->flLink);
-            pHeap->flBlockCount -= 1;
+            RemoveFromFreeList(pHeap, pNextBlock);
             pHeap->bytesFree -= pNextBlock->link.size;
             pBlock->link.size += pNextBlock->link.size;
             /* The new next block */
@@ -183,8 +231,7 @@ void * mosRealloc(MosHeap * pHeap, void * pBlock_, u32 newSize_) {
         pNextBlock->link.size_p = newSize + 1;
         pBlock->link.size = pNextBlock->link.size_p;
         /* Add new block to free-list */
-        mosAddToEndOfList(&pHeap->fl, &pNextBlock->flLink);
-        pHeap->flBlockCount += 1;
+        AddToFreeList(pHeap, pNextBlock);
     } else if (avail < newSize) {
         /* Move */
         u8 * pNewBlock = mosAlloc(pHeap, newSize_);
@@ -224,29 +271,39 @@ void mosFree(MosHeap * pHeap, void * pBlock_) {
         if (pPrev) {
             /* Combine with previous and next */
             sizeIncrease += pBlock->link.size + pNext->link.size;
-            mosRemoveFromList(&pPrev->flLink);
-            mosRemoveFromList(&pNext->flLink);
+            RemoveFromFreeList(pHeap, pPrev);
+            RemoveFromFreeList(pHeap, pNext);
             pBlock = pPrev;
-            pHeap->flBlockCount -= 1;
         } else {
             /* Combine with next */
             sizeIncrease += pNext->link.size;
-            mosRemoveFromList(&pNext->flLink);
+            RemoveFromFreeList(pHeap, pNext);
         }
     } else if (pPrev) {
         /* Combine with previous */
         sizeIncrease += pBlock->link.size;
-        mosRemoveFromList(&pPrev->flLink);
+        RemoveFromFreeList(pHeap, pPrev);
         pBlock = pPrev;
-    } else {
-        /* No combination possible */
-        pHeap->flBlockCount += 1;
     }
     /* Adjust implicit links */
     pBlock->link.size += sizeIncrease;
     pNext = (Block *)((u8 *)pBlock + pBlock->link.size);
     pNext->link.size_p = pBlock->link.size;
     /* Add block to free-list */
-    mosAddToFrontOfList(&pHeap->fl, &pBlock->flLink);
+    AddToFreeList(pHeap, pBlock);
     mosUnlockMutex(&pHeap->mtx);
 }
+
+u32 mosGetBiggestAvailableChunk(MosHeap * pHeap) {
+    u32 maxChunk = 0;
+    mosLockMutex(&pHeap->mtx);
+    u32 bin = 31 - __builtin_clz(pHeap->binMask);
+    MosLink * pLink = pHeap->pBins[bin].pNext;
+    for (; pLink != &pHeap->pBins[bin]; pLink = pLink->pNext) {
+        Block * pBlock = container_of(pLink, Block, flLink);
+        if (pBlock->link.size > maxChunk) maxChunk = pBlock->link.size;
+    }
+    mosUnlockMutex(&pHeap->mtx);
+    return maxChunk;
+}
+

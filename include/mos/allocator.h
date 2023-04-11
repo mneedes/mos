@@ -6,13 +6,12 @@
 
 /// \file  mos/allocator.h
 /// \brief
-/// The MOS allocator is an efficient first-fit memory allocator.
+/// The MOS allocator is a simple deterministic best-effort memory allocator.
 ///
-/// It may be configured for power-of-2 block alignment and supports
-/// allocation from multiple non-contiguous memory pools. It provides
-/// rudimentary detection of block overrun and multiple frees.
-//  This implementation has been extensively tested using random
-//  test vectors.
+/// Pools may be configured to return blocks with power-of-2 memory alignment.
+/// Includes support for allocation from multiple non-contiguous memory pools.
+/// It provides rudimentary detection of block overrun and multiple frees.
+/// This implementation has been extensively tested using random test vectors.
 
 #ifndef _MOS_ALLOCATOR_H_
 #define _MOS_ALLOCATOR_H_
@@ -20,13 +19,13 @@
 #include <mos/static_kernel.h>
 
 typedef struct {
-    MosMutex mtx;
-    MosList  fl;
-    u32      bytesFree;
-    u32      minBytesFree;
-    u16      alignMask;
-    u16      flBlockCount;
-    u16      minBlockSize;
+    MosMutex  mtx;
+    MosList * pBins;
+    u32       binMask;
+    u32       bytesFree;
+    u32       minBytesFree;
+    u16       alignMask;
+    u16       minBlockSize;
 } MosHeap;
 
 /// Initialize heap with an optional memory pool.
@@ -49,5 +48,8 @@ void * mosExchangeBlock(MosHeap * pHeap, void * pBlock, u32 newSize);
 /// Return block back to the heap.
 ///
 void mosFree(MosHeap * pHeap, void * pBlock);
+/// Get the max block size heap metric for evaluating fragmentation.
+///
+u32 mosGetBiggestAvailableChunk(MosHeap * pHeap);
 
 #endif
