@@ -30,7 +30,7 @@
  * Deterministic best-effort allocation using bins:
  *
  *   Free blocks are stored in power-of-2 bins. N attempts are made to
- *   find a block that can accomodate the allocation from its bin size,
+ *   find a block that can accommodate the allocation from its bin size,
  *   otherwise the next block size up is split.
  *
  *   Allocation sizes are a minimum of 2^4 = 16.  Therefore we omit the
@@ -143,7 +143,6 @@ void * mosAlloc(MosHeap * pHeap, u32 size) {
         u32 searchMask = pHeap->binMask & ~(BIN_MASK_FOR_SIZE(size) - 1);
         if (searchMask) {
             u32 bin = __builtin_ctz(searchMask);
-            mosAssert(searchMask);
             MosList * pLink = pHeap->pBins[bin].pNext;
             /* First try best-fit list */
             for (u32 try = 0; try < MAX_ALLOC_TRIES; try++, pLink = pLink->pNext) {
