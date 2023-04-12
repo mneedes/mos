@@ -14,7 +14,6 @@
 #include <mos/internal/security.h>
 #include <errno.h>
 
-// TODO: "Better Fit" Allocator improvement.
 // TODO: Consolidate "TO" APIs to single API function.
 // TODO: Atomic handle pool
 // TODO: Logging

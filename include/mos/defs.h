@@ -25,7 +25,7 @@
 #endif
 
 #ifndef MOS_MICRO_SEC_PER_TICK
-/// Interrupt tick rate
+/// System timer interrupt tick rate (for timers and time-slicing)
 ///
 #define MOS_MICRO_SEC_PER_TICK          1000
 #endif
