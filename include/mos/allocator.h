@@ -41,10 +41,6 @@ void * mosAlloc(MosHeap * pHeap, u32 size);
 //  data (truncation occurs only if size decreases). If call fails existing block will
 //  NOT be freed and NULL will be returned.
 void * mosRealloc(MosHeap * pHeap, void * pBlock, u32 newSize);
-/// TODO: Reallocate a block from the heap to the given size, only guaranteeing data
-/// preservation if the block size is the same or smaller. If call fails existing block will NOT
-/// be freed and NULL will be returned.
-void * mosExchangeBlock(MosHeap * pHeap, void * pBlock, u32 newSize);
 /// Return block back to the heap.
 ///
 void mosFree(MosHeap * pHeap, void * pBlock);

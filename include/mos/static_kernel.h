@@ -11,8 +11,6 @@
 #ifndef _MOS_STATIC_KERNEL_H_
 #define _MOS_STATIC_KERNEL_H_
 
-#include <mos_config.h>
-
 #include <mos/defs.h>
 #include <mos/arch.h>
 #include <mos/list.h>

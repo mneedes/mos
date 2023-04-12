@@ -352,12 +352,10 @@ InitThread(Thread * pThd, MosThreadPriority pri, MosThreadEntry * pEntry, s32 ar
     pSF->HWSAVE[0] = arg;
     pSF->LR_EXC_RTN = ExcReturnInitial;
     // Either fill lower stack OR just place canary value at bottom
-    if (MOS_STACK_USAGE_MONITOR) {
-        u32 * pFill = (u32 *)pSF - 1;
-        for (; pFill >= (u32 *)pStackBottom; pFill--) {
-            *pFill = STACK_FILL_VALUE;
-        }
-    } else *((u32 *)pStackBottom) = STACK_FILL_VALUE;
+    u32 * pFill = (u32 *)pSF - 1;
+    for (; pFill >= (u32 *)pStackBottom; pFill--) {
+        *pFill = STACK_FILL_VALUE;
+    }
     // Initialize context and state
     pThd->sp = (u32)pSF;
     pThd->mtxCnt = 0;
@@ -451,13 +449,9 @@ void mosGetStackStats(MosThread * _pThd, u32 * pStackSize, u32 * pStackUsage, u3
         *pStackUsage = mosGetStackDepth(pStackTop);
     else
         *pStackUsage = pStackTop - (u8 *)pThd->sp;
-    if (MOS_STACK_USAGE_MONITOR) {
-        u32 * pCheck = (u32 *)pThd->pStackBottom;
-        while (*pCheck++ == STACK_FILL_VALUE);
-        *pMaxStackUsage = pStackTop - (u8 *)pCheck + 4;
-    } else {
-        *pMaxStackUsage = *pStackUsage;
-    }
+    u32 * pCheck = (u32 *)pThd->pStackBottom;
+    while (*pCheck++ == STACK_FILL_VALUE);
+    *pMaxStackUsage = pStackTop - (u8 *)pCheck + 4;
     UnlockScheduler();
 }
 
