@@ -768,7 +768,7 @@ void mosRunScheduler(void) {
         "ldr r0, psp_start\n"
         "msr psp, r0\n"
         "mov r0, #0\n"
-        "msr basepri, r0\n"
+        "msr basepri, r0\n"  // basepri is not implemented for base but this appears harmless.
         "b SkipRS\n"
         ".balign 4\n"
         // 112 (28 words) is enough to store a dummy FP stack frame
