@@ -1,5 +1,5 @@
 # mos
-MOS, or Maintainable RTOS, is a simple and lightweight RTOS microkernel for the ARM Cortex M series that supports basic threading and IPC primitives.
+MOS, or Maintainable RTOS, is a simple and lightweight RTOS microkernel for ARM Cortex M that supports threading and IPC primitives.
 
 It is a work in progress and is intended for "fun personal projects."
 
