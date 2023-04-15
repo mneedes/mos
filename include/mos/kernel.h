@@ -13,7 +13,7 @@
 #ifndef _MOS_KERNEL_H_
 #define _MOS_KERNEL_H_
 
-// Include the static kernel and the allocator
+// The static kernel and the allocator
 #include <mos/static_kernel.h>
 #include <mos/allocator.h>
 
@@ -38,21 +38,21 @@ bool mosAllocAndRunThread(MosThread ** ppThd, MosThreadPriority pri,
 /// Increment thread reference count. Every user of a shared thread handle should increment it.
 /// Returns true if thread handle can be used.
 bool mosIncThreadRefCount(MosThread ** ppThd);
-/// Decrement reference count
+/// Decrement reference count. If count goes to zero, deallocates thread resources.
 ///
 bool mosDecThreadRefCount(MosThread ** ppThd);
 /// Obtain a unique ID (for thread storage and TODO: other purposes)
 ///
 MOS_ISR_SAFE u32 mosGetUniqueID(void);
 
-// Thread Storage
+// Thread Storage - allows libraries to store opaque data on a per-thread basis.
 
-/// Set local storage for the current thread.
+/// Set local storage for the current thread using a uniqueID for the given library.
 ///   Callback is invoked when thread resources are released.
 ///   Returns true on success.
 bool mosSetThreadStorage(MosThread * pThread, u32 uniqueID, void * pData, MosThreadStorageReleaseFunc * pReleaseFunc);
 
-/// Return pointer to thread local storage, NULL on failure.
+/// Return pointer to thread local storage using the uniqueID, NULL if local storage under that ID doesn't exist.
 ///
 void * mosGetThreadStorage(MosThread * pThread, u32 uniqueID);
 

@@ -10,7 +10,7 @@ static MosHeap * pSystemHeap = NULL;
 static MosMutex  ThreadMutex;
 
 // TODO:
-// 1. Polymorphic thread extension byte in MosThread?;
+// 1. Polymorphic thread extension byte in MosThread?
 
 // Local storage data
 typedef struct {
@@ -34,8 +34,7 @@ void mosInitDynamicKernel(MosHeap * pHeap) {
 }
 
 static void FreeDynamicThread(DynamicThread * pThd) {
-    MosLink * pLink;
-    for (pLink = pThd->sl.pNext; pLink != &pThd->sl;) {
+    for (MosLink * pLink = pThd->sl.pNext; pLink != &pThd->sl;) {
         MosLink * pNext = pLink->pNext;
         LocalStorage * pStorage = container_of(pLink, LocalStorage, link);
         if (pStorage->pReleaseFunc) (*pStorage->pReleaseFunc)(pStorage->pData);
@@ -142,8 +141,7 @@ void * mosGetThreadStorage(MosThread * pThread, u32 uniqueID) {
     DynamicThread * pThd = (DynamicThread *)pThread;
     void * pData = NULL;
     mosLockMutex(&ThreadMutex);
-    MosLink * pLink;
-    for (pLink = pThd->sl.pNext; pLink != &pThd->sl; pLink = pLink->pNext) {
+    for (MosLink * pLink = pThd->sl.pNext; pLink != &pThd->sl; pLink = pLink->pNext) {
         LocalStorage * pStorage = container_of(pLink, LocalStorage, link);
         if (pStorage->id == uniqueID) {
             pData = pStorage->pData;

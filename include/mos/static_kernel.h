@@ -5,8 +5,9 @@
 // "License") included under this distribution.
 
 /// \file  mos/static_kernel.h
-/// \brief MOS static microkernel can be used standalone, with an allocator (or with kernel.h)
-//         the full dynamic kernel extension.
+/// \brief The MOS static microkernel can be used stand alone,
+///        with the allocator (allocator.h) or with the full dynamic
+//         kernel extension (kernel.h).
 
 #ifndef _MOS_STATIC_KERNEL_H_
 #define _MOS_STATIC_KERNEL_H_
@@ -45,7 +46,11 @@ typedef void (MosEventHook)(MosEvent evt, u32 val);
 
 // Mos Thread
 typedef struct MosThread {
+#if (MOS_ARM_RTOS_ON_NON_SECURE_SIDE == true)
     u32       rsvd[21];
+#else
+    u32       rsvd[20];
+#endif
     void    * pUser;         /// User data pointer, set to NULL after thread initialization
 } MosThread;
 
@@ -67,7 +72,7 @@ typedef MosSem MosSignal;
 typedef struct MosTimer {
     u32                ticks;
     u32                wakeTick;
-    MosPmLink         tmrLink;
+    MosPmLink          tmrLink;
     MosTimerCallback * pCallback;   /// Callback function
     void             * pUser;       /// User data pointer for callback
 } MosTimer;

@@ -180,13 +180,16 @@ static s32 FPTestThread(s32 arg) {
     else return TEST_PASS;
 }
 
-static u32 storageID;
+/* Simulate two "libraries" using an index (libNum) */
+static u32 storageID[2];
 
-static void LibraryInit() {
-    static bool bInit = false;
-    if (!bInit) {
-        storageID = mosGetUniqueID();
-        bInit = true;
+static void LibraryInit(u32 libNum) {
+    static bool isInit[2] = { false, false };
+    /* In "real-life" something like isInit here probably needs a mutex :-) */
+    /* In this example it isn't required */
+    if (!isInit[libNum]) {
+        storageID[libNum] = mosGetUniqueID();
+        isInit[libNum] = true;
     }
 }
 
@@ -195,31 +198,31 @@ static void LibraryFreeCallback(void * pData) {
     mosPrintf("  Free %p\n", pData);
 }
 
-static s32 LibraryRun(s32 arg) {
+static s32 LibraryRun(u32 libNum, s32 arg) {
     s32 val = 0;
-    void * pData = mosGetThreadStorage(mosGetRunningThread(), storageID);
+    void * pData = mosGetThreadStorage(mosGetRunningThread(), storageID[libNum]);
     if (!pData) {
         pData = mosAlloc(&TestThreadHeapDesc, 100);
-        mosPrintf("  Alloc %p\n", pData);
+        mosPrintf("  %u: Alloc %p\n", libNum, pData);
         *((s32 *)pData) = arg;
         if (pData) {
-            if (!mosSetThreadStorage(mosGetRunningThread(), storageID, pData, LibraryFreeCallback)) {
+            if (!mosSetThreadStorage(mosGetRunningThread(), storageID[libNum], pData, LibraryFreeCallback)) {
                 mosFree(&TestThreadHeapDesc, pData);
                 pData = NULL;
             }
         }
     }
-    if (pData) {
-        val = *((s32 *)pData);
-    }
+    if (pData) val = *((s32 *)pData);
     return val;
 }
 
 static s32 StorageThread(s32 arg) {
     s32 retVal = TEST_PASS;
-    LibraryInit();
+    /* The scenario that is simulated here is there are multiple threads that share library APIs,
+     *  and those library implementations wish to store opaque data on a per-thread basis. */
     for (;;) {
-        if (LibraryRun(arg) != arg) retVal = TEST_FAIL;
+        if (LibraryRun(0, arg) != arg) retVal = TEST_FAIL;
+        if (LibraryRun(1, arg + 100) != arg + 100) retVal = TEST_FAIL;
         if (IsStopRequested()) break;
     }
     return retVal;
@@ -307,10 +310,8 @@ static bool ThreadTests(void) {
         tests_all_pass = false;
     }
     //
-    // InitThread / RunThread
-    //
-    //
-    // Set and Restore errno
+    // TODO: InitThread / RunThread
+    // TODO: Set and Restore errno
     //
     //
     // Dynamic threads
@@ -351,6 +352,8 @@ static bool ThreadTests(void) {
     ClearHistogram();
     thd[0] = NULL;
     thd[1] = NULL;
+    LibraryInit(0);
+    LibraryInit(1);
     mosAllocAndRunThread(&thd[0], 1, StorageThread, 0, DFT_STACK_SIZE);
     mosAllocAndRunThread(&thd[1], 1, StorageThread, 1, DFT_STACK_SIZE);
     if (thd[0] && thd[1]) {

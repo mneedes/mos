@@ -14,13 +14,9 @@
 #include <mos/internal/security.h>
 #include <errno.h>
 
-// TODO: Consolidate "TO" APIs to single API function.
-// TODO: Atomic handle pool
-// TODO: Logging
-
-// TODO: Hooks for other timers such as LPTIM?
+// TODO: Consolidate "TO" Timeout APIs to single API function.
 // TODO: auto tick startup?
-// TODO: smaller init for term handlers
+// TODO: smaller init for term handlers.
 
 #define NO_SUCH_THREAD       NULL
 #define STACK_FILL_VALUE     0xca110411
@@ -84,9 +80,11 @@ typedef struct Thread {
     u8                * pStackBottom;
     u32                 stackSize;
     const char        * pName;
+#if (MOS_ARM_RTOS_ON_NON_SECURE_SIDE == true)
     s8                  secureContext;
     s8                  secureContextNew;
     u16                 pad2;
+#endif
     void              * pUser;
 } Thread;
 
@@ -366,8 +364,10 @@ InitThread(Thread * pThd, MosThreadPriority pri, MosThreadEntry * pEntry, s32 ar
     pThd->pStackBottom = pStackBottom;
     pThd->stackSize = stackSize;
     pThd->pName = "";
+#if (MOS_ARM_RTOS_ON_NON_SECURE_SIDE == true)
     pThd->secureContext    = MOS_DEFAULT_SECURE_CONTEXT;
     pThd->secureContextNew = MOS_DEFAULT_SECURE_CONTEXT;
+#endif
     pThd->pUser = NULL;
     // ref_cnt is not initialized here, it is manipulated externally
 }
