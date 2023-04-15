@@ -79,9 +79,10 @@ typedef struct MosTimer {
 
 /// Initialize MOS Microkernel.
 /// In general this call must precede all other calls into the MOS microkernel.
-/// \note The ARM SysTick (system tick) and interrupt priority group settings should be
-///       configured prior to this call.
-void mosInit(void);
+/// \note Interrupt priority group settings should be configured prior to this call.
+/// \note supply a non-zero clock speed if you want this function to start the system tick.
+///       If the clock speed is already configured, pass zero to this function.
+void mosInit(u32 clockSpeedHz);
 
 /// Run Scheduler.
 /// Enables multi-threading, running all threads that been started prior to its

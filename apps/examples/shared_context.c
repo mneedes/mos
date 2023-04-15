@@ -112,7 +112,7 @@ int main() {
     HalInit();
 
     // Run init before calling any MOS functions
-    mosInit();
+    mosInit(0);
 
     // Init trace before calling any print functions
     mosInitTrace(0, true);

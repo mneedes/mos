@@ -28,7 +28,7 @@ int main() {
 #endif
 
     // Run init before calling any MOS functions
-    mosInit();
+    mosInit(0);
 
     // Init trace before calling any print functions
     mosInitTrace(TRACE_INFO | TRACE_ERROR | TRACE_FATAL, true);

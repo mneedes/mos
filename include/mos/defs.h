@@ -24,10 +24,10 @@
 #define MOS_MAX_THREAD_PRIORITIES       8
 #endif
 
-#ifndef MOS_MICRO_SEC_PER_TICK
+#ifndef MOS_TICKS_PER_SECOND
 /// System timer interrupt tick rate (for timers and time-slicing)
 ///
-#define MOS_MICRO_SEC_PER_TICK          1000
+#define MOS_TICKS_PER_SECOND            1000
 #endif
 
 #ifndef MOS_HANG_ON_EXCEPTIONS

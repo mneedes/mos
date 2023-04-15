@@ -15,7 +15,6 @@
 #include <errno.h>
 
 // TODO: Consolidate "TO" Timeout APIs to single API function.
-// TODO: auto tick startup?
 // TODO: smaller init for term handlers.
 
 #define NO_SUCH_THREAD       NULL
@@ -686,13 +685,23 @@ void mosSetTermArg(MosThread * _pThd, s32 arg) {
 // Initialization
 //
 
-void mosInit(void) {
+void mosInit(u32 clockSpeedHz) {
     // Save errno pointer for use during context switch
     pErrNo = __errno();
-    // Set up timers with tick-reduction
-    CyclesPerTick = MOS_REG(TICK_LOAD) + 1;
+    // Set up system tick
+    if (clockSpeedHz) {
+        CyclesPerTick = clockSpeedHz / MOS_TICKS_PER_SECOND;
+        // Configure and reset tick if not already configured.
+        if (MOS_REG(TICK_LOAD) != CyclesPerTick - 1) {
+            MOS_REG(TICK_LOAD) = CyclesPerTick - 1;
+            MOS_REG(TICK_VAL) = 0;
+        }
+    } else {
+        CyclesPerTick = MOS_REG(TICK_LOAD) + 1;
+        clockSpeedHz = CyclesPerTick * MOS_TICKS_PER_SECOND;
+    }
     MaxTickInterval = ((1 << 24) - 1) / CyclesPerTick;
-    CyclesPerMicroSec = CyclesPerTick / MOS_MICRO_SEC_PER_TICK;
+    CyclesPerMicroSec = clockSpeedHz / 1000000;
     // Architecture-specific setup
 #if (MOS_ARCH_CAT == MOS_ARCH_ARM_CORTEX_M_MAIN)
     // Trap Divide By 0 and disable "Unintentional" Alignment Faults
