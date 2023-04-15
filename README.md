@@ -11,9 +11,11 @@ MOS was originally developed on a STMicroelectronics STM32F4 Discovery and has b
 
 Design Goals:
 * RTOS: Hard priorities, bounded execution and short critical sections.
-* Simple configuration with low use of conditional compilation.
+* Simple configuration with low use of conditional compilation (no config.h files).
 * Small code size (_e.g.:_ minimal compiled size is ~5KB).
-* Baseline kernel is static with optional dynamic kernel extension.
+* Baseline kernel is static with optional extensions.
+* Extensions include best-effort allocator and dynamic kernel extension.
+* Dynamic kernel extension supports thread-local storage.
 * Easily customizable.
 * Provide example BSPs and example applications.
 
@@ -25,7 +27,7 @@ Included Primitives:
 * Atomic operations.
 
 Optional Modules:
-* Allocator with multi-region support.
+* Best-effort allocator with multiple non-contiguous region support.
 * Dynamic kernel extension with thread-local storage.
 * TrustZone security.
 * Shared context (cooperative multitasking where clients share same thread and message queue--for tiny footprints).
