@@ -67,6 +67,10 @@ static MosMutex TestMutex;
 static u32 queue[4];
 static MosQueue TestQueue;
 
+#if MOS_HANG_ON_EXCEPTIONS != false
+#error This test bench requires MOS_HANG_ON_EXCEPTIONS == false
+#endif
+
 bool IsStopRequested() {
     return (bool)mosGetRunningThread()->pUser;
 }

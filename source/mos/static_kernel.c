@@ -5,7 +5,7 @@
 // "License") included under this distribution.
 
 //
-// MOS Microkernel
+// MOS Static Microkernel
 //
 
 #include <bsp_hal.h>
