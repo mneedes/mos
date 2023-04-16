@@ -192,7 +192,7 @@ void mosAssertAt(char * pFile, u32 line) {
 // Time / Timers
 //
 
-u32 mosGetTickCount(void) {
+MOS_ISR_SAFE u32 mosGetTickCount(void) {
     return Tick.lower;
 }
 
@@ -206,6 +206,10 @@ MOS_ISR_SAFE u64 mosGetCycleCount(void) {
     }
     mosEnableInterrupts(mask);
     return (tmp * CyclesPerTick) - val;
+}
+
+MOS_ISR_SAFE u64 mosGetTimeInNanoseconds(void) {
+    return (mosGetCycleCount() * (u64)1000) / CyclesPerMicroSec;
 }
 
 MOS_ISR_SAFE void mosAdvanceTickCount(u32 ticks) {

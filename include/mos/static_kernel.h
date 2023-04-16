@@ -98,15 +98,21 @@ void mosRegisterEventHook(MosEventHook * pHook);
 
 // Time and Timers
 
+/// Obtain the current time in nanoseconds.
+///
+
 /// Obtain the lower half of the tick count.
 ///
 MOS_ISR_SAFE u32 mosGetTickCount(void);
 /// Get the monotonic cycle counter.
 ///
 MOS_ISR_SAFE u64 mosGetCycleCount(void);
+/// Obtain time since systick started in nanoseconds.
+///
+MOS_ISR_SAFE u64 mosGetTimeInNanoseconds(void);
 /// Advance the tick counter.
 ///
-void mosAdvanceTickCount(u32 ticks);
+MOS_ISR_SAFE void mosAdvanceTickCount(u32 ticks);
 /// Delay for a number of microseconds, e.g.: useful for bit-banging.
 ///   \note There is an upper limit for usec that is clock-speed dependent.
 MOS_ISR_SAFE void mosDelayMicroseconds(u32 usec);
