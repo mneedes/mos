@@ -17,7 +17,7 @@ typedef struct {
     u8   isUpper;
     u8   isSigned;
     u8   minWidth;
-    u8   prec;
+    s8   prec;
     char padChar;
     // State variables
     u8   doNumeric;
@@ -128,61 +128,6 @@ u32 mosItoa(char * restrict pOut, s32 input, u16 base, bool isUpper,
     return Itoa(pOut, &format, input);
 }
 
-// No-inline prevents inadvertent entry into lazy-stacking floating point modes
-static u32 MOS_NO_INLINE Dtoa(char * restrict pOut, State * pState, double in) {
-    char * pOut_ = pOut;
-    u64 * pIn = (u64 *)&in;
-    bool negative = false;
-    if (*pIn >> 63 == 0x1) {
-        negative = true;
-        in = -in;
-        *pOut++ = '-';
-    }
-    /* First evaluate special values (e.g.: nan / inf) */
-    u64 in_ = *pIn;
-    u32 pfx = (u32)(in_ >> 32);
-    if ((pfx & 0x7ff00000) == 0x7ff00000) {
-        u32 sfx = (u32)(in_ & 0xffffffff);
-        if (sfx == 0x0) {
-            if (pfx == 0x7ff00000) {
-                pOut[0] = 'i'; pOut[1] = 'n'; pOut[2] = 'f';
-            } else {
-                pOut[0] = 'n'; pOut[1] = 'a'; pOut[2] = 'n';
-            }
-            return negative + 3;
-        } else {
-            pOut[0] = 'n'; pOut[1] = 'a'; pOut[2] = 'n';
-            return negative + 3;
-        }
-    }
-    /* Round, get integer part and overflow clamp */
-    double p = 0.5;
-    for (u32 ix = 0; ix < pState->prec; ix++) p *= 0.1;
-    in += p;
-    s64 int_part = (s64)in;
-    in -= (double)int_part;
-    if (in >= (double)0xffffffffffffffff) {
-        pOut[0] = 'o'; pOut[1] = 'v'; pOut[2] = 'f';
-        return negative + 3;
-    }
-    pState->base      = 10;
-    pState->isSigned = false;
-    pState->minWidth = 0;
-    pState->padChar  = '0';
-    pOut += LLtoa(pOut, pState, int_part);
-    /* Get fractional part */
-    if (pState->prec) {
-        *pOut++ = '.';
-        u64 val = 1;
-        for (u32 ix = 0; ix < pState->prec; ix++) val *= 10;
-        in *= (double)val;
-        int_part = (s64)in;
-        pState->minWidth = pState->prec;
-        pOut += LLtoa(pOut, pState, int_part);
-    }
-    return pOut - pOut_;
-}
-
 /*
  * A pre-scaling algorithm is used in lieu of arbitrary precision arithmetic for
  *   faster conversion time. Scaling does however introduce small rounding errors,
@@ -277,10 +222,20 @@ static u32 MOS_NO_INLINE DtoaE(char * restrict pOut, State * pState, double in) 
         nMant &= 0x0fffffffffffffff;
         *pOut++ = nCh;
     }
+    /* Back out trailing zeros (active for %g option) */
+    while (pState->isSigned) {
+       if (pOut[-1] == '0') {
+           pOut--;
+           continue;
+       } else {
+           if (pOut[-1] == '.') pOut--;
+           break;
+       }
+    }
     /* Exponent */
     *pOut++ = 'e';
     if (nExp10 >= 0) *pOut++ = '+';
-    pState->base      = 10;
+    pState->base     = 10;
     pState->isSigned = true;
     pState->minWidth = 2;
     pState->padChar  = '0';
@@ -288,12 +243,70 @@ static u32 MOS_NO_INLINE DtoaE(char * restrict pOut, State * pState, double in) 
     return pOut - pOut_;
 }
 
+// No-inline prevents inadvertent entry into lazy-stacking floating point modes
+static u32 MOS_NO_INLINE DtoaF(char * restrict pOut, State * pState, double in) {
+    char * pOut_ = pOut;
+    u64 * pIn = (u64 *)&in;
+    bool negative = false;
+    if (*pIn >> 63 == 0x1) {
+        negative = true;
+        in = -in;
+        *pOut++ = '-';
+    }
+    /* First evaluate special values (e.g.: nan / inf) */
+    u64 in_ = *pIn;
+    u32 pfx = (u32)(in_ >> 32);
+    if ((pfx & 0x7ff00000) == 0x7ff00000) {
+        u32 sfx = (u32)(in_ & 0xffffffff);
+        if (sfx == 0x0) {
+            if (pfx == 0x7ff00000) {
+                pOut[0] = 'i'; pOut[1] = 'n'; pOut[2] = 'f';
+            } else {
+                pOut[0] = 'n'; pOut[1] = 'a'; pOut[2] = 'n';
+            }
+            return negative + 3;
+        } else {
+            pOut[0] = 'n'; pOut[1] = 'a'; pOut[2] = 'n';
+            return negative + 3;
+        }
+    }
+    /* Round, get integer part and overflow clamp */
+    double p = 0.5;
+    for (u32 ix = 0; ix < pState->prec; ix++) p *= 0.1;
+    in += p;
+    s64 int_part = (s64)in;
+    in -= (double)int_part;
+    if (in >= (double)0xffffffffffffffff) {
+        pOut[0] = 'o'; pOut[1] = 'v'; pOut[2] = 'f';
+        return negative + 3;
+    }
+    pState->base     = 10;
+    pState->isSigned = false;
+    pState->minWidth = 0;
+    pState->padChar  = '0';
+    pOut += LLtoa(pOut, pState, int_part);
+    /* Get fractional part */
+    if (pState->prec) {
+        *pOut++ = '.';
+        u64 val = 1;
+        for (u32 ix = 0; ix < pState->prec; ix++) val *= 10;
+        in *= (double)val;
+        int_part = (s64)in;
+        pState->minWidth = pState->prec;
+        pOut += LLtoa(pOut, pState, int_part);
+    }
+    return pOut - pOut_;
+}
+
+#if 0
 /* No-inline prevents inadvertent entry into lazy-stacking floating point modes */
 static u32 MOS_NO_INLINE DtoaG(char * restrict pOut, State * pState, double in) {
+   // WIP -- is this true?
    /* Go with f unless e mantissa is smaller.  If go with e then truncate zeros and subtract 1 from precision */
    /* 1.3e10 -> 1.3e10,  3e0 -> 3 */
    return 0;
 }
+#endif
 
 static void
 WriteBuf(char * restrict * pOut, const char * restrict pIn, s32 len, s32 * pRem) {
@@ -320,7 +333,7 @@ mosVSNPrintf(char * restrict pDest, mos_size size, const char * restrict pFmt, v
             if (*pCh == '%') {
                 /* Found argument, set default state */
                 state.minWidth = 0;
-                state.prec      = 6;
+                state.prec     = 6;
                 state.padChar  = ' ';
                 state.inArg    = true;
                 state.inPrec   = false;
@@ -344,7 +357,7 @@ mosVSNPrintf(char * restrict pDest, mos_size size, const char * restrict pFmt, v
                 break;
             }
             case '.': {
-                state.prec    = 0;
+                state.prec   = 0;
                 state.inPrec = true;
                 state.inArg  = true;
                 break;
@@ -365,53 +378,56 @@ mosVSNPrintf(char * restrict pDest, mos_size size, const char * restrict pFmt, v
                 state.inArg     = true;
                 break;
             case 'o':
-                state.base       = 8;
+                state.base      = 8;
                 state.isSigned  = false;
                 state.doNumeric = true;
                 break;
             case 'd':
-                state.base       = 10;
+                state.base      = 10;
                 state.isSigned  = true;
                 state.doNumeric = true;
                 break;
             case 'u':
-                state.base       = 10;
+                state.base      = 10;
                 state.isSigned  = false;
                 state.doNumeric = true;
                 break;
             case 'x':
-                state.base       = 16;
+                state.base      = 16;
                 state.isUpper   = false;
                 state.isSigned  = false;
                 state.doNumeric = true;
                 break;
             case 'X':
-                state.base       = 16;
+                state.base      = 16;
                 state.isUpper   = true;
                 state.isSigned  = false;
                 state.doNumeric = true;
                 break;
             case 'e': {
                 double argD = (double)va_arg(args, double);
-                // TODO: Limit precision to obtain 25 (or less) digits: (-x.xxxxxxxxxxxxxxxxxe+xxx)
-                char tmpD[25];
+                char tmpD[20];
+                if (state.prec > 12) state.prec = 12;
+                state.isSigned = false;
                 u32 cnt = DtoaE(tmpD, &state, argD);
                 WriteBuf(&pOut, tmpD, cnt, &rem);
                 break;
             }
             case 'f': {
                 double argD = (double)va_arg(args, double);
-                // TODO: Limit precision to obtain 25 (or less) digits: (-x.xxxxxxxxxxxxxxxxxe+xxx)
                 char tmpD[25];
-                u32 cnt = Dtoa(tmpD, &state, argD);
+                if (state.prec > 17) state.prec = 17;
+                u32 cnt = DtoaF(tmpD, &state, argD);
                 WriteBuf(&pOut, tmpD, cnt, &rem);
                 break;
             }
             case 'g': {
                 double argD = (double)va_arg(args, double);
-                // TODO: Limit precision to obtain 25 (or less) digits: (-x.xxxxxxxxxxxxxxxxxe+xxx)
-                char tmpD[25];
-                u32 cnt = DtoaG(tmpD, &state, argD);
+                char tmpD[20];
+                if (state.prec > 13) state.prec = 12;
+                else if (state.prec != 0) state.prec--; 
+                state.isSigned = true;
+                u32 cnt = DtoaE(tmpD, &state, argD);
                 WriteBuf(&pOut, tmpD, cnt, &rem);
                 break;
             }

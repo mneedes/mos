@@ -2055,10 +2055,22 @@ static bool MiscTests(void) {
             mosSNPrintf(buf, sizeof(buf), "%f", *pf);
             if (strcmp(buf, "nan")) test_pass = false;
         }
-#if 0
-        dbl = 2.71828182845904;
-        mosSNPrintf(buf, sizeof(buf), "%.15g", dbl, dbl);
-        mosPrintf("*%s*\n", buf);
+        {
+            dbl = 0.000134631111;
+            mosSNPrintf(buf, sizeof(buf), "%e", dbl);
+            if (strcmp(buf, "1.346311e-04")) test_pass = false;
+            mosSNPrintf(buf, sizeof(buf), "%0.2e", dbl);
+            if (strcmp(buf, "1.35e-04")) test_pass = false;
+            dbl = 134.63e17;
+            mosSNPrintf(buf, sizeof(buf), "%e", dbl);
+            if (strcmp(buf, "1.346300e+19")) test_pass = false;
+        }
+#if 1
+        {
+            dbl = 2.71828182845904;
+            mosSNPrintf(buf, sizeof(buf), "%.15g", dbl, dbl);
+            mosPrintf("*%s*\n", buf);
+        }
 #endif
     }
     if (test_pass) mosPrint(" Passed\n");
@@ -2134,7 +2146,7 @@ static s32 CmdTest(s32 argc, char * argv[]) {
 
 static s32 CmdTime(s32 argc, char * argv[]) {
     static u64 start_ns = 0;
-    u64 ns = (u64) mosGetCycleCount() * (s64)1000 / 110;
+    u64 ns = mosGetTimeInNanoseconds();
     if (!start_ns) start_ns = ns;
     mosPrintf("Time ns: %llu\n", ns - start_ns);
     return CMD_OK;
