@@ -1806,7 +1806,7 @@ static bool HeapTests(void) {
         mosFree(&TestHeapDesc, last_block);
         if (mosAlloc(&TestHeapDesc, bs1) != last_block) test_pass = false;
         mosPrintf("Allocated up to %u blocks\n", ctr);
-        if (ctr != sizeof(TestHeap) / (bs1 + 12 + 4)) test_pass = false;
+        if (ctr != (sizeof(TestHeap) - 14*8) / (bs1 + 12 + 4)) test_pass = false;
     }
     if (test_pass) mosPrint(" Passed\n");
     else {
