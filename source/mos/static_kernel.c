@@ -15,7 +15,6 @@
 #include <errno.h>
 
 // TODO: Consolidate "TO" Timeout APIs to single API function.
-// TODO: smaller init for term handlers.
 
 #define NO_SUCH_THREAD       NULL
 #define STACK_FILL_VALUE     0xca110411
@@ -337,13 +336,11 @@ static s32 ThreadExit(s32 rtnVal) {
 }
 
 MOS_ISR_SAFE static void
-InitThread(Thread * pThd, MosThreadPriority pri, MosThreadEntry * pEntry, s32 arg,
-               u8 * pStackBottom, u32 stackSize) {
-    u8 * pSP = pStackBottom;
+ReInitThread(Thread * pThd, MosThreadEntry * pEntry, s32 arg) {
     // Ensure 8-byte alignment for ARM / varargs compatibility.
-    pSP = (u8 *) ((u32)(pSP + stackSize - sizeof(u32)) & 0xfffffff8);
+    u32 * pSP = (u32 *)((u32)(pThd->pStackBottom + pThd->stackSize - sizeof(u32)) & 0xfffffff8);
     // Place canary value at top and fill out initial frame
-    *((u32 *)pSP) = STACK_FILL_VALUE;
+    *pSP = STACK_FILL_VALUE;
     StackFrame * pSF = (StackFrame *)pSP - 1;
     pSF->PSR = 0x01000000;
     pSF->PC = (u32)pEntry;
@@ -351,18 +348,21 @@ InitThread(Thread * pThd, MosThreadPriority pri, MosThreadEntry * pEntry, s32 ar
     pSF->R12 = 0;
     pSF->HWSAVE[0] = arg;
     pSF->LR_EXC_RTN = ExcReturnInitial;
-    // Either fill lower stack OR just place canary value at bottom
-    u32 * pFill = (u32 *)pSF - 1;
-    for (; pFill >= (u32 *)pStackBottom; pFill--) {
-        *pFill = STACK_FILL_VALUE;
-    }
-    // Initialize context and state
     pThd->sp = (u32)pSF;
     pThd->mtxCnt = 0;
-    pThd->errNo = 0;
-    pThd->pri = pri;
-    pThd->nomPri = pri;
+    pThd->pri = pThd->nomPri;
     pThd->pTermHandler = ThreadExit;
+}
+
+MOS_ISR_SAFE static void
+InitThread(Thread * pThd, MosThreadPriority pri, MosThreadEntry * pEntry, s32 arg,
+               u8 * pStackBottom, u32 stackSize) {
+    u32 * pSP = (u32 *)((u32)(pStackBottom + sizeof(u32) - 1) & 0xfffffff8);
+    for (; pSP <= (u32 *)(pStackBottom + stackSize - 2*sizeof(u32)); pSP++) {
+        *pSP = STACK_FILL_VALUE;
+    }
+    pThd->errNo = 0;
+    pThd->nomPri = pri;
     pThd->termArg = 0;
     pThd->pStackBottom = pStackBottom;
     pThd->stackSize = stackSize;
@@ -373,6 +373,7 @@ InitThread(Thread * pThd, MosThreadPriority pri, MosThreadEntry * pEntry, s32 ar
 #endif
     pThd->pUser = NULL;
     // ref_cnt is not initialized here, it is manipulated externally
+    ReInitThread(pThd, pEntry, arg);
 }
 
 static s32 IdleThreadEntry(s32 arg) {
@@ -857,9 +858,7 @@ static u32 MOS_USED Scheduler(u32 sp) {
         // Arrange death of running thread via kill handler
         if (mosIsOnList(&pRunningThread->tmrLink.link))
             mosRemoveFromList(&pRunningThread->tmrLink.link);
-        InitThread(pRunningThread, pRunningThread->pri,
-                   pRunningThread->pTermHandler, pRunningThread->termArg,
-                   pRunningThread->pStackBottom, pRunningThread->stackSize);
+        ReInitThread(pRunningThread, pRunningThread->pTermHandler, pRunningThread->termArg);
         SetThreadState(pRunningThread, THREAD_RUNNABLE);
     } else if (pRunningThread->state & THREAD_STATE_TICK) {
         // Update running thread timer state (insertion sort in timer queue)
@@ -971,6 +970,30 @@ void mosInitSem(MosSem * pSem, u32 startValue) {
     pSem->value = startValue;
     mosInitList(&pSem->pendQ);
     mosInitList(&pSem->evtLink);
+}
+
+//
+// Work in progress: Deep Sleep support
+//
+static s32 Wakelock = 0;
+
+bool mosTryEnterDeepSleep(void) {
+    bool bSleep = false;
+    _mosDisableInterrupts();
+    if (Wakelock == 0) {
+        //bSleep = halTryEnterDeepSleep();
+        bSleep = true;
+    }
+    _mosEnableInterrupts();
+    return bSleep;
+}
+
+void mosTakeWakeLock(void) {
+    mosAtomicFetchAndAdd32(&Wakelock, 1);
+}
+
+void mosReleaseWakeLock(void) {
+    mosAtomicFetchAndAdd32(&Wakelock, -1);
 }
 
 //
