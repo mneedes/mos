@@ -84,8 +84,8 @@
 #define MOS__LINE__            MOS_TO_STR(__LINE__)
 
 #define MOS_INLINE             __attribute__((always_inline)) inline
-#define MOS_PACKED             __attribute__((packed))
 #define MOS_NO_INLINE          __attribute__((noinline))
+#define MOS_PACKED             __attribute__((packed))
 #define MOS_NAKED              __attribute__((naked))
 #define MOS_USED               __attribute__((used))
 #define MOS_WEAK               __attribute__((weak))
@@ -96,6 +96,8 @@
 #define MOS_ISR_SAFE
 
 #define MOS_UNUSED(x)          (void)(x)
+/* The parameter is really used, but tell compiler it is unused to reject warnings */
+#define MOS_USED_PARAM(x)      MOS_UNUSED(x)
 
 #define MOS_STACK_ALIGNMENT    8
 #define MOS_STACK_ALIGNED      MOS_ALIGNED(MOS_STACK_ALIGNMENT)

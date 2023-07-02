@@ -19,9 +19,6 @@
 #define NO_SUCH_THREAD       NULL
 #define STACK_FILL_VALUE     0xca110411
 
-/* The parameter is really used, but tell compiler it is unused to reject warnings */
-#define MOS_USED_PARAM(x)    MOS_UNUSED(x)
-
 #define EVENT(e, v) \
     { if (MOS_ENABLE_EVENTS) (*pEventHook)((MOS_EVENT_ ## e), (v)); }
 
