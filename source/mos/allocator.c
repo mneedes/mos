@@ -195,6 +195,10 @@ FOUND:
 
 void * mosRealloc(MosHeap * pHeap, void * pBlock_, u32 newSize_) {
     if (!pBlock_) return mosAlloc(pHeap, newSize_);
+    if (!newSize_) {
+        mosFree(pHeap, pBlock_);
+        return NULL;
+    }
     mosLockMutex(&pHeap->mtx);
     Block * pBlock = (Block *)((u8 *)pBlock_ - sizeof(Link));
     /* Check for canary value and double-free */
