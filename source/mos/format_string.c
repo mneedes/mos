@@ -10,52 +10,50 @@
 static const char LowerCaseDigits[] = "0123456789abcdef";
 static const char UpperCaseDigits[] = "0123456789ABCDEF";
 
+enum Flags {
+    kIs64bit     = 0x2,
+    kIsUpper     = 0x4,
+    kIsSigned    = 0x8,
+    kPadOnRight  = 0x10,
+    kIsInteger   = 0x20,
+    kIsBase16    = 0x40,
+};
+
 /* This structure reduces the required stack depth */
 typedef struct {
-    /* Format settings */
-    u8   base;
-    u8   isUpper;
-    u8   isSigned;
-    u8   isOnLeft;
-    u8   minWidth;
-    u8   prec;
-    char padChar;
-    /* State variables */
-    u8   doInteger;
-    u8   inPrec;
-    u8   inArg;
-    u8   longCnt;
+    char * pOut;
+    s16    rem;
+    u8     flags;
+    u8     minWidth;
+    u8     prec;
+    char   padChar;
+    u8     inPrec;
+    u8     inArg;
 } State;
 
 /* No-inline prevents inadvertent entry into lazy-stacking floating point modes */
-static u32 MOS_NO_INLINE LLtoa(char * restrict pOut, State * pState, s64 in) {
+static u32 MOS_NO_INLINE LLtoa(char * pOut, State * pState, s64 in) {
     u64 adj = (u64)in;
     s32 cnt = 0;
-    if (pState->base == 10) {
-        if (pState->isSigned && in < 0) {
-            adj = -(u64)in;
-        }
-        /* Determine digits (in reverse order) */
+    if (pState->flags & kIsBase16) {
+        const char * pDigits = LowerCaseDigits;
+        if (pState->flags & kIsUpper) pDigits = UpperCaseDigits;
         do {
-            *pOut++ = LowerCaseDigits[adj % pState->base];
-            adj = adj / pState->base;
+            *pOut++ = pDigits[adj & 0xf];
+            adj >>= 4;
             cnt++;
         } while (adj != 0);
     } else {
-        u32 shift = 4;
-        if (pState->base == 8) shift = 3;
-        const char * restrict pDigits = LowerCaseDigits;
-        if (pState->isUpper) pDigits = UpperCaseDigits;
-        u32 mask = (1 << shift) - 1;
+        if ((pState->flags & kIsSigned) && in < 0) {
+            adj = -(u64)in;
+            *pOut++ = '-';
+        } else pState->flags &= ~kIsSigned;
+        /* Determine digits (in reverse order) */
         do {
-            *pOut++ = pDigits[adj & mask];
-            adj >>= shift;
+            *pOut++ = LowerCaseDigits[adj % 10];
+            adj = adj / 10;
             cnt++;
         } while (adj != 0);
-    }
-    if (pState->isSigned && in < 0) {
-        *pOut++ = '-';
-        cnt++;
     }
     /* Reverse digit order in place */
     for (s32 idx = 0; idx < ((cnt + 1) >> 1); idx++) {
@@ -63,38 +61,32 @@ static u32 MOS_NO_INLINE LLtoa(char * restrict pOut, State * pState, s64 in) {
         pOut[idx - cnt] = pOut[-idx - 1];
         pOut[-idx - 1] = tmp;
     }
-    return cnt;
+    return cnt + ((pState->flags & kIsSigned) > 0);
 }
 
 /* No-inline prevents inadvertent entry into lazy-stacking floating point modes */
-static u32 MOS_NO_INLINE Ltoa(char * restrict pOut, State * pState, s32 in) {
+static u32 MOS_NO_INLINE Ltoa(char * pOut, State * pState, s32 in) {
     u32 adj = (u32)in;
     s32 cnt = 0;
-    if (pState->base == 10) {
-        if (pState->isSigned && in < 0) {
-            adj = -(u32)in;
-        }
-        /* Determine digits (in reverse order) */
+    if (pState->flags & kIsBase16) {
+        const char * pDigits = LowerCaseDigits;
+        if (pState->flags & kIsUpper) pDigits = UpperCaseDigits;
         do {
-            *pOut++ = LowerCaseDigits[adj % pState->base];
-            adj = adj / pState->base;
+            *pOut++ = pDigits[adj & 0xf];
+            adj >>= 4;
             cnt++;
         } while (adj != 0);
     } else {
-        u32 shift = 4;
-        if (pState->base == 8) shift = 3;
-        const char * restrict pDigits = LowerCaseDigits;
-        if (pState->isUpper) pDigits = UpperCaseDigits;
-        u32 mask = (1 << shift) - 1;
+        if ((pState->flags & kIsSigned) && in < 0) {
+            adj = -(u32)in;
+            *pOut++ = '-';
+        } else pState->flags &= ~kIsSigned;
+        /* Determine digits (in reverse order) */
         do {
-            *pOut++ = pDigits[adj & mask];
-            adj >>= shift;
+            *pOut++ = LowerCaseDigits[adj % 10];
+            adj = adj / 10;
             cnt++;
         } while (adj != 0);
-    }
-    if (pState->isSigned && in < 0) {
-        *pOut++ = '-';
-        cnt++;
     }
     /* Reverse digit order in place */
     for (s32 idx = 0; idx < ((cnt + 1) >> 1); idx++) {
@@ -102,16 +94,7 @@ static u32 MOS_NO_INLINE Ltoa(char * restrict pOut, State * pState, s32 in) {
         pOut[idx - cnt] = pOut[-idx - 1];
         pOut[-idx - 1] = tmp;
     }
-    return cnt;
-}
-
-u32 mosItoa(char * restrict pOut, s32 input, u16 base, bool isUpper,
-            u16 minWidth, char padChar, bool isSigned) {
-    State format = {
-        .base = base, .isUpper = isUpper, .minWidth = minWidth,
-        .padChar = padChar, .isSigned = isSigned
-    };
-    return LLtoa(pOut, &format, input);
+    return cnt + ((pState->flags & kIsSigned) > 0);
 }
 
 /*
@@ -132,7 +115,7 @@ static const u8 s_nScaleExp10[] = {
 };
 
 /* No-inline prevents inadvertent entry into lazy-stacking floating point modes */
-static u32 MOS_NO_INLINE DtoaE(char * restrict pOut, State * pState, double in) {
+static u32 MOS_NO_INLINE DtoaE(char * pOut, State * pState, double in) {
     char * pOut_ = pOut;
     u64 * pIn = (u64 *)&in;
     bool negative = false;
@@ -208,7 +191,7 @@ static u32 MOS_NO_INLINE DtoaE(char * restrict pOut, State * pState, double in) 
         nMant &= 0x0fffffffffffffff;
         *pOut++ = nCh;
     }
-    if (pState->isSigned) {
+    if (pState->flags & kIsSigned) {
         u32 nDigits = pState->prec + 6;
         if (nExp10 >= 100 || nExp10 <= -100) nDigits++;
         /* Back out trailing zeros (%g option) */
@@ -241,16 +224,12 @@ static u32 MOS_NO_INLINE DtoaE(char * restrict pOut, State * pState, double in) 
         *pOut++ = '+';
     }
     if (nExp10 < 10) *pOut++ = '0';
-    pState->base       = 10;
-    pState->isSigned   = false;
-    pState->minWidth   = 2;
-    pState->padChar    = '0';
-    pOut += LLtoa(pOut, pState, nExp10);
+    pOut += Ltoa(pOut, pState, nExp10);
     return pOut - pOut_;
 }
 
 /* No-inline prevents inadvertent entry into lazy-stacking floating point modes */
-static u32 MOS_NO_INLINE DtoaF(char * restrict pOut, State * pState, double in) {
+static u32 MOS_NO_INLINE DtoaF(char * pOut, State * pState, double in) {
     char * pOut_ = pOut;
     u64 * pIn = (u64 *)&in;
     bool negative = false;
@@ -286,10 +265,6 @@ static u32 MOS_NO_INLINE DtoaF(char * restrict pOut, State * pState, double in) 
         pOut[0] = 'o'; pOut[1] = 'v'; pOut[2] = 'f';
         return negative + 3;
     }
-    pState->base       = 10;
-    pState->isSigned   = false;
-    pState->minWidth   = 0;
-    pState->padChar    = '0';
     pOut += LLtoa(pOut, pState, int_part);
     /* Get fractional part */
     if (pState->prec) {
@@ -298,7 +273,11 @@ static u32 MOS_NO_INLINE DtoaF(char * restrict pOut, State * pState, double in) 
         for (u32 ix = 0; ix < pState->prec; ix++) val *= 10;
         in *= (double)val;
         int_part = (s64)in;
-        pState->minWidth = pState->prec;
+        /* Run Ltoa to determine amount of padding, then pad and run Ltoa again */
+        u32 cnt = LLtoa(pOut, pState, int_part);
+        for (s32 padCnt = pState->prec - cnt; padCnt > 0; padCnt--) {
+            *pOut++ = '0';
+        }
         pOut += LLtoa(pOut, pState, int_part);
     }
     return pOut - pOut_;
@@ -306,7 +285,7 @@ static u32 MOS_NO_INLINE DtoaF(char * restrict pOut, State * pState, double in) 
 
 #if 0
 /* No-inline prevents inadvertent entry into lazy-stacking floating point modes */
-static u32 MOS_NO_INLINE DtoaG(char * restrict pOut, State * pState, double in) {
+static u32 MOS_NO_INLINE DtoaG(char * pOut, State * pState, double in) {
    /* Go with f unless total length of e is smaller.
    *  if go with e then truncate zeros and subtract 1 from precision */
    /* 1.3e10 -> 1.3e10,  3e0 -> 3 */
@@ -315,52 +294,53 @@ static u32 MOS_NO_INLINE DtoaG(char * restrict pOut, State * pState, double in) 
 #endif
 
 static void
-WriteBuf(char * restrict * pOut, const char * restrict pIn, s32 len, s32 * pRem) {
-    u32 cnt = len;
-    if (len > *pRem) {
-        if (*pRem < 0) cnt = 0;
-        else cnt = *pRem;
+WriteBuf(const char * pIn, State * pState, s32 len) {
+    u16 cnt = len;
+    if (len > pState->rem) {
+        if (pState->rem < 0) cnt = 0;
+        else cnt = pState->rem;
     }
-    *pRem -= len;
+    pState->rem -= len;
     for (; cnt > 0; cnt--) {
-        **pOut = *pIn++;
-        (*pOut)++;
+        *pState->pOut++ = *pIn++;
     }
 }
 
 s32
-mosVSNPrintf(char * restrict pDest, mos_size size, const char * restrict pFmt, va_list args) {
-    const char * restrict pCh = pFmt;
-    char * restrict pOut = pDest;
-    s32 rem = (s32)--size;
-    State state = { .inArg = false };
-    for (; *pCh != '\0'; pCh++) {
+mosVSNPrintf(char * pDest, mos_size size, const char * pFmt, va_list args) {
+    State state = {
+        .pOut = pDest,
+        .rem = (s16)--size,
+        .inArg = false
+    };
+    for (const char * pCh = pFmt; *pCh != '\0'; pCh++) {
         if (!state.inArg) {
             if (*pCh == '%') {
                 /* Found argument, set default state */
-                state.isOnLeft = false;
+                state.flags    = 0;
                 state.minWidth = 0;
                 state.prec     = 6;
                 state.padChar  = ' ';
                 state.inArg    = true;
                 state.inPrec   = false;
-                state.longCnt  = 0;
-            } else WriteBuf(&pOut, pCh, 1, &rem);
+            } else WriteBuf(pCh, &state, 1);
         } else if (*pCh >= '0' && *pCh <= '9') {
             if (!state.inPrec) {
-                if (state.minWidth == 0 && *pCh == '0' && !state.isOnLeft) state.padChar = '0';
-                else state.minWidth = (10 * state.minWidth) + (*pCh - '0');
+                if (state.minWidth == 0 && *pCh == '0' && !(state.flags & kPadOnRight)) {
+                    state.padChar = '0';
+                } else {
+                    state.minWidth = (10 * state.minWidth) + (*pCh - '0');
+                }
             } else {
                 state.prec = (10 * state.prec) + (*pCh - '0');
             }
         } else {
             /* Argument will be consumed (unless modifier found) */
-            state.inArg     = false;
-            state.doInteger = false;
+            state.inArg = false;
             switch (*pCh) {
             case '%': {
                 char c = '%';
-                WriteBuf(&pOut, &c, 1, &rem);
+                WriteBuf(&c, &state, 1);
                 break;
             }
             case '.': {
@@ -370,16 +350,16 @@ mosVSNPrintf(char * restrict pDest, mos_size size, const char * restrict pFmt, v
                 break;
             }
             case '-':
-                state.isOnLeft = true;
-                state.inArg    = true;
+                state.flags |= kPadOnRight;
+                state.inArg  = true;
                 break;
             case '+':
                 /* Ignore + */
-                state.inArg = true;
+                state.inArg  = true;
                 break;
             case 'c': {
                 char c = (char)va_arg(args, int);
-                WriteBuf(&pOut, &c, 1, &rem);
+                WriteBuf(&c, &state, 1);
                 break;
             }
             case 's': {
@@ -387,50 +367,34 @@ mosVSNPrintf(char * restrict pDest, mos_size size, const char * restrict pFmt, v
                 s32 cnt = state.minWidth;
                 char * p = pArg;
                 for (; *p != '\0'; p++, cnt--) {
-                    if (state.isOnLeft) WriteBuf(&pOut, p, 1, &rem);
+                    if (state.flags & kPadOnRight) WriteBuf(p, &state, 1);
                 }
-                for (; cnt > 0; cnt--) WriteBuf(&pOut, &state.padChar, 1, &rem);
-                if (!state.isOnLeft) WriteBuf(&pOut, pArg, p - pArg, &rem);
+                for (; cnt > 0; cnt--) WriteBuf(&state.padChar, &state, 1);
+                if (!(state.flags & kPadOnRight)) WriteBuf(pArg, &state, p - pArg);
                 break;
             }
             case 'l':
-                state.longCnt++;
-                state.inArg       = true;
-                break;
-            case 'o':
-                state.base        = 8;
-                state.isSigned    = false;
-                state.doInteger   = true;
+                state.flags++;
+                state.inArg = true;
                 break;
             case 'd':
-                state.base        = 10;
-                state.isSigned    = true;
-                state.doInteger   = true;
+                state.flags |= (kIsInteger | kIsSigned);
                 break;
             case 'u':
-                state.base        = 10;
-                state.isSigned    = false;
-                state.doInteger   = true;
+                state.flags |= kIsInteger;
                 break;
             case 'x':
-                state.base        = 16;
-                state.isUpper     = false;
-                state.isSigned    = false;
-                state.doInteger   = true;
+                state.flags |= (kIsInteger | kIsBase16);
                 break;
             case 'X':
-                state.base        = 16;
-                state.isUpper     = true;
-                state.isSigned    = false;
-                state.doInteger   = true;
+                state.flags |= (kIsInteger | kIsBase16 | kIsUpper);
                 break;
             case 'e': {
                 double argD = (double)va_arg(args, double);
                 char tmpD[20];
                 if (state.prec > 12) state.prec = 12;
-                state.isSigned = false;
                 u32 cnt = DtoaE(tmpD, &state, argD);
-                WriteBuf(&pOut, tmpD, cnt, &rem);
+                WriteBuf(tmpD, &state, cnt);
                 break;
             }
             case 'f': {
@@ -438,7 +402,7 @@ mosVSNPrintf(char * restrict pDest, mos_size size, const char * restrict pFmt, v
                 char tmpD[25];
                 if (state.prec > 17) state.prec = 17;
                 u32 cnt = DtoaF(tmpD, &state, argD);
-                WriteBuf(&pOut, tmpD, cnt, &rem);
+                WriteBuf(tmpD, &state, cnt);
                 break;
             }
             case 'g': {
@@ -446,32 +410,27 @@ mosVSNPrintf(char * restrict pDest, mos_size size, const char * restrict pFmt, v
                 char tmpD[20];
                 if (state.prec > 13) state.prec = 12;
                 else if (state.prec != 0) state.prec--; 
-                state.isSigned = true;
+                state.flags = kIsSigned;
                 u32 cnt = DtoaE(tmpD, &state, argD);
-                WriteBuf(&pOut, tmpD, cnt, &rem);
+                WriteBuf(tmpD, &state, cnt);
                 break;
             }
             case 'p':
-            case 'P': {
-                s64 arg64 = (u32)va_arg(args, u32 *);
-                char tmp[8];
-                state.base       = 16;
-                state.isUpper    = (*pCh == 'P');
-                state.isSigned   = false;
-                state.minWidth   = 8;
-                state.padChar    = '0';
-                u32 cnt = LLtoa(tmp, &state, arg64);
-                WriteBuf(&pOut, tmp, cnt, &rem);
+            case 'P':
+                state.flags |= (kIsInteger | kIsBase16);
+                state.flags |= (*pCh == 'P' ? kIsUpper : 0);
+#if (__SIZEOF_SIZE_T__ == 8)
+                state.flags |= 2;
+#endif
                 break;
-            }
             default:
                 break;
             }
             /* Convert numeric types to text */
-            if (state.doInteger) {
-                char tmp[22];
+            if (state.flags & kIsInteger) {
+                char tmp[20];
                 u32 cnt;
-                if (state.longCnt <= 1) {
+                if ((state.flags & 0x3) <= 1) {
                     s32 arg32 = va_arg(args, s32);
                     cnt = Ltoa(tmp, &state, arg32);
                 } else {
@@ -479,29 +438,29 @@ mosVSNPrintf(char * restrict pDest, mos_size size, const char * restrict pFmt, v
                     cnt = LLtoa(tmp, &state, arg64);
                 }
                 char * p = tmp;
-                if (state.isOnLeft) {
-                    WriteBuf(&pOut, p, cnt, &rem);
+                if (state.flags & kPadOnRight) {
+                    WriteBuf(p, &state, cnt);
                 }
                 s32 padCnt = state.minWidth - cnt;
                 if (state.padChar == '0' && tmp[0] == '-') {
-                    WriteBuf(&pOut, p++, 1, &rem);
+                    WriteBuf(p++, &state, 1);
                     cnt--;
                 }
                 for (; padCnt > 0; padCnt--) {
-                    WriteBuf(&pOut, &state.padChar, 1, &rem);
+                    WriteBuf(&state.padChar, &state, 1);
                 }
-                if (!state.isOnLeft) {
-                    WriteBuf(&pOut, p, cnt, &rem);
+                if (!(state.flags & kPadOnRight)) {
+                    WriteBuf(p, &state, cnt);
                 }
             }
         }
     }
-    *pOut = '\0';
-    return (s32)size - rem;
+    *state.pOut = '\0';
+    return (s32)size - (s32)state.rem;
 }
 
 s32
-mosSNPrintf(char * restrict pDest, mos_size size, const char * restrict pFmt, ...) {
+mosSNPrintf(char * pDest, mos_size size, const char * pFmt, ...) {
     va_list args;
     va_start(args, pFmt);
     s32 cnt = mosVSNPrintf(pDest, size, pFmt, args);

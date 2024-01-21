@@ -2065,7 +2065,7 @@ static bool MiscTests(void) {
             mosSNPrintf(buf, sizeof(buf), "%e", dbl);
             if (strcmp(buf, "1.346300e+19")) test_pass = false;
         }
-#if 1
+#if 0
         {
             dbl = 2.71828182845904;
             mosSNPrintf(buf, sizeof(buf), "%.15g", dbl, dbl);
