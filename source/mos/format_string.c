@@ -43,7 +43,7 @@ static u32 MOS_NO_INLINE LLtoa(char * restrict pOut, State * pState, s64 in) {
         } while (adj != 0);
     } else {
         u32 shift = 4;
-        //if (pState->base == 8) shift = 3;
+        if (pState->base == 8) shift = 3;
         const char * restrict pDigits = LowerCaseDigits;
         if (pState->isUpper) pDigits = UpperCaseDigits;
         u32 mask = (1 << shift) - 1;
@@ -82,7 +82,7 @@ static u32 MOS_NO_INLINE Ltoa(char * restrict pOut, State * pState, s32 in) {
         } while (adj != 0);
     } else {
         u32 shift = 4;
-        //if (pState->base == 8) shift = 3;
+        if (pState->base == 8) shift = 3;
         const char * restrict pDigits = LowerCaseDigits;
         if (pState->isUpper) pDigits = UpperCaseDigits;
         u32 mask = (1 << shift) - 1;
