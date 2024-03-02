@@ -61,11 +61,21 @@
 #define MOS_VERSION            0.8
 #define MOS_VERSION_STRING     MOS_TO_STR(MOS_VERSION)
 
+// Determine architecture bit width
+#if defined(__SIZEOF_SIZE_T__)
+#if (__SIZEOF_SIZE_T__ == 8)
+  #define MOS_ARCH_BIT_WIDTH 64
+#elif (__SIZEOF_SIZE_T__ == 4)
+  #define MOS_ARCH_BIT_WIDTH 32
+#endif
+#endif
+
+
 #ifndef count_of
 #define count_of(x)            (sizeof(x) / sizeof(x[0]))
 #endif
 #ifndef offset_of
-#define offset_of(t, m)        ((u32)&((t *)0)->m)
+#define offset_of(t, m)        ((mos_size)&((t *)0)->m)
 #endif
 #ifndef container_of
 #define container_of(p, t, m)  ((t *)((u8 *)(p) - offset_of(t, m)))
@@ -124,7 +134,11 @@ typedef uint32_t    u32;
 typedef int32_t     s32;
 typedef uint64_t    u64;
 typedef int64_t     s64;
+#if MOS_ARCH_BIT_WIDTH == 32
 typedef uint32_t    mos_size;
+#elif MOS_ARCH_BIT_WIDTH == 64
+typedef uint64_t    mos_size;
+#endif
 
 typedef u8 MosThreadPriority;
 

@@ -9,23 +9,24 @@
 /*
  * MOS General Purpose Allocator
  *
- * Deterministic best-effort allocation using bins:
+ * Deterministic best-effort allocation using power-of-2 sized bins:
  *
- *   Free blocks are stored in power-of-2 bins. N attempts are made to
- *   find a block that can accommodate the allocation from its bin size,
- *   otherwise the next block size up is split.
+ *   Free blocks are binned based on their block size. N attempts are
+ *   made to find a block that can accommodate the allocation from the
+ *   minimum required bin size, otherwise a block from the next size up
+ *   is split.
  *
  *   Allocation sizes are a minimum of 2^4 = 16.  Therefore we omit the
- *   first 4 bins.  A bin is for block sizes in the interval:
+ *   first 4 bins.  Bins are for block sizes in the interval:
  *        2^(bin + 4) <= size < 2^(bin + 5)
  *
- *     Bin  size
- *      0 - 16-31
- *      1 - 32-63
- *      2 - 64-127
+ *     Bin  Block Size Range
+ *      0       16-31
+ *      1       32-63
+ *      2       64-127
  *         ...
- *     12 - 65536 - 131071
- *     13 - 131072 (and above)
+ *     12       65536 - 131071
+ *     13       131072 (and above)
  *
  * Heap may be composed of multiple non-contiguous pools:
  *
@@ -57,14 +58,6 @@
  *   Payload of freed block contains explicit link
  */
 
-#if defined(__SIZEOF_SIZE_T__)
-#if (__SIZEOF_SIZE_T__ == 8)
-  #define MOS_ARCHITECTURE_BITS 64
-#elif (__SIZEOF_SIZE_T__ == 4)
-  #define MOS_ARCHITECTURE_BITS 32
-#endif
-#endif
-
 enum {
     CANARY_CHECKSUM   = 0xe711,
     CANARY_DEFAULT    = CANARY_CHECKSUM << 16,
@@ -76,7 +69,7 @@ enum {
 
 typedef struct {
     u32  canary_tag;   /* combination canary/tag field */
-#if MOS_ARCHITECTURE_BITS == 64
+#if MOS_ARCH_BIT_WIDTH == 64
     u32  pad;
 #endif
     u32  size_p;       /* size of previous block */
@@ -91,10 +84,10 @@ typedef struct {
     };
 } Block;
 
-#if MOS_ARCHITECTURE_BITS == 32
+#if MOS_ARCH_BIT_WIDTH == 32
 MOS_STATIC_ASSERT(Link, sizeof(Link) == 12);
 MOS_STATIC_ASSERT(Block, sizeof(Block) == 20);
-#elif MOS_ARCHITECTURE_BITS == 64
+#elif MOS_ARCH_BIT_WIDTH == 64
 MOS_STATIC_ASSERT(Link, sizeof(Link) == 16);
 MOS_STATIC_ASSERT(Block, sizeof(Block) == 32);
 #endif

@@ -1,17 +1,13 @@
 
-// Copyright 2019-2023 Matthew C Needes
+// Copyright 2019-2024 Matthew C Needes
 // You may not use this source file except in compliance with the
 // terms and conditions contained within the LICENSE file (the
 // "License") included under this distribution.
 
 /// \file  mos/allocator.h
-/// \brief
-/// The MOS allocator is a simple deterministic best-effort memory allocator.
 ///
-/// Pools may be configured to return blocks with power-of-2 memory alignment.
-/// Includes support for allocation from multiple non-contiguous memory pools.
-/// It provides rudimentary detection of block overrun and multiple frees.
-/// This implementation has been extensively tested using random test vectors.
+/// Please see the applicable allocator C files for detailed
+///   descriptions of the allocation algorithms.
 
 #ifndef _MOS_ALLOCATOR_H_
 #define _MOS_ALLOCATOR_H_
